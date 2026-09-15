@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Timezone, { TimezoneInfo } from './Timezone';
+import { createEntry } from '../core/model';
+import type { Entry } from '../core/types';
 import type {
   AddTimezoneResult,
   ConvertPosition,
@@ -7,62 +9,11 @@ import type {
   SortMode,
 } from '../App';
 
-const TIMEZONE_STORAGE_KEY = 'timemate.timezones.v1';
-const TIMEZONE_PINNED_STORAGE_KEY = 'timemate.pinned.v1';
 const MAX_CITIES = 10;
 
-// 初始时区数据
-const initialTimezones: TimezoneInfo[] = [];
-
-const loadStoredTimezones = (): TimezoneInfo[] => {
-  try {
-    const raw = localStorage.getItem(TIMEZONE_STORAGE_KEY);
-    if (!raw) return initialTimezones;
-
-    const parsed = JSON.parse(raw) as TimezoneInfo[];
-    if (!Array.isArray(parsed)) return initialTimezones;
-
-    const valid = parsed.filter(
-      (item) =>
-        item &&
-        typeof item.id === 'string' &&
-        typeof item.city === 'string' &&
-        typeof item.zone === 'string'
-    );
-
-    // Migrate legacy seeded defaults (tokyo/newyork/rome) to empty list.
-    const legacySeedIds = ['tokyo', 'newyork', 'rome'];
-    const isLegacySeed =
-      valid.length === legacySeedIds.length &&
-      legacySeedIds.every((id) => valid.some((item) => item.id === id));
-    if (isLegacySeed) {
-      return [];
-    }
-
-    return valid.slice(0, MAX_CITIES);
-  } catch {
-    return initialTimezones;
-  }
-};
-
-const loadStoredPinnedIds = (validTimezoneIds: string[]): string[] => {
-  try {
-    const raw = localStorage.getItem(TIMEZONE_PINNED_STORAGE_KEY);
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw) as string[];
-    if (!Array.isArray(parsed)) return [];
-
-    const validIdSet = new Set(validTimezoneIds);
-    return parsed.filter(
-      (id) => typeof id === 'string' && validIdSet.has(id)
-    );
-  } catch {
-    return [];
-  }
-};
-
 interface TimezoneListProps {
+  entries: Entry[];
+  setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
   onAddTimezone?: (
     timezone: (timezone: TimezoneInfo) => AddTimezoneResult
   ) => void;
@@ -107,20 +58,15 @@ const getDateTimeRankInZone = (zone: string): number => {
 };
 
 const TimezoneList: React.FC<TimezoneListProps> = ({
+  entries,
+  setEntries,
   onAddTimezone,
   sortMode,
   hourFormat,
   isConvertModeOpen,
   convertPosition,
 }) => {
-  const [timezones, setTimezones] = useState<TimezoneInfo[]>(() =>
-    loadStoredTimezones()
-  );
   const [activeSettingId, setActiveSettingId] = useState<string | null>(null);
-  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
-    const storedTimezones = loadStoredTimezones();
-    return loadStoredPinnedIds(storedTimezones.map((tz) => tz.id));
-  });
   const [, setTimeSortTick] = useState(0);
 
   // 切换设置状态
@@ -130,8 +76,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
 
   // 删除时区
   const deleteTimezone = (id: string) => {
-    setTimezones((prev) => prev.filter((tz) => tz.id !== id));
-    setPinnedIds((prev) => prev.filter((tid) => tid !== id));
+    setEntries((prev) => prev.filter((entry) => entry.id !== id));
     if (activeSettingId === id) {
       setActiveSettingId(null);
     }
@@ -139,13 +84,17 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
 
   // 固定时区
   const pinTimezone = (id: string) => {
-    setPinnedIds((prev) => [...prev.filter((tid) => tid !== id), id]);
+    setEntries((prev) =>
+      prev.map((entry) => (entry.id === id ? { ...entry, pinned: true } : entry))
+    );
     setActiveSettingId(null); // 取消 setting 状态
   };
 
   // 取消固定
   const unpinTimezone = (id: string) => {
-    setPinnedIds((prev) => prev.filter((tid) => tid !== id));
+    setEntries((prev) =>
+      prev.map((entry) => (entry.id === id ? { ...entry, pinned: false } : entry))
+    );
     if (activeSettingId === id) {
       setActiveSettingId(null);
     }
@@ -156,12 +105,12 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
     let result: AddTimezoneResult = 'duplicate';
 
     // 允许相同时区的不同城市；仅阻止完全重复（同 city + zone）
-    setTimezones((prev) => {
+    setEntries((prev) => {
       if (
         prev.some(
-          (tz) =>
-            tz.zone === newTimezone.zone &&
-            tz.city.toLowerCase() === newTimezone.city.toLowerCase()
+          (entry) =>
+            entry.timezone === newTimezone.zone &&
+            entry.label.toLowerCase() === newTimezone.city.toLowerCase()
         )
       ) {
         result = 'duplicate';
@@ -174,11 +123,19 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
       }
 
       result = 'added';
-      return [...prev, newTimezone]; // 否则添加新时区
+      return [
+        ...prev,
+        createEntry({
+          timezone: newTimezone.zone,
+          label: newTimezone.city,
+          lat: newTimezone.lat,
+          lon: newTimezone.lon,
+        }),
+      ];
     });
 
     return result;
-  }, []);
+  }, [setEntries]);
 
   // 使用useEffect在组件挂载后注册方法，而不是在渲染过程中
   useEffect(() => {
@@ -186,22 +143,6 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
       onAddTimezone(addTimezone);
     }
   }, [onAddTimezone, addTimezone]); // 正确添加所有依赖项
-
-  useEffect(() => {
-    localStorage.setItem(TIMEZONE_STORAGE_KEY, JSON.stringify(timezones));
-  }, [timezones]);
-
-  useEffect(() => {
-    const validIdSet = new Set(timezones.map((tz) => tz.id));
-    setPinnedIds((prev) => {
-      const next = prev.filter((id) => validIdSet.has(id));
-      return next.length === prev.length ? prev : next;
-    });
-  }, [timezones]);
-
-  useEffect(() => {
-    localStorage.setItem(TIMEZONE_PINNED_STORAGE_KEY, JSON.stringify(pinnedIds));
-  }, [pinnedIds]);
 
   useEffect(() => {
     if (sortMode !== 'time') return;
@@ -234,29 +175,27 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
     };
   }, [activeSettingId]);
 
-  const timezoneOrder = new Map(timezones.map((tz, index) => [tz.id, index]));
+  const entryOrder = new Map(entries.map((entry, index) => [entry.id, index]));
 
-  const compareByMode = (a: TimezoneInfo, b: TimezoneInfo): number => {
+  const compareByMode = (a: Entry, b: Entry): number => {
     if (sortMode === 'alphabet') {
-      return a.city.localeCompare(b.city);
+      return a.label.localeCompare(b.label);
     }
 
     if (sortMode === 'time') {
-      return getDateTimeRankInZone(a.zone) - getDateTimeRankInZone(b.zone);
+      return getDateTimeRankInZone(a.timezone) - getDateTimeRankInZone(b.timezone);
     }
 
     // newest(default): recently added first
-    const orderA = timezoneOrder.get(a.id) ?? 0;
-    const orderB = timezoneOrder.get(b.id) ?? 0;
+    const orderA = entryOrder.get(a.id) ?? 0;
+    const orderB = entryOrder.get(b.id) ?? 0;
     return orderB - orderA;
   };
 
   // 置顶始终在前；同组内按排序命令排序。
-  const sortedTimezones = [...timezones].sort((a, b) => {
-    const isPinnedA = pinnedIds.includes(a.id);
-    const isPinnedB = pinnedIds.includes(b.id);
-    if (isPinnedA !== isPinnedB) {
-      return isPinnedA ? -1 : 1;
+  const sortedEntries = [...entries].sort((a, b) => {
+    if (a.pinned !== b.pinned) {
+      return a.pinned ? -1 : 1;
     }
 
     return compareByMode(a, b);
@@ -264,7 +203,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
 
   return (
     <div className="timezone-list">
-      {sortedTimezones.length === 0 ? (
+      {sortedEntries.length === 0 ? (
         <div className="timezone-list__empty">
           <p className="timezone-list__empty-text">
             Press <span className="timezone-list__empty-addicon"></span> to add
@@ -272,23 +211,23 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
           </p>
         </div>
       ) : (
-        sortedTimezones.map((tz) => (
+        sortedEntries.map((entry) => (
           <Timezone
-            key={tz.id}
-            id={tz.id}
-            city={tz.city}
-            zone={tz.zone}
-            lat={tz.lat}
-            lon={tz.lon}
+            key={entry.id}
+            id={entry.id}
+            city={entry.label}
+            zone={entry.timezone}
+            lat={entry.lat}
+            lon={entry.lon}
             hourFormat={hourFormat}
             isConvertModeOpen={isConvertModeOpen}
             convertPosition={convertPosition}
-            setting={activeSettingId === tz.id}
-            isPinned={pinnedIds.includes(tz.id)}
-            toggleSetting={() => toggleSetting(tz.id)}
-            deleteTimezone={() => deleteTimezone(tz.id)}
-            pinTimezone={() => pinTimezone(tz.id)}
-            unpinTimezone={() => unpinTimezone(tz.id)}
+            setting={activeSettingId === entry.id}
+            isPinned={entry.pinned}
+            toggleSetting={() => toggleSetting(entry.id)}
+            deleteTimezone={() => deleteTimezone(entry.id)}
+            pinTimezone={() => pinTimezone(entry.id)}
+            unpinTimezone={() => unpinTimezone(entry.id)}
           />
         ))
       )}

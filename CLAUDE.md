@@ -20,12 +20,13 @@ TimeMate is a **Chrome Manifest V3 popup extension** built with React + TypeScri
 ### Component tree and state ownership
 
 ```
-App.tsx              ← global state: sortMode, hourFormat, isConvertModeOpen, isSearchOpen, convertPosition
+App.tsx              ← global state: entries (v2 Entry[]), settings, sortMode, hourFormat, isConvertModeOpen, isSearchOpen, convertPosition; persists entries+settings to localStorage
 ├── Header.tsx       ← UI controls (sort, hour format, theme, converter slider, search toggle)
 │   ├── Searchbar.tsx  ← city search via Open-Meteo Geocoding API; passes selected city up via callback
 │   └── Converter panel (inline in Header)
-└── TimezoneList.tsx ← owns timezone list + pin state; persists to localStorage
-    └── Timezone.tsx  ← individual card; reads time with Intl.DateTimeFormat, updates every 1s
+├── TimezoneList.tsx ← controlled by entries/setEntries from App; owns only UI-local state (active card, sort tick)
+│   └── Timezone.tsx  ← individual card; reads time with Intl.DateTimeFormat, updates every 1s
+└── CoreTimePanel.tsx ← bottom-docked; runs src/core/coretime.ts over entries+settings, collapsed by default
 ```
 
 State flows down as props; children communicate upward via callbacks. There is no global store.
@@ -34,8 +35,8 @@ State flows down as props; children communicate upward via callbacks. There is n
 
 | Key                       | Content                                |
 | ------------------------- | -------------------------------------- |
-| `timemate.timezones.v1`   | Array of `{city, zone, id}` objects    |
-| `timemate.pinned.v1`      | Array of pinned IDs                    |
+| `timemate.data.v2`        | `AppData` — `{version, entries, groups, settings}` (see `src/core/types.ts`); `entries` replaces the old `timemate.timezones.v1`/`.pinned.v1` pair — pin state now lives on `entry.pinned` |
+| `timemate.backup_v1`      | One-time pre-migration snapshot of the v1 data (`src/core/migrate.ts`) |
 | `timemate.sort-mode.v1`   | `"newest"` \| `"time"` \| `"alphabet"` |
 | `timemate.hour-format.v1` | `"12"` \| `"24"`                       |
 | `theme`                   | `"light"` \| `"dark"`                  |

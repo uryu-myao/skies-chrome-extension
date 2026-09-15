@@ -1,7 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import Header from './components/Header';
 import TimezoneList from './components/TimezoneList';
+import CoreTimePanel from './components/CoreTimePanel';
 import { TimezoneInfo } from './components/Timezone';
+import { loadAppData, saveAppData, DEFAULT_SETTINGS } from './core/model';
+import type { AppSettings, Entry } from './core/types';
 import '@styles/_reset.css';
 import '@styles/main.scss';
 
@@ -33,6 +36,8 @@ function App() {
     }
     return '12';
   });
+  const [entries, setEntries] = useState<Entry[]>(() => loadAppData()?.entries ?? []);
+  const [settings] = useState<AppSettings>(() => loadAppData()?.settings ?? DEFAULT_SETTINGS);
 
   const registerAddTimezone = useCallback(
     (fn: (timezone: TimezoneInfo) => AddTimezoneResult) => {
@@ -56,6 +61,10 @@ function App() {
     localStorage.setItem(HOUR_FORMAT_STORAGE_KEY, hourFormat);
   }, [hourFormat]);
 
+  useEffect(() => {
+    saveAppData({ version: 2, entries, groups: [], settings });
+  }, [entries, settings]);
+
   return (
     <div
       className={`app ${isConvertModeOpen ? 'app--convert-open' : ''} ${
@@ -78,6 +87,8 @@ function App() {
       />
       <div className="app-content">
         <TimezoneList
+          entries={entries}
+          setEntries={setEntries}
           onAddTimezone={registerAddTimezone}
           sortMode={sortMode}
           hourFormat={hourFormat}
@@ -85,6 +96,7 @@ function App() {
           convertPosition={convertPosition}
         />
       </div>
+      <CoreTimePanel entries={entries} settings={settings} />
     </div>
   );
 }
