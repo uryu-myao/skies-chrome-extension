@@ -10,6 +10,7 @@ import type {
 } from '../App';
 
 const MAX_CITIES = 10;
+const HINT_SHOWN_STORAGE_KEY = 'timemate.swipe-hint-shown.v1';
 
 interface TimezoneListProps {
   entries: Entry[];
@@ -19,6 +20,7 @@ interface TimezoneListProps {
   ) => void;
   sortMode: SortMode;
   hourFormat: HourFormat;
+  showSeconds: boolean;
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
 }
@@ -63,11 +65,20 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   onAddTimezone,
   sortMode,
   hourFormat,
+  showSeconds,
   isConvertModeOpen,
   convertPosition,
 }) => {
   const [activeSettingId, setActiveSettingId] = useState<string | null>(null);
   const [, setTimeSortTick] = useState(0);
+  const [hintShown, setHintShown] = useState<boolean>(
+    () => localStorage.getItem(HINT_SHOWN_STORAGE_KEY) === '1'
+  );
+
+  const markHintPlayed = () => {
+    localStorage.setItem(HINT_SHOWN_STORAGE_KEY, '1');
+    setHintShown(true);
+  };
 
   // 切换设置状态
   const toggleSetting = (id: string) => {
@@ -211,7 +222,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
           </p>
         </div>
       ) : (
-        sortedEntries.map((entry) => (
+        sortedEntries.map((entry, index) => (
           <Timezone
             key={entry.id}
             id={entry.id}
@@ -220,6 +231,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
             lat={entry.lat}
             lon={entry.lon}
             hourFormat={hourFormat}
+            showSeconds={showSeconds}
             isConvertModeOpen={isConvertModeOpen}
             convertPosition={convertPosition}
             setting={activeSettingId === entry.id}
@@ -228,6 +240,8 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
             deleteTimezone={() => deleteTimezone(entry.id)}
             pinTimezone={() => pinTimezone(entry.id)}
             unpinTimezone={() => unpinTimezone(entry.id)}
+            playHint={index === 0 && !hintShown}
+            onHintPlayed={markHintPlayed}
           />
         ))
       )}

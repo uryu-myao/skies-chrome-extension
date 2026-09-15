@@ -92,6 +92,7 @@ function App() {
           onAddTimezone={registerAddTimezone}
           sortMode={sortMode}
           hourFormat={hourFormat}
+          showSeconds={settings.showSeconds}
           isConvertModeOpen={isConvertModeOpen}
           convertPosition={convertPosition}
         />

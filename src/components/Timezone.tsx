@@ -16,6 +16,7 @@ export interface TimezoneInfo {
 
 interface TimezoneProps extends TimezoneInfo {
   hourFormat: HourFormat;
+  showSeconds: boolean;
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
   setting: boolean;
@@ -24,6 +25,8 @@ interface TimezoneProps extends TimezoneInfo {
   deleteTimezone: () => void;
   pinTimezone: () => void;
   unpinTimezone: () => void;
+  playHint?: boolean;
+  onHintPlayed?: () => void;
 }
 
 interface SunTimes {
@@ -67,6 +70,7 @@ const Timezone: React.FC<TimezoneProps> = ({
   lat,
   lon,
   hourFormat,
+  showSeconds,
   isConvertModeOpen,
   convertPosition,
   setting,
@@ -75,6 +79,8 @@ const Timezone: React.FC<TimezoneProps> = ({
   deleteTimezone,
   pinTimezone,
   unpinTimezone,
+  playHint,
+  onHintPlayed,
 }) => {
   const stars = useMemo(() => makeStars(id, 20), [id]);
 
@@ -298,7 +304,12 @@ const Timezone: React.FC<TimezoneProps> = ({
   return (
     <div
       data-timezone-id={id}
-      className={`timezone ${setting ? 'setting' : ''} ${isPinned ? 'pinned' : ''} timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}`}>
+      className={`timezone ${setting ? 'setting' : ''} ${isPinned ? 'pinned' : ''} timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}${playHint ? ' timezone--hint' : ''}`}
+      onAnimationEnd={(event) => {
+        if (event.animationName === 'timezone-hint-peek') {
+          onHintPlayed?.();
+        }
+      }}>
       <div className="timezone-inner">
         {timeOfDay === 'night' && !isConvertModeOpen && (
           <svg className="timezone-stars" aria-hidden="true">
@@ -312,7 +323,7 @@ const Timezone: React.FC<TimezoneProps> = ({
         {(isConvertModeOpen || hourFormat === '12') && timeData.meridiem && (
           <div className={`timezone-data__meridiem${timeData.meridiem === 'AM' ? ' timezone-data__meridiem--am' : ''}${isConvertModeOpen ? ' timezone-data__meridiem--convert' : ''}`}>{timeData.meridiem}</div>
         )}
-        {!isConvertModeOpen && (
+        {showSeconds && !isConvertModeOpen && (
           <div className="timezone-data__second">{timeData.second}</div>
         )}
         <div className="timezone-footer">
