@@ -2,19 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import '@styles/Header.scss';
 import Searchbar from '../components/Searchbar';
 import { TimezoneInfo } from './Timezone';
-import type {
-  AddTimezoneResult,
-  ConvertPosition,
-  HourFormat,
-  SortMode,
-} from '../App';
+import type { AddTimezoneResult, ConvertPosition } from '../App';
 
 interface HeaderProps {
   addTimezone: (timezone: TimezoneInfo) => AddTimezoneResult;
-  sortMode: SortMode;
-  onSortChange: (mode: SortMode) => void;
-  hourFormat: HourFormat;
-  onToggleHourFormat: () => void;
+  onOpenSettings: () => void;
   isConvertModeOpen: boolean;
   onConvertModeChange: (isOpen: boolean) => void;
   convertPosition: ConvertPosition;
@@ -25,10 +17,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({
   addTimezone,
-  sortMode,
-  onSortChange,
-  hourFormat,
-  onToggleHourFormat,
+  onOpenSettings,
   isConvertModeOpen,
   onConvertModeChange,
   convertPosition,
@@ -46,21 +35,12 @@ const Header: React.FC<HeaderProps> = ({
   const [isDraggingConvert, setIsDraggingConvert] = useState(false);
   const [convertInitialPosition, setConvertInitialPosition] = useState(0);
   const toggleSearch = () => {
-    setShowSortMenu(false);
     onConvertModeChange(false);
     onSearchOpenChange(!isSearchOpen);
   };
-  const [showSortMenu, setShowSortMenu] = useState(false);
-  const sortRef = useRef<HTMLDivElement>(null);
   const [showLogoMenu, setShowLogoMenu] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const logoRef = useRef<HTMLDivElement>(null);
-  const toggleSortMenu = () => {
-    onSearchOpenChange(false);
-    setShowLogoMenu(false);
-    onConvertModeChange(false);
-    setShowSortMenu((prev) => !prev);
-  };
   const getLocalConvertPosition = (): number => {
     const now = new Date();
     const totalHours =
@@ -72,7 +52,6 @@ const Header: React.FC<HeaderProps> = ({
   const toggleConvertMenu = () => {
     onSearchOpenChange(false);
     setShowLogoMenu(false);
-    setShowSortMenu(false);
     if (!isConvertModeOpen) {
       const localPos = getLocalConvertPosition();
       onConvertPositionChange(localPos);
@@ -88,7 +67,6 @@ const Header: React.FC<HeaderProps> = ({
   };
   const toggleLogoMenu = () => {
     onSearchOpenChange(false);
-    setShowSortMenu(false);
     onConvertModeChange(false);
     setShowLogoMenu((prev) => !prev);
   };
@@ -193,9 +171,6 @@ const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (sortRef.current && !sortRef.current.contains(target)) {
-        setShowSortMenu(false);
-      }
       if (convertRef.current && !convertRef.current.contains(target)) {
         onConvertModeChange(false);
       }
@@ -360,52 +335,10 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
           <div className="header-btns__inner">
-            <div className="header-sort" ref={sortRef}>
-              <button
-                className="header-btn header-btn__sort"
-                aria-label="Sort options"
-                onClick={toggleSortMenu}></button>
-              {showSortMenu && (
-                <div className="header-sort__menu">
-                  <button
-                    className={`header-sort__item ${
-                      sortMode === 'newest' ? 'active' : ''
-                    }`}
-                    onClick={() => {
-                      onSortChange('newest');
-                      setShowSortMenu(false);
-                    }}>
-                    Sort by newest (default)
-                  </button>
-                  <button
-                    className={`header-sort__item ${
-                      sortMode === 'time' ? 'active' : ''
-                    }`}
-                    onClick={() => {
-                      onSortChange('time');
-                      setShowSortMenu(false);
-                    }}>
-                    Sort by time
-                  </button>
-                  <button
-                    className={`header-sort__item ${
-                      sortMode === 'alphabet' ? 'active' : ''
-                    }`}
-                    onClick={() => {
-                      onSortChange('alphabet');
-                      setShowSortMenu(false);
-                    }}>
-                    Sort by alphabet
-                  </button>
-                </div>
-              )}
-            </div>
             <button
-              className="header-btn header-btn__hour-format"
-              aria-label="Toggle 12/24 hour format"
-              onClick={onToggleHourFormat}>
-              {hourFormat === '12' ? '24' : '12'}
-            </button>
+              className="header-btn header-btn__settings"
+              aria-label="Open settings"
+              onClick={onOpenSettings}></button>
           </div>
         </div>
       </div>

@@ -2,18 +2,16 @@ import { useState, useCallback, useEffect } from 'react';
 import Header from './components/Header';
 import TimezoneList from './components/TimezoneList';
 import CoreTimePanel from './components/CoreTimePanel';
+import SettingsPanel from './components/SettingsPanel';
 import { TimezoneInfo } from './components/Timezone';
 import { loadAppData, saveAppData, DEFAULT_SETTINGS } from './core/model';
 import type { AppSettings, Entry } from './core/types';
 import '@styles/_reset.css';
 import '@styles/main.scss';
 
-export type SortMode = 'newest' | 'time' | 'alphabet';
 export type AddTimezoneResult = 'added' | 'duplicate' | 'limit';
 export type HourFormat = '12' | '24';
 export type ConvertPosition = number;
-const SORT_MODE_STORAGE_KEY = 'timemate.sort-mode.v1';
-const HOUR_FORMAT_STORAGE_KEY = 'timemate.hour-format.v1';
 
 function App() {
   const [addTimezoneFn, setAddTimezoneFn] = useState<
@@ -22,22 +20,13 @@ function App() {
   const [isConvertModeOpen, setIsConvertModeOpen] = useState(false);
   const [convertPosition, setConvertPosition] = useState<ConvertPosition>(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>(() => {
-    const stored = localStorage.getItem(SORT_MODE_STORAGE_KEY);
-    if (stored === 'newest' || stored === 'time' || stored === 'alphabet') {
-      return stored;
-    }
-    return 'newest';
-  });
-  const [hourFormat, setHourFormat] = useState<HourFormat>(() => {
-    const stored = localStorage.getItem(HOUR_FORMAT_STORAGE_KEY);
-    if (stored === '12' || stored === '24') {
-      return stored;
-    }
-    return '12';
-  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [entries, setEntries] = useState<Entry[]>(() => loadAppData()?.entries ?? []);
-  const [settings] = useState<AppSettings>(() => loadAppData()?.settings ?? DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(
+    () => loadAppData()?.settings ?? DEFAULT_SETTINGS
+  );
+
+  const hourFormat: HourFormat = settings.hour24 ? '24' : '12';
 
   const registerAddTimezone = useCallback(
     (fn: (timezone: TimezoneInfo) => AddTimezoneResult) => {
@@ -54,14 +43,6 @@ function App() {
   };
 
   useEffect(() => {
-    localStorage.setItem(SORT_MODE_STORAGE_KEY, sortMode);
-  }, [sortMode]);
-
-  useEffect(() => {
-    localStorage.setItem(HOUR_FORMAT_STORAGE_KEY, hourFormat);
-  }, [hourFormat]);
-
-  useEffect(() => {
     saveAppData({ version: 2, entries, groups: [], settings });
   }, [entries, settings]);
 
@@ -72,12 +53,7 @@ function App() {
       }`}>
       <Header
         addTimezone={handleAddTimezone}
-        sortMode={sortMode}
-        onSortChange={setSortMode}
-        hourFormat={hourFormat}
-        onToggleHourFormat={() =>
-          setHourFormat((prev) => (prev === '12' ? '24' : '12'))
-        }
+        onOpenSettings={() => setIsSettingsOpen(true)}
         isConvertModeOpen={isConvertModeOpen}
         onConvertModeChange={setIsConvertModeOpen}
         convertPosition={convertPosition}
@@ -90,7 +66,7 @@ function App() {
           entries={entries}
           setEntries={setEntries}
           onAddTimezone={registerAddTimezone}
-          sortMode={sortMode}
+          sortOrder={settings.sortOrder}
           hourFormat={hourFormat}
           showSeconds={settings.showSeconds}
           isConvertModeOpen={isConvertModeOpen}
@@ -98,6 +74,12 @@ function App() {
         />
       </div>
       <CoreTimePanel entries={entries} settings={settings} />
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        setSettings={setSettings}
+      />
     </div>
   );
 }

@@ -1,13 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import Timezone, { TimezoneInfo } from './Timezone';
 import { createEntry } from '../core/model';
-import type { Entry } from '../core/types';
-import type {
-  AddTimezoneResult,
-  ConvertPosition,
-  HourFormat,
-  SortMode,
-} from '../App';
+import type { Entry, SortOrder } from '../core/types';
+import type { AddTimezoneResult, ConvertPosition, HourFormat } from '../App';
 
 const MAX_CITIES = 10;
 const HINT_SHOWN_STORAGE_KEY = 'timemate.swipe-hint-shown.v1';
@@ -18,7 +13,7 @@ interface TimezoneListProps {
   onAddTimezone?: (
     timezone: (timezone: TimezoneInfo) => AddTimezoneResult
   ) => void;
-  sortMode: SortMode;
+  sortOrder: SortOrder;
   hourFormat: HourFormat;
   showSeconds: boolean;
   isConvertModeOpen: boolean;
@@ -63,7 +58,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   entries,
   setEntries,
   onAddTimezone,
-  sortMode,
+  sortOrder,
   hourFormat,
   showSeconds,
   isConvertModeOpen,
@@ -156,14 +151,14 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   }, [onAddTimezone, addTimezone]); // 正确添加所有依赖项
 
   useEffect(() => {
-    if (sortMode !== 'time') return;
+    if (sortOrder !== 'offset') return;
 
     const intervalId = setInterval(() => {
       setTimeSortTick((prev) => prev + 1);
     }, 30000);
 
     return () => clearInterval(intervalId);
-  }, [sortMode]);
+  }, [sortOrder]);
 
   useEffect(() => {
     if (!activeSettingId) return;
@@ -189,15 +184,15 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   const entryOrder = new Map(entries.map((entry, index) => [entry.id, index]));
 
   const compareByMode = (a: Entry, b: Entry): number => {
-    if (sortMode === 'alphabet') {
+    if (sortOrder === 'name') {
       return a.label.localeCompare(b.label);
     }
 
-    if (sortMode === 'time') {
+    if (sortOrder === 'offset') {
       return getDateTimeRankInZone(a.timezone) - getDateTimeRankInZone(b.timezone);
     }
 
-    // newest(default): recently added first
+    // manual(default): recently added first
     const orderA = entryOrder.get(a.id) ?? 0;
     const orderB = entryOrder.get(b.id) ?? 0;
     return orderB - orderA;

@@ -20,13 +20,14 @@ TimeMate is a **Chrome Manifest V3 popup extension** built with React + TypeScri
 ### Component tree and state ownership
 
 ```
-App.tsx              ← global state: entries (v2 Entry[]), settings, sortMode, hourFormat, isConvertModeOpen, isSearchOpen, convertPosition; persists entries+settings to localStorage
-├── Header.tsx       ← UI controls (sort, hour format, theme, converter slider, search toggle)
+App.tsx              ← global state: entries (v2 Entry[]), settings (v2 AppSettings — hour24/sortOrder live here now, no separate hourFormat/sortMode state), isConvertModeOpen, isSearchOpen, isSettingsOpen, convertPosition; persists entries+settings to localStorage
+├── Header.tsx       ← 3 actions only: search toggle, converter slider, open-settings (12/24 + sort moved into SettingsPanel)
 │   ├── Searchbar.tsx  ← city search via Open-Meteo Geocoding API; passes selected city up via callback
 │   └── Converter panel (inline in Header)
 ├── TimezoneList.tsx ← controlled by entries/setEntries from App; owns only UI-local state (active card, sort tick)
 │   └── Timezone.tsx  ← individual card; reads time with Intl.DateTimeFormat, updates every 1s
-└── CoreTimePanel.tsx ← bottom-docked; runs src/core/coretime.ts over entries+settings, collapsed by default
+├── CoreTimePanel.tsx ← bottom-docked; runs src/core/coretime.ts over entries+settings, collapsed by default
+└── SettingsPanel.tsx ← full-popup slide-in; edits settings.{hour24,showSeconds,sortOrder,coreTimePanel,defaultWorkHours,defaultWorkDays}. Display/Core time sections only — DST alerts/Account sections wait on steps 7/8 (dst banner, ExtPay) so the page doesn't point at features that don't exist yet
 ```
 
 State flows down as props; children communicate upward via callbacks. There is no global store.
@@ -37,8 +38,7 @@ State flows down as props; children communicate upward via callbacks. There is n
 | ------------------------- | -------------------------------------- |
 | `timemate.data.v2`        | `AppData` — `{version, entries, groups, settings}` (see `src/core/types.ts`); `entries` replaces the old `timemate.timezones.v1`/`.pinned.v1` pair — pin state now lives on `entry.pinned` |
 | `timemate.backup_v1`      | One-time pre-migration snapshot of the v1 data (`src/core/migrate.ts`) |
-| `timemate.sort-mode.v1`   | `"newest"` \| `"time"` \| `"alphabet"` |
-| `timemate.hour-format.v1` | `"12"` \| `"24"`                       |
+| `timemate.swipe-hint-shown.v1` | Set once the first-card swipe hint animation has played |
 | `theme`                   | `"light"` \| `"dark"`                  |
 
 ### Key implementation details
