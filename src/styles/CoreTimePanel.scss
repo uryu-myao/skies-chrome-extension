@@ -1,16 +1,18 @@
 .core-time-panel {
   flex-shrink: 0;
-  border-top: 1px solid var(--color-border);
+  margin: 0 var(--container-padding-horizontal) 10px;
+  border-radius: 22px;
   background: var(--color-bg-timezone);
+  overflow: hidden;
 
-  &__summary {
+  &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     width: 100%;
-    min-height: 40px;
-    padding: 0 var(--container-padding-horizontal);
+    min-height: 44px;
+    padding: 0 16px;
     background: none;
     border: none;
     color: var(--color-font-timezone);
@@ -22,37 +24,25 @@
     }
   }
 
-  &__conclusion {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  &__headline {
+  &__title {
     font-family: 'Poppins', serif;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 15px;
+    font-weight: 700;
   }
 
-  &__detail {
+  &__meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
     font-family: 'Poppins', serif;
     font-size: 11px;
-    font-weight: 400;
-    opacity: 0.85;
-  }
-
-  &__muted {
-    opacity: 0.6;
+    font-weight: 500;
+    opacity: 0.5;
   }
 
   &__chevron {
-    flex-shrink: 0;
     color: var(--color-font-timezone);
-    opacity: 0.6;
     transition: transform 0.2s ease;
   }
 
@@ -61,37 +51,27 @@
   }
 
   &__band {
-    padding: 0 var(--container-padding-horizontal) 12px;
-  }
-
-  &__scale {
-    display: flex;
-    justify-content: space-between;
-    margin: 0 0 4px 50px;
-    font-family: 'Lato', sans-serif;
-    font-size: 9px;
-    opacity: 0.45;
+    padding: 4px 16px 12px;
   }
 
   &__rows {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
   }
 
   &__row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
   }
 
   &__row-label {
-    flex: 0 0 44px;
+    flex: 0 0 46px;
     font-family: 'Poppins', serif;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 500;
-    text-transform: uppercase;
-    opacity: 0.65;
+    opacity: 0.85;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -99,22 +79,25 @@
 
   &__track {
     position: relative;
-    display: flex;
     flex: 1;
-    height: 10px;
-    border-radius: 3px;
+    height: 14px;
+    border-radius: 100vw;
+    background: rgba(255, 255, 255, 0.08);
     overflow: hidden;
   }
 
-  // Flat fill, not the card's animated gradient — same two palettes
-  // (Timezone.scss day/night stops) so the band reads as one color language.
-  &__slot {
-    flex: 1 1 0;
-    height: 100%;
-    background: #1d1c27;
+  &__segment {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 100vw;
 
-    &.is-working {
-      background: #77b6e3;
+    &--entry {
+      background: #5c7cd6;
+    }
+
+    &--you {
+      background: #9db8ea;
     }
   }
 
@@ -122,8 +105,58 @@
     position: absolute;
     top: -2px;
     bottom: -2px;
-    border-radius: 4px;
+    border-radius: 100vw;
     outline: 1.5px solid var(--color-secondary);
     pointer-events: none;
+  }
+
+  &__scale {
+    display: flex;
+    justify-content: space-between;
+    margin: 6px 0 0 56px;
+    font-family: 'Lato', sans-serif;
+    font-size: 10px;
+    opacity: 0.45;
+  }
+
+  &__conclusion-row {
+    padding: 10px 16px 14px;
+  }
+
+  &--expanded &__conclusion-row {
+    border-top: 1px solid var(--color-division);
+  }
+
+  &__conclusion {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  &__headline {
+    font-family: 'Poppins', serif;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__detail {
+    font-family: 'Poppins', serif;
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.75;
+  }
+
+  &__muted-line {
+    font-family: 'Poppins', serif;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: 0.5;
+  }
+
+  &__muted {
+    opacity: 0.6;
   }
 }
