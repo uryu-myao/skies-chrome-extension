@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import '@styles/CoreTimePanel.scss';
 import { coreTime } from '../core/coretime';
-import { getSystemTimezone, localWeekday, SLOTS_PER_DAY } from '../core/tz';
+import { getSystemTimezone, SLOTS_PER_DAY } from '../core/tz';
 import type { AppSettings, Entry } from '../core/types';
 
 interface CoreTimePanelProps {
@@ -53,22 +53,15 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
     [filteredEntries, settings]
   );
 
-  // Your own default work window, already expressed in reference-axis time — no
-  // conversion needed, unlike the per-entry rows which each carry their own timezone.
-  const youBlocks = useMemo(() => {
-    const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
-    const isWorkDay = settings.defaultWorkDays.includes(localWeekday(referenceTimezone, new Date()));
-    const startSlot = settings.defaultWorkHours.start * 2;
-    const endSlot = settings.defaultWorkHours.end * 2;
-    return Array.from({ length: SLOTS_PER_DAY }, (_, slot) => isWorkDay && slot >= startSlot && slot < endSlot);
-  }, [settings]);
+  const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
 
   if (settings.coreTimePanel === 'hidden' || entries.length === 0) {
     return null;
   }
 
-  const labelOf = (entryId: string): string =>
-    filteredEntries.find((entry) => entry.id === entryId)?.label ?? '';
+  const entryOf = (entryId: string): Entry | undefined =>
+    filteredEntries.find((entry) => entry.id === entryId);
+  const labelOf = (entryId: string): string => entryOf(entryId)?.label ?? '';
 
   const renderConclusion = () => {
     if (filteredEntries.length === 0) {
@@ -126,15 +119,12 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
   const canExpand = filteredEntries.length > 0;
   const cityWord = filteredEntries.length === 1 ? 'city' : 'cities';
 
-  const rows: { key: string; label: string; blocks: boolean[]; variant: 'entry' | 'you' }[] = [
-    ...result.rows.map((row) => ({
-      key: row.entryId,
-      label: labelOf(row.entryId),
-      blocks: row.blocks,
-      variant: 'entry' as const,
-    })),
-    { key: '__you__', label: 'You', blocks: youBlocks, variant: 'you' as const },
-  ];
+  const rows = result.rows.map((row) => ({
+    key: row.entryId,
+    label: labelOf(row.entryId),
+    blocks: row.blocks,
+    isBaseline: entryOf(row.entryId)?.timezone === referenceTimezone,
+  }));
 
   return (
     <div className={`core-time-panel ${isExpanded ? 'core-time-panel--expanded' : ''}`}>
@@ -167,8 +157,11 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
             {rows.map((row) => (
               <div className="core-time-panel__row" key={row.key}>
                 <span
-                  className={`core-time-panel__row-label ${row.variant === 'you' ? 'core-time-panel__row-label--you' : ''}`}>
+                  className={`core-time-panel__row-label ${row.isBaseline ? 'core-time-panel__row-label--baseline' : ''}`}>
                   {row.label}
+                  {row.isBaseline && (
+                    <span className="core-time-panel__row-baseline-tag">You</span>
+                  )}
                 </span>
                 <div className="core-time-panel__track">
                   {TRACK_DOT_HOURS.map((hour) => (
@@ -181,7 +174,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
                   {blocksToRanges(row.blocks).map((range, i) => (
                     <span
                       key={i}
-                      className={`core-time-panel__segment core-time-panel__segment--${row.variant}`}
+                      className="core-time-panel__segment"
                       style={{
                         left: `${(range.start / SLOTS_PER_DAY) * 100}%`,
                         width: `${((range.end - range.start) / SLOTS_PER_DAY) * 100}%`,

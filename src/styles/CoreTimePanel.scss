@@ -77,10 +77,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
 
-    &--you {
+    &--baseline {
       color: #9db8ea;
       opacity: 1;
     }
+  }
+
+  &__row-baseline-tag {
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
   }
 
   &__track {
@@ -120,14 +129,7 @@
     position: absolute;
     top: 0;
     bottom: 0;
-
-    &--entry {
-      background: #5c7cd6;
-    }
-
-    &--you {
-      background: #9db8ea;
-    }
+    background: #5c7cd6;
   }
 
   &__overlap {
