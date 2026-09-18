@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type Dispatch, type SetStateAction } from 'react';
 import '@styles/Header.scss';
 import Searchbar from '../components/Searchbar';
 import { TimezoneInfo } from './Timezone';
+import { getSystemTimezone, localHHMM, timeOfDay } from '../core/tz';
+import type { AppSettings, Entry } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition } from '../App';
 
 interface HeaderProps {
@@ -13,6 +15,15 @@ interface HeaderProps {
   onConvertPositionChange: (position: ConvertPosition) => void;
   isSearchOpen: boolean;
   onSearchOpenChange: (isOpen: boolean) => void;
+  entries: Entry[];
+  settings: AppSettings;
+  setSettings: Dispatch<SetStateAction<AppSettings>>;
+}
+
+// "Asia/Tokyo" -> "Tokyo" — same convention as an entry's default label.
+function friendlyZoneName(zone: string): string {
+  const last = zone.split('/').pop() ?? zone;
+  return last.replace(/_/g, ' ');
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -24,6 +35,9 @@ const Header: React.FC<HeaderProps> = ({
   onConvertPositionChange,
   isSearchOpen,
   onSearchOpenChange,
+  entries,
+  settings,
+  setSettings,
 }) => {
   const convertStops = [0, 3, 6, 9, 12, 15, 18, 21, 24];
 
@@ -38,10 +52,46 @@ const Header: React.FC<HeaderProps> = ({
     onConvertModeChange(false);
     onSearchOpenChange(!isSearchOpen);
   };
-  const [showLogoMenu, setShowLogoMenu] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
-  const logoRef = useRef<HTMLDivElement>(null);
-  const logoMenuRef = useRef<HTMLDivElement>(null);
+
+  // Reference timezone chip ============================
+  const [showTzMenu, setShowTzMenu] = useState(false);
+  const [chipNow, setChipNow] = useState(() => new Date());
+  const tzChipRef = useRef<HTMLDivElement>(null);
+  const tzMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => setChipNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const effectiveTimezone = settings.referenceTimezone ?? getSystemTimezone();
+  const chipEntry = entries.find((entry) => entry.timezone === effectiveTimezone);
+  const chipCityLabel = chipEntry?.label ?? friendlyZoneName(effectiveTimezone);
+  const chipTime = localHHMM(effectiveTimezone, chipNow);
+  const chipSky = timeOfDay(effectiveTimezone, chipNow);
+
+  const referenceOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { timezone: string; label: string }[] = [];
+    entries.forEach((entry) => {
+      if (seen.has(entry.timezone)) return;
+      seen.add(entry.timezone);
+      options.push({ timezone: entry.timezone, label: entry.label });
+    });
+    return options;
+  }, [entries]);
+
+  const toggleTzMenu = () => {
+    onSearchOpenChange(false);
+    onConvertModeChange(false);
+    setShowTzMenu((prev) => !prev);
+  };
+
+  const selectReferenceTimezone = (timezone: string | null) => {
+    setSettings((prev) => ({ ...prev, referenceTimezone: timezone }));
+    setShowTzMenu(false);
+  };
+
   const getLocalConvertPosition = (): number => {
     const now = new Date();
     const totalHours =
@@ -52,7 +102,7 @@ const Header: React.FC<HeaderProps> = ({
   };
   const toggleConvertMenu = () => {
     onSearchOpenChange(false);
-    setShowLogoMenu(false);
+    setShowTzMenu(false);
     if (!isConvertModeOpen) {
       const localPos = getLocalConvertPosition();
       onConvertPositionChange(localPos);
@@ -65,19 +115,6 @@ const Header: React.FC<HeaderProps> = ({
     const localPos = getLocalConvertPosition();
     onConvertPositionChange(localPos);
     setConvertInitialPosition(localPos);
-  };
-  const toggleLogoMenu = () => {
-    onSearchOpenChange(false);
-    onConvertModeChange(false);
-    setShowLogoMenu((prev) => !prev);
-  };
-
-  const handleShare = () => {
-    navigator.clipboard.writeText(
-      'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik'
-    );
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
   };
 
   const getConvertMetrics = useCallback(() => {
@@ -182,12 +219,12 @@ const Header: React.FC<HeaderProps> = ({
         onConvertModeChange(false);
       }
       if (
-        logoRef.current &&
-        !logoRef.current.contains(target) &&
-        logoMenuRef.current &&
-        !logoMenuRef.current.contains(target)
+        tzChipRef.current &&
+        !tzChipRef.current.contains(target) &&
+        tzMenuRef.current &&
+        !tzMenuRef.current.contains(target)
       ) {
-        setShowLogoMenu(false);
+        setShowTzMenu(false);
       }
     };
 
@@ -242,17 +279,69 @@ const Header: React.FC<HeaderProps> = ({
   }, [convertPosition, getConvertMetrics, isConvertModeOpen]);
 
   return (
-    <>
-      <header
-        className={`header ${
-          isConvertModeOpen ? 'header--convert-open' : ''
-        }`}>
-        <div className="header-inner">
-          <div className="header-logo-menu" ref={logoRef}>
+    <header
+      className={`header ${
+        isConvertModeOpen ? 'header--convert-open' : ''
+      }`}>
+      <div className="header-inner">
+          <div className="header-tz-chip" ref={tzChipRef}>
             <button
-              className="header-logo"
-              aria-label="Open logo menu"
-              onClick={toggleLogoMenu}></button>
+              type="button"
+              className={`header-tz-chip__button header-tz-chip__button--${chipSky}`}
+              aria-label="Change reference timezone"
+              aria-expanded={showTzMenu}
+              onClick={toggleTzMenu}>
+              <span className="header-tz-chip__logo" />
+              <span className="header-tz-chip__city">{chipCityLabel}</span>
+              <span className="header-tz-chip__time">{chipTime}</span>
+              <svg
+                className={`header-tz-chip__chevron ${
+                  showTzMenu ? 'header-tz-chip__chevron--open' : ''
+                }`}
+                width="8"
+                height="8"
+                viewBox="0 0 10 10"
+                fill="none"
+                aria-hidden="true">
+                <path
+                  d="M2 3.5L5 6.5L8 3.5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+
+            {showTzMenu && (
+              <div className="header-tz-chip__menu" ref={tzMenuRef}>
+                <button
+                  type="button"
+                  className={`header-tz-chip__option ${
+                    settings.referenceTimezone === null ? 'active' : ''
+                  }`}
+                  onClick={() => selectReferenceTimezone(null)}>
+                  System timezone
+                  <span className="header-tz-chip__option-sub">
+                    {friendlyZoneName(getSystemTimezone())}
+                  </span>
+                </button>
+                {referenceOptions.length > 0 && (
+                  <div className="header-tz-chip__divider" />
+                )}
+                {referenceOptions.map((option) => (
+                  <button
+                    type="button"
+                    key={option.timezone}
+                    className={`header-tz-chip__option ${
+                      settings.referenceTimezone === option.timezone ? 'active' : ''
+                    }`}
+                    onClick={() => selectReferenceTimezone(option.timezone)}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="header-btns">
             <div className="header-btns__inner">
@@ -333,84 +422,7 @@ const Header: React.FC<HeaderProps> = ({
             onSelect={() => onSearchOpenChange(false)}
           />
         )}
-      </header>
-      <div
-        className={`header-logo-menu__overlay ${
-          showLogoMenu ? 'header-logo-menu__overlay--open' : ''
-        }`}
-        onClick={() => setShowLogoMenu(false)}
-        aria-hidden="true"
-      />
-      <div
-        className={`header-logo-menu__menu ${
-          showLogoMenu ? 'header-logo-menu__menu--open' : ''
-        }`}
-        ref={logoMenuRef}>
-        <button
-          className="header-logo-menu__item header-logo-menu__item--share"
-          onClick={handleShare}>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            aria-hidden="true">
-            <path
-              d="M7 8.5V1.5M7 1.5L4.5 4M7 1.5L9.5 4"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M2 9.5V12H12V9.5"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          {shareCopied ? 'Copied!' : 'Share TimeMate'}
-        </button>
-        <button className="header-logo-menu__item">
-          <a
-            href=" https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik/reviews"
-            target="_blank"
-            rel="noopener noreferrer">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="currentColor"
-              aria-hidden="true">
-              <path d="M7 1l1.545 3.13L12 4.636l-2.5 2.435.59 3.44L7 8.886l-3.09 1.625.59-3.44L2 4.636l3.455-.505L7 1z" />
-            </svg>
-            Back Me with 5 Stars
-          </a>
-        </button>
-        <button className="header-logo-menu__item">
-          <a
-            href="https://forms.gle/ncZLfTs8RKE59ETC9"
-            target="_blank"
-            rel="noopener noreferrer">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              aria-hidden="true">
-              <path
-                d="M1.5 2.5a1 1 0 011-1h9a1 1 0 011 1v6a1 1 0 01-1 1H5l-3.5 2.5V2.5z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Send Feedback
-          </a>
-        </button>
-      </div>
-    </>
+    </header>
   );
 };
 

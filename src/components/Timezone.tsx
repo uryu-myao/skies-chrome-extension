@@ -4,6 +4,7 @@ import '@styles/Timezone.scss';
 import SettingButton from './SettingButton';
 import PinButton from './PinButton';
 import DeleteButton from './DeleteButton';
+import { timeOfDay as computeTimeOfDay, type TimeOfDay } from '../core/tz';
 import type { ConvertPosition, HourFormat } from '../App';
 
 export interface TimezoneInfo {
@@ -36,10 +37,6 @@ interface SunTimes {
   sunsetStr: string;
   date: string;
 }
-
-type TimeOfDay = 'night' | 'dawn' | 'day' | 'twilight';
-
-const TWILIGHT_MINUTES = 45;
 
 function hashStr(s: string): number {
   let h = 0;
@@ -114,43 +111,6 @@ const Timezone: React.FC<TimezoneProps> = ({
     }
   };
 
-  const computeTimeOfDay = (st: SunTimes | null, refDate: Date = new Date()): TimeOfDay => {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).formatToParts(refDate);
-
-    const h = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0');
-    const m = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0');
-    const nowMin = h * 60 + m;
-
-    // Fall back to generic 6:00 / 18:00 when no sun data is available (no lat/lon).
-    const sunriseMinutes = st?.sunriseMinutes ?? 360;
-    const sunsetMinutes = st?.sunsetMinutes ?? 1080;
-
-    if (
-      nowMin >= sunriseMinutes + TWILIGHT_MINUTES &&
-      nowMin <= sunsetMinutes - TWILIGHT_MINUTES
-    ) {
-      return 'day';
-    }
-    if (
-      nowMin >= sunriseMinutes - TWILIGHT_MINUTES &&
-      nowMin <= sunriseMinutes + TWILIGHT_MINUTES
-    ) {
-      return 'dawn';
-    }
-    if (
-      nowMin >= sunsetMinutes - TWILIGHT_MINUTES &&
-      nowMin <= sunsetMinutes + TWILIGHT_MINUTES
-    ) {
-      return 'twilight';
-    }
-    return 'night';
-  };
-
   useEffect(() => {
     if (!lat || !lon) return;
 
@@ -166,7 +126,7 @@ const Timezone: React.FC<TimezoneProps> = ({
         try {
           const result = JSON.parse(cached) as SunTimes;
           sunTimesRef.current = result;
-          setTimeOfDay(computeTimeOfDay(result));
+          setTimeOfDay(computeTimeOfDay(zone, new Date(), result));
           return;
         } catch { /* corrupt entry, fall through to fetch */ }
       }
@@ -199,7 +159,7 @@ const Timezone: React.FC<TimezoneProps> = ({
           new Date(Date.now() - 86400000)
         );
         localStorage.removeItem(`timemate.sun.${zone}.${yesterday}`);
-        setTimeOfDay(computeTimeOfDay(result));
+        setTimeOfDay(computeTimeOfDay(zone, new Date(), result));
       } catch {
         // silently ignore fetch errors
       }
@@ -208,7 +168,6 @@ const Timezone: React.FC<TimezoneProps> = ({
     fetchSunTimes();
     const interval = setInterval(fetchSunTimes, 60 * 60 * 1000);
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lon, zone]);
 
   useEffect(() => {
@@ -288,7 +247,7 @@ const Timezone: React.FC<TimezoneProps> = ({
         offset: getTimezoneOffsetString(zone),
       }));
 
-      setTimeOfDay(computeTimeOfDay(sunTimesRef.current, sourceDate));
+      setTimeOfDay(computeTimeOfDay(zone, sourceDate, sunTimesRef.current));
     };
 
     updateTime();
@@ -298,7 +257,6 @@ const Timezone: React.FC<TimezoneProps> = ({
 
     const intervalId = setInterval(updateTime, 1000);
     return () => clearInterval(intervalId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone, hourFormat, isConvertModeOpen, convertPosition]);
 
   return (

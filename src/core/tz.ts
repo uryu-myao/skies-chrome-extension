@@ -135,3 +135,32 @@ export function formatHHMM(minutesOfDay: number): string {
 export function localHHMM(timezone: string, date: Date): string {
   return formatHHMM(localMinutesOfDay(timezone, date));
 }
+
+export type TimeOfDay = 'night' | 'dawn' | 'day' | 'twilight';
+
+export interface SunWindow {
+  sunriseMinutes: number;
+  sunsetMinutes: number;
+}
+
+const TWILIGHT_MINUTES = 45;
+
+// Falls back to a generic 6:00/18:00 sunrise/sunset when no sun window is
+// available (no lat/lon for the zone — e.g. the header's reference-timezone
+// chip, which only ever has an IANA id to work with).
+export function timeOfDay(timezone: string, date: Date, sun: SunWindow | null = null): TimeOfDay {
+  const nowMin = localMinutesOfDay(timezone, date);
+  const sunriseMinutes = sun?.sunriseMinutes ?? 360;
+  const sunsetMinutes = sun?.sunsetMinutes ?? 1080;
+
+  if (nowMin >= sunriseMinutes + TWILIGHT_MINUTES && nowMin <= sunsetMinutes - TWILIGHT_MINUTES) {
+    return 'day';
+  }
+  if (nowMin >= sunriseMinutes - TWILIGHT_MINUTES && nowMin <= sunriseMinutes + TWILIGHT_MINUTES) {
+    return 'dawn';
+  }
+  if (nowMin >= sunsetMinutes - TWILIGHT_MINUTES && nowMin <= sunsetMinutes + TWILIGHT_MINUTES) {
+    return 'twilight';
+  }
+  return 'night';
+}

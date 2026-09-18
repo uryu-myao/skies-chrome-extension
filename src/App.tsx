@@ -60,6 +60,9 @@ function App() {
         onConvertPositionChange={setConvertPosition}
         isSearchOpen={isSearchOpen}
         onSearchOpenChange={setIsSearchOpen}
+        entries={entries}
+        settings={settings}
+        setSettings={setSettings}
       />
       <div className="app-content">
         <TimezoneList
