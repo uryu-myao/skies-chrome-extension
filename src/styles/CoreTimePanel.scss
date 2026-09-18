@@ -1,8 +1,9 @@
 .core-time-panel {
   flex-shrink: 0;
-  margin: 0 var(--container-padding-horizontal) 10px;
-  border-radius: 22px;
+  margin: 0 var(--container-padding-horizontal) 16px;
+  border-radius: 12px;
   background: var(--color-bg-timezone);
+  color: var(--color-font-timezone);
   overflow: hidden;
 
   &__header {
@@ -11,8 +12,8 @@
     justify-content: space-between;
     gap: 8px;
     width: 100%;
-    min-height: 44px;
-    padding: 0 16px;
+    min-height: 36px;
+    padding: 0 14px;
     background: none;
     border: none;
     color: var(--color-font-timezone);
@@ -26,7 +27,7 @@
 
   &__title {
     font-family: 'Poppins', serif;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
   }
 
@@ -51,13 +52,13 @@
   }
 
   &__band {
-    padding: 4px 16px 12px;
+    padding: 4px 14px 12px;
   }
 
   &__rows {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
   }
 
   &__row {
@@ -70,7 +71,7 @@
     flex: 0 0 46px;
     font-family: 'Poppins', serif;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     opacity: 0.85;
     white-space: nowrap;
     overflow: hidden;
@@ -80,17 +81,40 @@
   &__track {
     position: relative;
     flex: 1;
-    height: 14px;
+    height: 10px;
     border-radius: 100vw;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--gradient-converter);
     overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 100vw;
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+
+  &__dot {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.6);
+
+    &.hour {
+      width: 3px;
+      height: 3px;
+      background-color: rgba(255, 247, 213, 0.72);
+    }
   }
 
   &__segment {
     position: absolute;
     top: 0;
     bottom: 0;
-    border-radius: 100vw;
 
     &--entry {
       background: #5c7cd6;
@@ -105,7 +129,6 @@
     position: absolute;
     top: -2px;
     bottom: -2px;
-    border-radius: 100vw;
     outline: 1.5px solid var(--color-secondary);
     pointer-events: none;
   }
@@ -120,7 +143,7 @@
   }
 
   &__conclusion-row {
-    padding: 10px 16px 14px;
+    padding: 10px 16px 12px;
   }
 
   &--expanded &__conclusion-row {
@@ -135,7 +158,7 @@
 
   &__headline {
     font-family: 'Poppins', serif;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -158,5 +181,6 @@
 
   &__muted {
     opacity: 0.6;
+    padding-left: 6px;
   }
 }

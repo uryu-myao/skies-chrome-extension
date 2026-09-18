@@ -496,19 +496,21 @@ th {
 }
 
 /* Reset clicking foucus blue border in all browsers
+ * Scoped to :focus-visible so a mouse click doesn't flash an outline —
+ * keyboard navigation still gets one.
    ========================================================================== */
 
-div:focus,
-a:focus,
-img:focus,
-span:focus,
-li:focus,
-picture:focus,
-figure:focus,
-button:focus,
-input:focus,
-textarea:focus,
-select:focus {
+div:focus-visible,
+a:focus-visible,
+img:focus-visible,
+span:focus-visible,
+li:focus-visible,
+picture:focus-visible,
+figure:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
   outline: 1px solid rgba(0, 0, 0, 0.1);
 }
 

@@ -1,6 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react';
+import { useEffect } from 'react';
 import '@styles/SettingsPanel.scss';
 import type { AppSettings, SortOrder } from '../core/types';
+import SegmentedControl from './SegmentedControl';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -34,7 +36,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       ...prev,
       defaultWorkHours: {
         start,
-        end: prev.defaultWorkHours.end > start ? prev.defaultWorkHours.end : Math.min(start + 1, 23),
+        end:
+          prev.defaultWorkHours.end > start
+            ? prev.defaultWorkHours.end
+            : Math.min(start + 1, 23),
       },
     }));
   };
@@ -61,129 +66,141 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     (_, i) => settings.defaultWorkHours.start + 1 + i
   );
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   return (
-    <div className={`settings-panel ${isOpen ? 'settings-panel--open' : ''}`}>
-      <div className="settings-panel__header">
-        <button className="settings-panel__back" onClick={onClose}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Settings
-        </button>
-      </div>
-      <div className="settings-panel__body">
-        <section className="settings-panel__section">
+    <>
+      <div
+        className={`settings-overlay ${isOpen ? 'settings-overlay--open' : ''}`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className={`settings-panel ${isOpen ? 'settings-panel--open' : ''}`}>
+        <div className="settings-panel__header">
+          <span className="settings-panel__title">Settings</span>
+          <button
+            className="settings-panel__close"
+            onClick={onClose}
+            aria-label="Close settings">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              aria-hidden="true">
+              <path
+                d="M2.5 2.5l7 7M9.5 2.5l-7 7"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <div className="settings-panel__body">
           <h3 className="settings-panel__section-title">Display</h3>
-
-          <div className="settings-panel__row">
-            <span className="settings-panel__label">Hour format</span>
-            <div className="settings-panel__segmented">
-              <button
-                className={!settings.hour24 ? 'active' : ''}
-                onClick={() => update({ hour24: false })}>
-                12h
-              </button>
-              <button
-                className={settings.hour24 ? 'active' : ''}
-                onClick={() => update({ hour24: true })}>
-                24h
-              </button>
+          <section className="settings-panel__section">
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Hour format</span>
+              <SegmentedControl
+                value={settings.hour24}
+                onChange={(hour24) => update({ hour24 })}
+                options={[
+                  { value: false, label: '12h' },
+                  { value: true, label: '24h' },
+                ]}
+              />
             </div>
-          </div>
 
-          <div className="settings-panel__row">
-            <span className="settings-panel__label">Show seconds</span>
-            <div className="settings-panel__segmented">
-              <button
-                className={!settings.showSeconds ? 'active' : ''}
-                onClick={() => update({ showSeconds: false })}>
-                Off
-              </button>
-              <button
-                className={settings.showSeconds ? 'active' : ''}
-                onClick={() => update({ showSeconds: true })}>
-                On
-              </button>
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Show seconds</span>
+              <SegmentedControl
+                value={settings.showSeconds}
+                onChange={(showSeconds) => update({ showSeconds })}
+                options={[
+                  { value: false, label: 'Off' },
+                  { value: true, label: 'On' },
+                ]}
+              />
             </div>
-          </div>
 
-          <div className="settings-panel__row">
-            <span className="settings-panel__label">Sort order</span>
-            <div className="settings-panel__segmented">
-              {SORT_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  className={settings.sortOrder === option.value ? 'active' : ''}
-                  onClick={() => update({ sortOrder: option.value })}>
-                  {option.label}
-                </button>
-              ))}
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Sort order</span>
+              <SegmentedControl
+                value={settings.sortOrder}
+                onChange={(sortOrder) => update({ sortOrder })}
+                options={SORT_OPTIONS}
+              />
             </div>
-          </div>
+          </section>
 
-          <div className="settings-panel__row">
-            <span className="settings-panel__label">Core Time panel</span>
-            <div className="settings-panel__segmented">
-              <button
-                className={settings.coreTimePanel === 'hidden' ? 'active' : ''}
-                onClick={() => update({ coreTimePanel: 'hidden' })}>
-                Hide
-              </button>
-              <button
-                className={settings.coreTimePanel !== 'hidden' ? 'active' : ''}
-                onClick={() => update({ coreTimePanel: 'always' })}>
-                Show
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="settings-panel__section">
           <h3 className="settings-panel__section-title">Core time</h3>
-
-          <div className="settings-panel__row">
-            <span className="settings-panel__label">Default work hours</span>
-            <div className="settings-panel__hours">
-              <select
-                value={settings.defaultWorkHours.start}
-                onChange={(event) => setStartHour(Number(event.target.value))}>
-                {startHourOptions.map((h) => (
-                  <option key={h} value={h}>
-                    {formatHour(h)}
-                  </option>
-                ))}
-              </select>
-              <span className="settings-panel__hours-sep">–</span>
-              <select
-                value={settings.defaultWorkHours.end}
-                onChange={(event) => setEndHour(Number(event.target.value))}>
-                {endHourOptions.map((h) => (
-                  <option key={h} value={h}>
-                    {formatHour(h)}
-                  </option>
-                ))}
-              </select>
+          <section className="settings-panel__section">
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Core Time panel</span>
+              <SegmentedControl
+                value={settings.coreTimePanel === 'hidden'}
+                onChange={(hidden) =>
+                  update({ coreTimePanel: hidden ? 'hidden' : 'always' })
+                }
+                options={[
+                  { value: true, label: 'Hide' },
+                  { value: false, label: 'Show' },
+                ]}
+              />
             </div>
-          </div>
 
-          <div className="settings-panel__row settings-panel__row--wrap">
-            <span className="settings-panel__label">Default work days</span>
-            <div className="settings-panel__days">
-              {WEEKDAY_LABELS.map((label, day) => (
-                <button
-                  key={day}
-                  className={`settings-panel__day ${
-                    settings.defaultWorkDays.includes(day) ? 'active' : ''
-                  }`}
-                  onClick={() => toggleWorkDay(day)}>
-                  {label}
-                </button>
-              ))}
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Default work hours</span>
+              <div className="settings-panel__hours">
+                <select
+                  value={settings.defaultWorkHours.start}
+                  onChange={(event) => setStartHour(Number(event.target.value))}>
+                  {startHourOptions.map((h) => (
+                    <option key={h} value={h}>
+                      {formatHour(h)}
+                    </option>
+                  ))}
+                </select>
+                <span className="settings-panel__hours-sep">–</span>
+                <select
+                  value={settings.defaultWorkHours.end}
+                  onChange={(event) => setEndHour(Number(event.target.value))}>
+                  {endHourOptions.map((h) => (
+                    <option key={h} value={h}>
+                      {formatHour(h)}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
-        </section>
+
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Default work days</span>
+              <div className="settings-panel__days">
+                {WEEKDAY_LABELS.map((label, day) => (
+                  <button
+                    key={day}
+                    className={`settings-panel__day ${
+                      settings.defaultWorkDays.includes(day) ? 'active' : ''
+                    }`}
+                    onClick={() => toggleWorkDay(day)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

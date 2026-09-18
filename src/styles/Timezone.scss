@@ -127,7 +127,7 @@
     grid-template:
       'local time' auto
       'footer footer' 20px / 1fr 1fr;
-    gap: 3px;
+    gap: 4px;
     padding-top: 5px;
     background: linear-gradient(
       180deg,
@@ -208,7 +208,7 @@
   &-footer {
     color: white;
     background: rgba(0, 170, 255, 0.15);
-    padding: 0 var(--container-padding-horizontal) 0 15px;
+    padding: 0 27px 0 15px;
     grid-area: footer;
     display: flex;
     justify-content: space-between;
@@ -229,7 +229,7 @@
     &__location {
       grid-area: local;
       font-family: 'Poppins', serif;
-      font-size: 15px;
+      font-size: 22px;
       font-style: normal;
       font-weight: 700;
       display: flex;
@@ -242,13 +242,13 @@
     &__time {
       grid-area: time;
       font-family: 'Lato', sans-serif;
-      font-size: 26px;
+      font-size: 30px;
       font-weight: 400;
       letter-spacing: 0.5px;
       font-style: normal;
       display: flex;
       justify-content: flex-end;
-      padding-right: 16px;
+      padding-right: 26px;
       text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
 
@@ -258,11 +258,11 @@
       font-family: 'Poppins', serif;
       font-weight: 600;
       font-style: normal;
-      font-size: 8px;
+      font-size: 10px;
       text-transform: uppercase;
       margin: 0;
       top: 7px;
-      right: 6px;
+      right: 8px;
 
       &--am {
         color: var(--color-meridiem-am);
@@ -283,10 +283,10 @@
 
     &__second {
       position: absolute;
-      top: 22px;
-      right: 6px;
+      top: 24px;
+      right: 8px;
       font-family: 'Lato', sans-serif;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: 300;
       letter-spacing: 0.8px;
       font-style: normal;

@@ -14,6 +14,8 @@ interface SlotRange {
   end: number;
 }
 
+const TRACK_DOT_HOURS = [3, 6, 9, 12, 15, 18, 21];
+
 function blocksToRanges(blocks: boolean[]): SlotRange[] {
   const ranges: SlotRange[] = [];
   let start: number | null = null;
@@ -166,6 +168,13 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
               <div className="core-time-panel__row" key={row.key}>
                 <span className="core-time-panel__row-label">{row.label}</span>
                 <div className="core-time-panel__track">
+                  {TRACK_DOT_HOURS.map((hour) => (
+                    <span
+                      key={hour}
+                      className={`core-time-panel__dot ${hour % 6 === 0 ? 'hour' : ''}`}
+                      style={{ left: `${(hour / 24) * 100}%` }}
+                    />
+                  ))}
                   {blocksToRanges(row.blocks).map((range, i) => (
                     <span
                       key={i}
