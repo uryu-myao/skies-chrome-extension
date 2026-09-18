@@ -151,6 +151,33 @@
     opacity: 0.8;
   }
 
+  &__row--link {
+    width: 100%;
+    border: none;
+    background: none;
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+
+    &:hover {
+      opacity: 0.8;
+    }
+  }
+
+  &__chevron {
+    color: var(--color-font-timezone);
+    opacity: 0.4;
+    font-size: 14px;
+  }
+
+  &__value {
+    font-family: 'Poppins', serif;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--color-font-timezone);
+    opacity: 0.5;
+  }
+
   &__segmented {
     position: relative;
     display: flex;

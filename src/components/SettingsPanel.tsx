@@ -1,8 +1,13 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import '@styles/SettingsPanel.scss';
 import type { AppSettings, SortOrder } from '../core/types';
 import SegmentedControl from './SegmentedControl';
+import { version as appVersion } from '../../package.json';
+
+const SHARE_URL = 'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik';
+const RATE_URL = `${SHARE_URL}/reviews`;
+const FEEDBACK_URL = 'https://forms.gle/ncZLfTs8RKE59ETC9';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -28,8 +33,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   settings,
   setSettings,
 }) => {
+  const [shareCopied, setShareCopied] = useState(false);
+
   const update = (patch: Partial<AppSettings>) =>
     setSettings((prev) => ({ ...prev, ...patch }));
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(SHARE_URL);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
 
   const setStartHour = (start: number) => {
     setSettings((prev) => ({
@@ -196,6 +209,42 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   </button>
                 ))}
               </div>
+            </div>
+          </section>
+
+          <h3 className="settings-panel__section-title">About</h3>
+          <section className="settings-panel__section">
+            <button
+              type="button"
+              className="settings-panel__row settings-panel__row--link"
+              onClick={handleShare}>
+              <span className="settings-panel__label">
+                {shareCopied ? 'Copied!' : 'Share TimeMate'}
+              </span>
+              <span className="settings-panel__chevron">›</span>
+            </button>
+
+            <a
+              className="settings-panel__row settings-panel__row--link"
+              href={RATE_URL}
+              target="_blank"
+              rel="noopener noreferrer">
+              <span className="settings-panel__label">Rate on Chrome Store</span>
+              <span className="settings-panel__chevron">›</span>
+            </a>
+
+            <a
+              className="settings-panel__row settings-panel__row--link"
+              href={FEEDBACK_URL}
+              target="_blank"
+              rel="noopener noreferrer">
+              <span className="settings-panel__label">Send Feedback</span>
+              <span className="settings-panel__chevron">›</span>
+            </a>
+
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Version</span>
+              <span className="settings-panel__value">v{appVersion}</span>
             </div>
           </section>
         </div>
