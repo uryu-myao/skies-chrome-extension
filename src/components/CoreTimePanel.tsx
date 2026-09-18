@@ -153,52 +153,54 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
 
       {isExpanded && canExpand && (
         <div className="core-time-panel__band">
-          <div className="core-time-panel__rows">
-            {rows.map((row) => (
-              <div className="core-time-panel__row" key={row.key}>
-                <span
-                  className={`core-time-panel__row-label ${row.isBaseline ? 'core-time-panel__row-label--baseline' : ''}`}>
-                  {row.label}
-                  {row.isBaseline && (
-                    <span className="core-time-panel__row-baseline-tag">You</span>
-                  )}
-                </span>
-                <div className="core-time-panel__track">
-                  {TRACK_DOT_HOURS.map((hour) => (
-                    <span
-                      key={hour}
-                      className={`core-time-panel__dot ${hour % 6 === 0 ? 'hour' : ''}`}
-                      style={{ left: `${(hour / 24) * 100}%` }}
-                    />
-                  ))}
-                  {blocksToRanges(row.blocks).map((range, i) => (
-                    <span
-                      key={i}
-                      className="core-time-panel__segment"
-                      style={{
-                        left: `${(range.start / SLOTS_PER_DAY) * 100}%`,
-                        width: `${((range.end - range.start) / SLOTS_PER_DAY) * 100}%`,
-                      }}
-                    />
-                  ))}
-                  {result.overlap.map((range, i) => (
-                    <span
-                      key={i}
-                      className="core-time-panel__overlap"
-                      style={{
-                        left: `${(range.startSlot / SLOTS_PER_DAY) * 100}%`,
-                        width: `${((range.endSlot - range.startSlot) / SLOTS_PER_DAY) * 100}%`,
-                      }}
-                    />
-                  ))}
-                </div>
+          {rows.map((row) => (
+            <div className="core-time-panel__row" key={row.key}>
+              <span
+                className={`core-time-panel__row-label ${row.isBaseline ? 'core-time-panel__row-label--baseline' : ''}`}
+                title={row.label}>
+                {row.label}
+                {row.isBaseline && (
+                  <span className="core-time-panel__row-baseline-tag">You</span>
+                )}
+              </span>
+              <div className="core-time-panel__track">
+                {TRACK_DOT_HOURS.map((hour) => (
+                  <span
+                    key={hour}
+                    className={`core-time-panel__dot ${hour % 6 === 0 ? 'hour' : ''}`}
+                    style={{ left: `${(hour / 24) * 100}%` }}
+                  />
+                ))}
+                {blocksToRanges(row.blocks).map((range, i) => (
+                  <span
+                    key={i}
+                    className="core-time-panel__segment"
+                    style={{
+                      left: `${(range.start / SLOTS_PER_DAY) * 100}%`,
+                      width: `${((range.end - range.start) / SLOTS_PER_DAY) * 100}%`,
+                    }}
+                  />
+                ))}
+                {result.overlap.map((range, i) => (
+                  <span
+                    key={i}
+                    className="core-time-panel__overlap"
+                    style={{
+                      left: `${(range.startSlot / SLOTS_PER_DAY) * 100}%`,
+                      width: `${((range.endSlot - range.startSlot) / SLOTS_PER_DAY) * 100}%`,
+                    }}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="core-time-panel__scale">
-            {[0, 6, 12, 18, 24].map((hour) => (
-              <span key={hour}>{hour}</span>
-            ))}
+            </div>
+          ))}
+          <div className="core-time-panel__scale-row">
+            <span aria-hidden="true" />
+            <div className="core-time-panel__scale">
+              {[0, 6, 12, 18, 24].map((hour) => (
+                <span key={hour}>{hour}</span>
+              ))}
+            </div>
           </div>
         </div>
       )}

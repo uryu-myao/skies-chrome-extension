@@ -19,7 +19,7 @@ interface SettingsPanelProps {
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
   { value: 'manual', label: 'Newest' },
-  { value: 'offset', label: 'By time' },
+  { value: 'offset', label: 'By offset' },
   { value: 'name', label: 'Alphabet' },
 ];
 

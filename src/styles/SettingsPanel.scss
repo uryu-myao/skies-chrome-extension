@@ -125,7 +125,8 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--color-secondary);
+    color: var(--color-font-timezone);
+    opacity: 0.45;
   }
 
   &__row {
