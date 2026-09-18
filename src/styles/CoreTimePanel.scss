@@ -76,6 +76,11 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+
+    &--you {
+      color: #9db8ea;
+      opacity: 1;
+    }
   }
 
   &__track {

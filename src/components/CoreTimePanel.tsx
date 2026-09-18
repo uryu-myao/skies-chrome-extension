@@ -166,7 +166,10 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
           <div className="core-time-panel__rows">
             {rows.map((row) => (
               <div className="core-time-panel__row" key={row.key}>
-                <span className="core-time-panel__row-label">{row.label}</span>
+                <span
+                  className={`core-time-panel__row-label ${row.variant === 'you' ? 'core-time-panel__row-label--you' : ''}`}>
+                  {row.label}
+                </span>
                 <div className="core-time-panel__track">
                   {TRACK_DOT_HOURS.map((hour) => (
                     <span
