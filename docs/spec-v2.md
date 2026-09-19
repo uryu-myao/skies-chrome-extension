@@ -148,7 +148,12 @@ coreTime({
   axis: [{ slot, refTime }],        // 48 格
   rows: [{ entryId, blocks, localDate, crossesDay }],
   overlap: [{ startSlot, endSlot }] | [],
-  closest: { refTime, perEntry: [...], gapMinutes } | null
+  conclusion:                        // 状态枚举 + 数据,不含文案,见 5.3
+    | { status: 'NO_ENTRIES' }
+    | { status: 'OVERLAP' }
+    | { status: 'NO_OVERLAP_TODAY', closest: { refTime, perEntry: [...], gapMinutes } }
+    | { status: 'ALL_OFF', offEntryIds, nextOverlap: { daysFromToday, weekday, startSlot, endSlot } | null }
+    | { status: 'PARTIAL_OFF', workingEntryIds, offEntryIds, nextOverlap: {...} | null }
 }
 ```
 
@@ -158,21 +163,40 @@ coreTime({
 2. 对每个条目、每个槽位:换算成该条目的本地时刻与本地星期
 3. 该槽位计入工作时段,当且仅当:本地星期 ∈ `workDays` 且本地时刻 ∈ `[start, end)`
 4. `overlap` = 所有条目工作槽位的交集
-5. `overlap` 为空时,计算 `closest`(见 5.3)
+5. `overlap` 为空时,进入 5.3 的状态判断——不再直接计算 `closest`,是否计算 `closest` 本身取决于该状态判断的结果
 
-### 5.3 零重叠是主状态,不是异常
+### 5.3 空状态是主状态,不是异常
 
-东京 + 波士顿在默认工时下**必然**零重叠。这是最常见的情况,必须给出可操作的结果:
+东京 + 波士顿在默认工时下**必然**零重叠。这是最常见的情况,必须给出可操作的结果,而不是一句「计算失败」类的兜底文案。零重叠之外,「今天恰好是休息日」同样是常态而非异常,需要单独识别,不能和「工时对不上」混成一种状态。
+
+`overlap` 为空时,按下表判断状态。**展开态与收起态渲染必须共用同一个状态判断,不允许两套逻辑**;判断本身放在 `core/coretime.ts`,只返回状态枚举 + 该状态需要的数据,不含任何文案字符串,文案全部由 UI 层渲染:
+
+| 状态               | 触发条件                                                    | 数据                                                |
+| ------------------ | ------------------------------------------------------------ | --------------------------------------------------- |
+| `NO_ENTRIES`       | 参与计算的条目数为 0;也是下方计算异常时的统一兜底             | —                                                    |
+| `OVERLAP`          | `overlap` 非空                                                | `overlap` 数组                                       |
+| `ALL_OFF`          | `overlap` 为空,且所有条目在 `referenceDate` 这一刻都不在各自 `workDays` 内 | 被排除条目 id 列表、`nextOverlap`                     |
+| `PARTIAL_OFF`      | `overlap` 为空,部分(非全部)条目在 `referenceDate` 这一刻不在各自 `workDays` 内 | 在岗条目 id 列表、被排除条目 id 列表、`nextOverlap`   |
+| `NO_OVERLAP_TODAY` | `overlap` 为空,且所有条目在 `referenceDate` 这一刻都在各自 `workDays` 内 | `closest`                                            |
+
+**判断"今天是否在场"用的是 `referenceDate` 这一个具体瞬间的本地星期,不是扫描整条 48 槽轴。** 扫描整条轴会产生两种边界假象:(a) 一个与参考时区零偏移的条目,它在轴上的本地星期是恒定值,一旦当天不是它的工作日,会让轴上全部 48 个槽位都判定为不可行,`closest` 因此直接返回 `null`;(b) 一个有偏移的条目,轴的两端可能分别落在两个不同日历日,恰好把前一天工作日的一小段划进轴内,产出「周六 00:00」这类没有实际意义的建议。改成只看 `referenceDate` 这一个瞬间,这两种假象都不会出现。
+
+**`NO_OVERLAP_TODAY` 的 `closest`**:在参考轴上找一个槽位,使得**所有条目距离各自工作时段的总偏离分钟数最小**。返回该时刻、各条目的本地时刻、以及最大偏离量(用于生成「4h after your day ends」这类提示)。若存在多个并列最优解,取最早的一个。这个分支的前提是当天所有条目都在工作日内,正常情况下必然有解;若仍返回 `null`(例如日期变更线两侧的极端偏移组合),视为 bug:`console.error` 并回退到 `NO_ENTRIES`,不再新增第二套「计算失败」文案。
+
+**`ALL_OFF` / `PARTIAL_OFF` 的 `nextOverlap`**:从明天起,以参考时区的日历日为单位向后逐日搜索——每天各自生成一条完整的 48 槽轴并计算 `overlap`(与当天的算法完全一致),取第一个 `overlap` 非空的日期,返回该日期的星期与时段。上限 7 天;超出上限仍未找到则返回 `null`,UI 不渲染这一行,而不是再补一句兜底文案。
+
+文案示例(UI 层渲染,`core/` 本身不含任何文案字符串):
 
 ```
-No shared work hours today
-Closest — 22:00 your time / 09:00 Kenji's
-4h after your day ends
+OVERLAP            Overlap 11:00–18:00
+NO_OVERLAP_TODAY   No overlap today
+                   Closest — 22:00 yours / 09:00 Shanghai's
+ALL_OFF            Everyone's off today
+                   Next overlap — Mon 11:00–18:00
+PARTIAL_OFF        Only Shanghai is working today
+                   Next full overlap — Mon 11:00–18:00
+NO_ENTRIES         Add a city to compare
 ```
-
-`closest` 的定义:在参考轴上找一个槽位,使得**所有条目距离各自工作时段的总偏离分钟数最小**。返回该时刻、各条目的本地时刻、以及最大偏离量(用于生成「4h after your day ends」这句)。
-
-若存在多个并列最优解,取最早的一个。
 
 ### 5.4 单条目
 
