@@ -15,6 +15,7 @@ interface SlotRange {
 }
 
 const TRACK_DOT_HOURS = [3, 6, 9, 12, 15, 18, 21];
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function blocksToRanges(blocks: boolean[]): SlotRange[] {
   const ranges: SlotRange[] = [];
@@ -40,6 +41,12 @@ function formatHoursDiff(minutes: number): string {
   return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
 }
 
+function joinLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels[0] ?? '';
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+}
+
 const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -63,57 +70,89 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
     filteredEntries.find((entry) => entry.id === entryId);
   const labelOf = (entryId: string): string => entryOf(entryId)?.label ?? '';
 
+  const renderNextOverlap = (label: string, nextOverlap: { weekday: number; startSlot: number; endSlot: number } | null) => {
+    if (!nextOverlap) return null;
+    const range = `${formatSlotTime(result.axis, nextOverlap.startSlot)}–${formatSlotTime(result.axis, nextOverlap.endSlot)}`;
+    return (
+      <span className="core-time-panel__detail">
+        {label} — {WEEKDAY_SHORT[nextOverlap.weekday]} {range}
+      </span>
+    );
+  };
+
   const renderConclusion = () => {
-    if (filteredEntries.length === 0) {
-      return (
-        <span className="core-time-panel__headline">
-          No cities included in Core Time
-        </span>
-      );
-    }
+    const { conclusion } = result;
 
-    if (result.overlap.length > 0) {
-      const [first, ...rest] = result.overlap;
-      const range = `${formatSlotTime(result.axis, first.startSlot)}–${formatSlotTime(result.axis, first.endSlot)}`;
-      const prefix = filteredEntries.length === 1 ? labelOf(filteredEntries[0].id) : 'Overlap';
-      return (
-        <span className="core-time-panel__headline">
-          {prefix} {range}
-          {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
-        </span>
-      );
-    }
+    switch (conclusion.status) {
+      case 'NO_ENTRIES':
+        return <span className="core-time-panel__headline">Add a city to compare</span>;
 
-    if (result.closest) {
-      const [rh, rm] = result.closest.refTime.split(':').map(Number);
-      const refMinutes = rh * 60 + rm;
-      const startMinutes = settings.defaultWorkHours.start * 60;
-      const endMinutes = settings.defaultWorkHours.end * 60;
-
-      let directionText: string | null = null;
-      if (refMinutes < startMinutes) {
-        directionText = `${formatHoursDiff(startMinutes - refMinutes)} before your day starts`;
-      } else if (refMinutes >= endMinutes) {
-        directionText = `${formatHoursDiff(refMinutes - endMinutes)} after your day ends`;
+      case 'OVERLAP': {
+        const [first, ...rest] = result.overlap;
+        const range = `${formatSlotTime(result.axis, first.startSlot)}–${formatSlotTime(result.axis, first.endSlot)}`;
+        const prefix = filteredEntries.length === 1 ? labelOf(filteredEntries[0].id) : 'Overlap';
+        return (
+          <span className="core-time-panel__headline">
+            {prefix} {range}
+            {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
+          </span>
+        );
       }
 
-      return (
-        <div className="core-time-panel__conclusion">
-          <span className="core-time-panel__headline">No shared work hours today</span>
-          <span className="core-time-panel__detail">
-            Closest — {result.closest.refTime} your time
-            {result.closest.perEntry.map((p) => (
-              <span key={p.entryId}> / {p.localTime} {labelOf(p.entryId)}'s</span>
-            ))}
-          </span>
-          {directionText && <span className="core-time-panel__muted-line">{directionText}</span>}
-        </div>
-      );
-    }
+      case 'NO_OVERLAP_TODAY': {
+        const { closest } = conclusion;
+        const [rh, rm] = closest.refTime.split(':').map(Number);
+        const refMinutes = rh * 60 + rm;
+        const startMinutes = settings.defaultWorkHours.start * 60;
+        const endMinutes = settings.defaultWorkHours.end * 60;
 
-    return (
-      <span className="core-time-panel__headline">No valid work hours to compare</span>
-    );
+        let directionText: string | null = null;
+        if (refMinutes < startMinutes) {
+          directionText = `${formatHoursDiff(startMinutes - refMinutes)} before your day starts`;
+        } else if (refMinutes >= endMinutes) {
+          directionText = `${formatHoursDiff(refMinutes - endMinutes)} after your day ends`;
+        }
+
+        return (
+          <div className="core-time-panel__conclusion">
+            <span className="core-time-panel__headline">No overlap today</span>
+            <span className="core-time-panel__detail">
+              Closest — {closest.refTime} yours
+              {closest.perEntry.map((p) => (
+                <span key={p.entryId}> / {p.localTime} {labelOf(p.entryId)}'s</span>
+              ))}
+            </span>
+            {directionText && <span className="core-time-panel__muted-line">{directionText}</span>}
+          </div>
+        );
+      }
+
+      case 'ALL_OFF':
+        return (
+          <div className="core-time-panel__conclusion">
+            <span className="core-time-panel__headline">Everyone's off today</span>
+            {renderNextOverlap('Next overlap', conclusion.nextOverlap)}
+          </div>
+        );
+
+      case 'PARTIAL_OFF': {
+        const workingLabels = conclusion.workingEntryIds.map(labelOf);
+        const verb = workingLabels.length === 1 ? 'is' : 'are';
+        return (
+          <div className="core-time-panel__conclusion">
+            <span className="core-time-panel__headline">
+              Only {joinLabels(workingLabels)} {verb} working today
+            </span>
+            {renderNextOverlap('Next full overlap', conclusion.nextOverlap)}
+          </div>
+        );
+      }
+
+      default: {
+        const unreachable: never = conclusion;
+        return unreachable;
+      }
+    }
   };
 
   const canExpand = filteredEntries.length > 0;
