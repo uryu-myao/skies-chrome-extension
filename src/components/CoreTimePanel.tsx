@@ -163,6 +163,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
     label: labelOf(row.entryId),
     blocks: row.blocks,
     isBaseline: entryOf(row.entryId)?.timezone === referenceTimezone,
+    isOff: row.blocks.every((block) => !block),
   }));
 
   return (
@@ -193,16 +194,24 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
       {isExpanded && canExpand && (
         <div className="core-time-panel__band">
           {rows.map((row) => (
-            <div className="core-time-panel__row" key={row.key}>
+            <div
+              className={`core-time-panel__row ${row.isOff ? 'core-time-panel__row--off' : ''}`}
+              key={row.key}>
               <span
-                className={`core-time-panel__row-label ${row.isBaseline ? 'core-time-panel__row-label--baseline' : ''}`}
-                title={row.label}>
-                {row.label}
+                className={`core-time-panel__row-label ${row.isBaseline ? 'core-time-panel__row-label--baseline' : ''}`}>
+                <span className="core-time-panel__row-name" title={row.label}>
+                  {row.label}
+                </span>
                 {row.isBaseline && (
                   <span className="core-time-panel__row-baseline-tag">You</span>
                 )}
+                {row.isOff && (
+                  <span className="core-time-panel__row-off-tag">Off</span>
+                )}
               </span>
-              <div className="core-time-panel__track">
+              <div
+                className="core-time-panel__track"
+                title={row.isOff ? 'Not a work day' : undefined}>
                 {TRACK_DOT_HOURS.map((hour) => (
                   <span
                     key={hour}
