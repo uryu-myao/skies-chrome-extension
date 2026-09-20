@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type Dispatch, type 
 import '@styles/Header.scss';
 import Searchbar from '../components/Searchbar';
 import { TimezoneInfo } from './Timezone';
-import { getSystemTimezone, localHHMM, timeOfDay } from '../core/tz';
+import { getSystemTimezone, localHHMM } from '../core/tz';
 import type { AppSettings, Entry } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition } from '../App';
 
@@ -68,7 +68,6 @@ const Header: React.FC<HeaderProps> = ({
   const chipEntry = entries.find((entry) => entry.timezone === effectiveTimezone);
   const chipCityLabel = chipEntry?.label ?? friendlyZoneName(effectiveTimezone);
   const chipTime = localHHMM(effectiveTimezone, chipNow);
-  const chipSky = timeOfDay(effectiveTimezone, chipNow);
 
   const referenceOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -287,7 +286,7 @@ const Header: React.FC<HeaderProps> = ({
           <div className="header-tz-chip" ref={tzChipRef}>
             <button
               type="button"
-              className={`header-tz-chip__button header-tz-chip__button--${chipSky}`}
+              className="header-tz-chip__button"
               aria-label="Change reference timezone"
               aria-expanded={showTzMenu}
               onClick={toggleTzMenu}>

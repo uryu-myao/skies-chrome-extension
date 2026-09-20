@@ -63,38 +63,13 @@
       padding: 0 10px 0 4px;
       border: none;
       border-radius: 100vw;
-      background: linear-gradient(
-        180deg,
-        var(--tz-c0, #3d83e5) 0%,
-        var(--tz-c1, #77b6e3) 50%,
-        var(--tz-c2, #d3e2f2) 100%
-      );
+      background-color: var(--color-primary);
       color: var(--color-font-timezone);
       cursor: pointer;
-      transition:
-        --tz-c0 0.6s ease,
-        --tz-c1 0.6s ease,
-        --tz-c2 0.6s ease;
+      transition: background-color 0.2s ease-in-out;
 
-      &--night {
-        --tz-c0: #12111e;
-        --tz-c1: #1d1c27;
-        --tz-c2: #2a2933;
-      }
-      &--dawn {
-        --tz-c0: #608ebb;
-        --tz-c1: #b994c3;
-        --tz-c2: #e8cba1;
-      }
-      &--twilight {
-        --tz-c0: #102d58;
-        --tz-c1: #3e4f85;
-        --tz-c2: #df524e;
-      }
-      &--day {
-        --tz-c0: #3d83e5;
-        --tz-c1: #77b6e3;
-        --tz-c2: #d3e2f2;
+      &:hover {
+        background-color: var(--color-hover);
       }
     }
 
