@@ -278,11 +278,12 @@ const Header: React.FC<HeaderProps> = ({
   }, [convertPosition, getConvertMetrics, isConvertModeOpen]);
 
   return (
-    <header
-      className={`header ${
-        isConvertModeOpen ? 'header--convert-open' : ''
-      }`}>
-      <div className="header-inner">
+    <>
+      <header
+        className={`header ${
+          isConvertModeOpen ? 'header--convert-open' : ''
+        }`}>
+        <div className="header-inner">
           <div className="header-tz-chip" ref={tzChipRef}>
             <button
               type="button"
@@ -423,7 +424,15 @@ const Header: React.FC<HeaderProps> = ({
             onSelect={() => onSearchOpenChange(false)}
           />
         )}
-    </header>
+      </header>
+      {showTzMenu && (
+        <div
+          className="header-tz-chip__overlay"
+          onClick={() => setShowTzMenu(false)}
+          aria-hidden="true"
+        />
+      )}
+    </>
   );
 };
 
