@@ -77,6 +77,12 @@
     }
 
     &__pill {
+      position: relative;
+      // Above __overlay (z-index: 15) so the pill reads as part of the
+      // same surface as __menu (16) instead of getting dimmed with
+      // everything else behind the overlay — visually ties trigger and
+      // popup together as one unit.
+      z-index: 16;
       display: flex;
       align-items: center;
       gap: 6px;
