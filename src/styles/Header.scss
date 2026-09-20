@@ -127,7 +127,15 @@
     }
 
     &__overlay {
-      position: absolute;
+      // fixed, not absolute: this sits inside .header, which is its own
+      // stacking context (position:relative + z-index:2) — an absolute
+      // overlay here would be capped at z-index 2 from the outside, no
+      // matter what z-index it's given, and would end up UNDER the rest
+      // of the popup instead of over it. Fixed positioning still paints
+      // within .header's stacking context (so it correctly stays below
+      // __menu's z-index:16) but sizes against the viewport instead of
+      // .header's own small box, covering the whole popup either way.
+      position: fixed;
       inset: 0;
       z-index: 15;
       background: rgba(8, 8, 12, 0.55);
