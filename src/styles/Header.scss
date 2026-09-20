@@ -108,6 +108,13 @@
       font-weight: 500;
       letter-spacing: 0.06em;
       opacity: 0.85;
+      // Poppins' digits aren't tabular (font-variant-numeric: tabular-nums
+      // has no effect — measured, not assumed), so a ticking clock
+      // otherwise reflows the pill's width every time the digits change.
+      // 38px comfortably covers the widest of all 1440 HH:MM combinations
+      // (06:46, measured at ~36.5px).
+      min-width: 38px;
+      text-align: right;
     }
 
     &__chevron {
