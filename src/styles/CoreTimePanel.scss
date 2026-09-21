@@ -5,6 +5,11 @@
   background: var(--color-bg-timezone);
   color: var(--color-font-timezone);
   overflow: hidden;
+  box-shadow:
+    rgba(255, 255, 255, 0.1) 0px 1px 0px 0px inset,
+    rgba(7, 13, 79, 0.05) 0px 0px 20px 3px,
+    rgba(7, 13, 79, 0.05) 0px 0px 40px 20px,
+    rgba(255, 255, 255, 0.06) 0px 0px 0px 1px inset;
 
   &__header {
     display: flex;
