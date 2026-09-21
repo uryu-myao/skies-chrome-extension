@@ -200,10 +200,10 @@
     text-overflow: ellipsis;
   }
 
-  // Same orange as __overlap's band outline — both mark "this is the
-  // overlap", just in the headline vs. the band.
+  // App's primary accent blue (same token Settings uses for its active
+  // segmented-control/day-toggle states) — orange read as too jarring here.
   &__headline-range {
-    color: var(--color-secondary);
+    color: var(--color-primary-blue);
   }
 
   &__detail {
