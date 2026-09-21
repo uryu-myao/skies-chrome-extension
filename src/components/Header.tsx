@@ -295,9 +295,7 @@ const Header: React.FC<HeaderProps> = ({
                 <span className="header-tz-chip__city">{chipCityLabel}</span>
                 <span className="header-tz-chip__time">{chipTime}</span>
                 <svg
-                  className={`header-tz-chip__chevron ${
-                    showTzMenu ? 'header-tz-chip__chevron--open' : ''
-                  }`}
+                  className="header-tz-chip__chevron"
                   width="8"
                   height="8"
                   viewBox="0 0 10 10"
