@@ -12,6 +12,7 @@
     rgba(255, 255, 255, 0.06) 0px 0px 0px 1px inset;
 
   &__header {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -19,20 +20,31 @@
     width: 100%;
     min-height: 36px;
     padding: 0 14px;
-    // Same gradient the :hover rule uses, just transparent at both stops —
-    // background: none -> radial-gradient(...) can't transition (there's no
-    // interpolation path between "no image" and a gradient image), so the
-    // base state needs to already BE a gradient, structurally identical to
-    // the hover one, differing only in alpha, for the fade to animate.
-    background: radial-gradient(40% 60% at 50% 0, rgba(91, 91, 91, 0) 0%, rgba(32, 32, 37, 0) 100%);
+    background: none;
     border: none;
     color: var(--color-font-timezone);
     cursor: pointer;
     text-align: left;
-    transition: all 0.2s ease-in-out;
 
-    &:hover:not(:disabled) {
+    // Chrome doesn't smoothly interpolate background-image between two
+    // gradients (verified: getComputedStyle shows the end value on the very
+    // next frame, no in-between steps, regardless of how structurally
+    // similar the two gradients are) — so the hover fade can't live on
+    // `background` directly. A separate layer faded via opacity sidesteps
+    // that entirely, since opacity *is* always interpolatable.
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 0;
       background: radial-gradient(40% 60% at 50% 0, rgba(91, 91, 91, 0.48) 0%, #202025 100%);
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+      pointer-events: none;
+    }
+
+    &:hover:not(:disabled)::before {
+      opacity: 1;
     }
 
     &:disabled {
@@ -41,12 +53,16 @@
   }
 
   &__title {
+    position: relative;
+    z-index: 1;
     font-family: 'Poppins', serif;
     font-size: 14px;
     font-weight: 700;
   }
 
   &__meta {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 4px;
