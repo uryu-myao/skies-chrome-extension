@@ -200,6 +200,12 @@
     text-overflow: ellipsis;
   }
 
+  // Same orange as __overlap's band outline — both mark "this is the
+  // overlap", just in the headline vs. the band.
+  &__headline-range {
+    color: var(--color-secondary);
+  }
+
   &__detail {
     font-family: 'Poppins', serif;
     font-size: 12px;

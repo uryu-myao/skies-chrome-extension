@@ -93,7 +93,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
         const prefix = filteredEntries.length === 1 ? labelOf(filteredEntries[0].id) : 'Overlap';
         return (
           <span className="core-time-panel__headline">
-            {prefix} {range}
+            {prefix} <span className="core-time-panel__headline-range">{range}</span>
             {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
           </span>
         );
