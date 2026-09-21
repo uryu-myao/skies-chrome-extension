@@ -25,6 +25,10 @@
     cursor: pointer;
     text-align: left;
 
+    &:hover:not(:disabled) {
+      background: radial-gradient(79.21% 79.21% at 42.35% 0, #787878 0%, #282828 100%);
+    }
+
     &:disabled {
       cursor: default;
     }
