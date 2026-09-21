@@ -122,6 +122,11 @@
       text-align: right;
     }
 
+    &__chevron {
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
     &__overlay {
       // fixed, not absolute: this sits inside .header, which is its own
       // stacking context (position:relative + z-index:2) — an absolute

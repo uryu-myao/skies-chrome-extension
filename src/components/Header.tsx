@@ -294,6 +294,21 @@ const Header: React.FC<HeaderProps> = ({
               <span className="header-tz-chip__pill">
                 <span className="header-tz-chip__city">{chipCityLabel}</span>
                 <span className="header-tz-chip__time">{chipTime}</span>
+                <svg
+                  className="header-tz-chip__chevron"
+                  width="8"
+                  height="8"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  aria-hidden="true">
+                  <path
+                    d="M2 3.5L5 6.5L8 3.5"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </span>
             </button>
 
