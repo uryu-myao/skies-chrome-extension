@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import '@styles/_reset.css';
 import '@styles/Timezone.scss';
-import SettingButton from './SettingButton';
-import PinButton from './PinButton';
-import DeleteButton from './DeleteButton';
 import {
   formatRelativeOffset,
   formatUtcOffset,
@@ -29,14 +26,6 @@ interface TimezoneProps extends TimezoneInfo {
   showSeconds: boolean;
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
-  setting: boolean;
-  isPinned: boolean;
-  toggleSetting: (id: string) => void;
-  deleteTimezone: () => void;
-  pinTimezone: () => void;
-  unpinTimezone: () => void;
-  playHint?: boolean;
-  onHintPlayed?: () => void;
 }
 
 interface SunTimes {
@@ -80,14 +69,6 @@ const Timezone: React.FC<TimezoneProps> = ({
   showSeconds,
   isConvertModeOpen,
   convertPosition,
-  setting,
-  isPinned,
-  toggleSetting,
-  deleteTimezone,
-  pinTimezone,
-  unpinTimezone,
-  playHint,
-  onHintPlayed,
 }) => {
   const stars = useMemo(() => makeStars(id, 20), [id]);
 
@@ -271,12 +252,7 @@ const Timezone: React.FC<TimezoneProps> = ({
   return (
     <div
       data-timezone-id={id}
-      className={`timezone ${setting ? 'setting' : ''} ${isPinned ? 'pinned' : ''} timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}${playHint ? ' timezone--hint' : ''}`}
-      onAnimationEnd={(event) => {
-        if (event.animationName === 'timezone-hint-peek') {
-          onHintPlayed?.();
-        }
-      }}>
+      className={`timezone timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}`}>
       <div className="timezone-inner">
         {timeOfDay === 'night' && !isConvertModeOpen && (
           <svg className="timezone-stars" aria-hidden="true">
@@ -331,20 +307,6 @@ const Timezone: React.FC<TimezoneProps> = ({
             </span>
           </p>
         </div>
-      </div>
-      <SettingButton onClick={() => toggleSetting(id)} />
-      <div className="timezone-btn">
-        <PinButton
-          isPinned={isPinned}
-          onClick={() => {
-            if (isPinned) {
-              unpinTimezone();
-            } else {
-              pinTimezone();
-            }
-          }}
-        />
-        <DeleteButton onClick={deleteTimezone} />
       </div>
     </div>
   );

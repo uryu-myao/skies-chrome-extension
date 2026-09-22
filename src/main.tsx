@@ -4,12 +4,13 @@ import '@styles/index.scss';
 import App from './App';
 import { migrate } from './core/migrate';
 
-// Runs before any rendering — backs up v1 data and writes the v2 blob as a
-// silent side effect. The UI still reads/writes v1 keys until the Phase-3 cutover.
-migrate();
+// Runs before any rendering — v1 → v2 on first run, and a one-time freeze of
+// the old display order into manual order. The app renders from what it
+// returns, so a failed write still shows the right list this session.
+const initialData = migrate();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <App initialData={initialData} />
   </StrictMode>
 );

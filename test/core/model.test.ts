@@ -66,6 +66,28 @@ describe('loadAppData / saveAppData', () => {
     expect(loadAppData()).toBeNull();
   });
 
+  it('writes each entry\'s array position into order, and loads back sorted by it', () => {
+    const settings: AppSettings = { ...DEFAULT_SETTINGS };
+    const a = createEntry({ timezone: 'Asia/Tokyo', label: 'A', order: 7 });
+    const b = createEntry({ timezone: 'Asia/Tokyo', label: 'B', order: 3 });
+    saveAppData({ version: 2, entries: [a, b], groups: [], settings });
+
+    const stored = JSON.parse(localStorage.getItem('timemate.data.v2')!);
+    expect(stored.entries.map((e: { order: number }) => e.order)).toEqual([0, 1]);
+
+    // Stored out of array order: load follows `order`, not array position
+    stored.entries.reverse();
+    localStorage.setItem('timemate.data.v2', JSON.stringify(stored));
+    expect(loadAppData()!.entries.map((e) => e.label)).toEqual(['A', 'B']);
+  });
+
+  it('leaves data without order exactly as stored (migrate() freezes it)', () => {
+    const settings: AppSettings = { ...DEFAULT_SETTINGS };
+    const raw = { version: 2, entries: [{ id: 'x', label: 'X' }, { id: 'y', label: 'Y' }], groups: [], settings };
+    localStorage.setItem('timemate.data.v2', JSON.stringify(raw));
+    expect(loadAppData()!.entries.map((e) => e.label)).toEqual(['X', 'Y']);
+  });
+
   it('round-trips a saved AppData blob', () => {
     const settings: AppSettings = { ...DEFAULT_SETTINGS };
     const data = { version: 2 as const, entries: [createEntry({ timezone: 'Asia/Tokyo' })], groups: [], settings };

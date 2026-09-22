@@ -1,11 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BACKUP_V1_STORAGE_KEY,
+  freezeDisplayOrder,
   mapV1ToV2,
   migrate,
+  needsOrderFreeze,
   readV1Snapshot,
 } from '../../src/core/migrate';
-import { APP_DATA_STORAGE_KEY } from '../../src/core/model';
+import {
+  APP_DATA_STORAGE_KEY,
+  createEntry,
+  DEFAULT_SETTINGS,
+  loadAppData,
+  saveAppData,
+} from '../../src/core/model';
+import type { AppData, Entry, SortOrder } from '../../src/core/types';
 import v1Real from '../fixtures/v1-real.json';
 
 // v1-real.json is a real v1 export pulled from DevTools -> Application ->
@@ -122,5 +131,128 @@ describe('migrate', () => {
   it('produces an empty-but-valid AppData when there is no v1 data at all', () => {
     const data = migrate();
     expect(data).toEqual(expect.objectContaining({ version: 2, entries: [] }));
+  });
+});
+
+// Data as saved before manual ordering: no `order` on any entry.
+function legacyData(entries: Entry[], sortOrder: SortOrder, referenceTimezone: string | null = null): AppData {
+  const withoutOrder = entries.map((entry) => {
+    const copy: Partial<Entry> = { ...entry };
+    delete copy.order;
+    return copy as Entry;
+  });
+  return {
+    version: 2,
+    entries: withoutOrder,
+    groups: [],
+    settings: { ...DEFAULT_SETTINGS, sortOrder, referenceTimezone },
+  };
+}
+
+const labels = (data: AppData) => data.entries.map((entry) => entry.label);
+const orders = (data: AppData) => data.entries.map((entry) => entry.order);
+const FREEZE_AT = new Date('2026-07-15T12:00:00Z');
+
+describe('freezeDisplayOrder', () => {
+  it('manual: pinned first, then newest first — the reversed stored array', () => {
+    const data = legacyData(
+      [
+        createEntry({ timezone: 'Asia/Tokyo', label: 'A' }),
+        createEntry({ timezone: 'Asia/Tokyo', label: 'B', pinned: true }),
+        createEntry({ timezone: 'Asia/Tokyo', label: 'C' }),
+        createEntry({ timezone: 'Asia/Tokyo', label: 'D', pinned: true }),
+      ],
+      'manual'
+    );
+    const frozen = freezeDisplayOrder(data, FREEZE_AT);
+    expect(labels(frozen)).toEqual(['D', 'B', 'C', 'A']);
+    expect(orders(frozen)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('offset: pinned first, then furthest behind the reference timezone first', () => {
+    const data = legacyData(
+      [
+        createEntry({ timezone: 'Asia/Kolkata', label: 'Mumbai' }),
+        createEntry({ timezone: 'Europe/Berlin', label: 'Berlin', pinned: true }),
+        createEntry({ timezone: 'America/New_York', label: 'New York' }),
+      ],
+      'offset',
+      'Asia/Tokyo'
+    );
+    expect(labels(freezeDisplayOrder(data, FREEZE_AT))).toEqual(['Berlin', 'New York', 'Mumbai']);
+  });
+
+  it('name: pinned first, then alphabetical', () => {
+    const data = legacyData(
+      [
+        createEntry({ timezone: 'Europe/Zurich', label: 'Zurich' }),
+        createEntry({ timezone: 'Asia/Kolkata', label: 'Mumbai', pinned: true }),
+        createEntry({ timezone: 'Europe/Amsterdam', label: 'Amsterdam' }),
+      ],
+      'name'
+    );
+    expect(labels(freezeDisplayOrder(data, FREEZE_AT))).toEqual(['Mumbai', 'Amsterdam', 'Zurich']);
+  });
+
+  it('only reorders — every entry survives, untouched apart from order', () => {
+    const entries = [
+      createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo', pinned: true, workDays: [1, 2] }),
+      createEntry({ timezone: 'Asia/Shanghai', label: 'Shanghai' }),
+    ];
+    const frozen = freezeDisplayOrder(legacyData(entries, 'manual'), FREEZE_AT);
+    expect(frozen.entries).toHaveLength(2);
+    expect(frozen.entries.find((e) => e.label === 'Tokyo')).toEqual({ ...entries[0], order: 0 });
+  });
+});
+
+describe('migrate — freezing the pre-manual-order display order', () => {
+  it('freezes and persists existing v2 data that has no order yet', () => {
+    const data = legacyData(
+      [
+        createEntry({ timezone: 'Asia/Tokyo', label: 'A' }),
+        createEntry({ timezone: 'Asia/Tokyo', label: 'B', pinned: true }),
+        createEntry({ timezone: 'Asia/Tokyo', label: 'C' }),
+      ],
+      'manual'
+    );
+    localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify(data));
+    expect(needsOrderFreeze(data)).toBe(true);
+
+    const migrated = migrate(FREEZE_AT);
+
+    expect(labels(migrated)).toEqual(['B', 'C', 'A']);
+    const stored = loadAppData()!;
+    expect(labels(stored)).toEqual(['B', 'C', 'A']);
+    expect(needsOrderFreeze(stored)).toBe(false);
+  });
+
+  it('runs once: a later manual reorder is not overridden by the old pinned/sort rules', () => {
+    const data = legacyData(
+      [
+        createEntry({ timezone: 'Asia/Tokyo', label: 'A' }),
+        createEntry({ timezone: 'Asia/Tokyo', label: 'B', pinned: true }),
+      ],
+      'manual'
+    );
+    localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify(data));
+    const frozen = migrate(FREEZE_AT);
+    expect(labels(frozen)).toEqual(['B', 'A']);
+
+    // The user drags A above the (still pinned: true) B
+    saveAppData({ ...frozen, entries: [frozen.entries[1], frozen.entries[0]] });
+
+    expect(labels(migrate(FREEZE_AT))).toEqual(['A', 'B']);
+  });
+
+  it('v1 → v2 lands in the order the v1 list showed (real export: pinned Tokyo, then Xuzhou)', () => {
+    seedV1Storage(v1Real);
+    const data = migrate(FREEZE_AT);
+    expect(labels(data)).toEqual(['Tokyo', 'Xuzhou']);
+    expect(orders(data)).toEqual([0, 1]);
+  });
+
+  it('v1 → v2 with no pins and the newest-first default shows the stored v1 array reversed', () => {
+    seedV1Storage({ ...v1Real, pinned: [] });
+    expect(labels(migrate(FREEZE_AT))).toEqual(['Xuzhou', 'Tokyo']);
   });
 });

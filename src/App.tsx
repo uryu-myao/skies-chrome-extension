@@ -4,9 +4,9 @@ import TimezoneList from './components/TimezoneList';
 import CoreTimePanel from './components/CoreTimePanel';
 import SettingsPanel from './components/SettingsPanel';
 import { TimezoneInfo } from './components/Timezone';
-import { loadAppData, saveAppData, DEFAULT_SETTINGS } from './core/model';
+import { saveAppData } from './core/model';
 import { getSystemTimezone } from './core/tz';
-import type { AppSettings, Entry } from './core/types';
+import type { AppData, AppSettings, Entry } from './core/types';
 import '@styles/_reset.css';
 import '@styles/main.scss';
 
@@ -14,7 +14,11 @@ export type AddTimezoneResult = 'added' | 'duplicate' | 'limit';
 export type HourFormat = '12' | '24';
 export type ConvertPosition = number;
 
-function App() {
+interface AppProps {
+  initialData: AppData;
+}
+
+function App({ initialData }: AppProps) {
   const [addTimezoneFn, setAddTimezoneFn] = useState<
     ((timezone: TimezoneInfo) => AddTimezoneResult) | null
   >(null);
@@ -22,10 +26,8 @@ function App() {
   const [convertPosition, setConvertPosition] = useState<ConvertPosition>(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [entries, setEntries] = useState<Entry[]>(() => loadAppData()?.entries ?? []);
-  const [settings, setSettings] = useState<AppSettings>(
-    () => loadAppData()?.settings ?? DEFAULT_SETTINGS
-  );
+  const [entries, setEntries] = useState<Entry[]>(initialData.entries);
+  const [settings, setSettings] = useState<AppSettings>(initialData.settings);
 
   const hourFormat: HourFormat = settings.hour24 ? '24' : '12';
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
@@ -71,7 +73,6 @@ function App() {
           entries={entries}
           setEntries={setEntries}
           onAddTimezone={registerAddTimezone}
-          sortOrder={settings.sortOrder}
           referenceTimezone={referenceTimezone}
           hourFormat={hourFormat}
           showSeconds={settings.showSeconds}

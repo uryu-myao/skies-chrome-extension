@@ -1,5 +1,6 @@
 import { createDefaultAppData, createEntry, DEFAULT_SETTINGS, loadAppData, saveAppData } from './model';
-import type { AppData, AppSettings, SortOrder } from './types';
+import { getSystemTimezone, relativeOffsetMinutes } from './tz';
+import type { AppData, AppSettings, Entry, SortOrder } from './types';
 
 const V1_TIMEZONES_KEY = 'timemate.timezones.v1';
 const V1_PINNED_KEY = 'timemate.pinned.v1';
@@ -96,6 +97,49 @@ export function mapV1ToV2(snapshot: V1Snapshot): AppData {
   return { version: 2, entries, groups: [], settings };
 }
 
+export function needsOrderFreeze(data: AppData): boolean {
+  return data.entries.some((entry: Partial<Entry>) => typeof entry.order !== 'number');
+}
+
+// Pure. Reproduces the list's display order from before manual ordering —
+// pinned entries first, then the saved sortOrder (manual = newest first,
+// i.e. the stored array reversed; offset = furthest behind the reference
+// first, as of `now`; name) — and makes that the manual order. Removing pins
+// and sort modes must not reshuffle a list the user is used to seeing, and
+// must not fall back to raw insertion order. Entries are only reordered,
+// never dropped.
+export function freezeDisplayOrder(data: AppData, now: Date): AppData {
+  const { sortOrder } = data.settings;
+  const referenceTimezone = data.settings.referenceTimezone ?? getSystemTimezone();
+  const offsetOf = (entry: Entry) => relativeOffsetMinutes(entry.timezone, referenceTimezone, now);
+
+  const entries = data.entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => {
+      if (a.entry.pinned !== b.entry.pinned) return a.entry.pinned ? -1 : 1;
+      if (sortOrder === 'name') return a.entry.label.localeCompare(b.entry.label);
+      if (sortOrder === 'offset') return offsetOf(a.entry) - offsetOf(b.entry);
+      return b.index - a.index;
+    })
+    .map(({ entry }, order) => ({ ...entry, order }));
+
+  return { ...data, entries };
+}
+
+// Freezes and persists the old display order the first time data without
+// `order` is seen; a no-op afterwards. If the write fails the frozen data is
+// still returned, so this session renders the right order either way.
+function freezeOrderOnce(data: AppData, now: Date): AppData {
+  if (!needsOrderFreeze(data)) return data;
+  const frozen = freezeDisplayOrder(data, now);
+  try {
+    saveAppData(frozen);
+  } catch (err) {
+    console.error('[TimeMate] failed to persist the frozen list order:', err);
+  }
+  return frozen;
+}
+
 function backupV1Once(snapshot: V1Snapshot): void {
   if (localStorage.getItem(BACKUP_V1_STORAGE_KEY)) return;
   localStorage.setItem(
@@ -104,17 +148,19 @@ function backupV1Once(snapshot: V1Snapshot): void {
   );
 }
 
-// Entry point: run once at startup, before any rendering. Idempotent — if v2
-// data already exists, this is a no-op read. On failure, v1 data is left
-// untouched and nothing is written, so the caller never renders an empty list.
-export function migrate(): AppData {
+// Entry point: run once at startup, before any rendering; the caller renders
+// from the returned data. Idempotent — if v2 data already exists this is a
+// read, plus a one-time freezeDisplayOrder() for data saved before manual
+// ordering. On failure, v1 data is left untouched and nothing is written, so
+// the caller never renders an empty list.
+export function migrate(now: Date = new Date()): AppData {
   const existing = loadAppData();
-  if (existing) return existing;
+  if (existing) return freezeOrderOnce(existing, now);
 
   let mapped: AppData | null = null;
   try {
     const snapshot = readV1Snapshot();
-    mapped = mapV1ToV2(snapshot);
+    mapped = freezeDisplayOrder(mapV1ToV2(snapshot), now);
     backupV1Once(snapshot);
     saveAppData(mapped);
     return mapped;

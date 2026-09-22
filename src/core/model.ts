@@ -35,6 +35,7 @@ export function createEntry(partial: Partial<Entry> & { timezone: string }): Ent
     includeInCoreTime: partial.includeInCoreTime ?? true,
     pinned: partial.pinned ?? false,
     groups: partial.groups ?? [],
+    order: partial.order ?? 0,
     lat: partial.lat,
     lon: partial.lon,
   };
@@ -76,12 +77,18 @@ export function loadAppData(): AppData | null {
       return null;
     }
 
-    return parsed;
+    // Data from before manual ordering has no `order` yet; migrate() freezes
+    // it, so leave that array exactly as stored.
+    if (!parsed.entries.every((entry) => typeof entry.order === 'number')) {
+      return parsed;
+    }
+    return { ...parsed, entries: [...parsed.entries].sort((a, b) => a.order - b.order) };
   } catch {
     return null;
   }
 }
 
 export function saveAppData(data: AppData): void {
-  localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify(data));
+  const entries = data.entries.map((entry, order) => ({ ...entry, order }));
+  localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify({ ...data, entries }));
 }

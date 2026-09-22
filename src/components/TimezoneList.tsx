@@ -1,12 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import Timezone, { TimezoneInfo } from './Timezone';
 import { createEntry } from '../core/model';
-import { relativeOffsetMinutes } from '../core/tz';
-import type { Entry, SortOrder } from '../core/types';
+import type { Entry } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition, HourFormat } from '../App';
 
 const MAX_CITIES = 10;
-const HINT_SHOWN_STORAGE_KEY = 'timemate.swipe-hint-shown.v1';
 
 interface TimezoneListProps {
   entries: Entry[];
@@ -14,7 +12,6 @@ interface TimezoneListProps {
   onAddTimezone?: (
     timezone: (timezone: TimezoneInfo) => AddTimezoneResult
   ) => void;
-  sortOrder: SortOrder;
   referenceTimezone: string;
   hourFormat: HourFormat;
   showSeconds: boolean;
@@ -26,55 +23,12 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   entries,
   setEntries,
   onAddTimezone,
-  sortOrder,
   referenceTimezone,
   hourFormat,
   showSeconds,
   isConvertModeOpen,
   convertPosition,
 }) => {
-  const [activeSettingId, setActiveSettingId] = useState<string | null>(null);
-  const [, setTimeSortTick] = useState(0);
-  const [hintShown, setHintShown] = useState<boolean>(
-    () => localStorage.getItem(HINT_SHOWN_STORAGE_KEY) === '1'
-  );
-
-  const markHintPlayed = () => {
-    localStorage.setItem(HINT_SHOWN_STORAGE_KEY, '1');
-    setHintShown(true);
-  };
-
-  // 切换设置状态
-  const toggleSetting = (id: string) => {
-    setActiveSettingId((prev) => (prev === id ? null : id));
-  };
-
-  // 删除时区
-  const deleteTimezone = (id: string) => {
-    setEntries((prev) => prev.filter((entry) => entry.id !== id));
-    if (activeSettingId === id) {
-      setActiveSettingId(null);
-    }
-  };
-
-  // 固定时区
-  const pinTimezone = (id: string) => {
-    setEntries((prev) =>
-      prev.map((entry) => (entry.id === id ? { ...entry, pinned: true } : entry))
-    );
-    setActiveSettingId(null); // 取消 setting 状态
-  };
-
-  // 取消固定
-  const unpinTimezone = (id: string) => {
-    setEntries((prev) =>
-      prev.map((entry) => (entry.id === id ? { ...entry, pinned: false } : entry))
-    );
-    if (activeSettingId === id) {
-      setActiveSettingId(null);
-    }
-  };
-
   // 使用useCallback包装addTimezone函数，避免不必要的重新创建
   const addTimezone = useCallback((newTimezone: TimezoneInfo): AddTimezoneResult => {
     let result: AddTimezoneResult = 'duplicate';
@@ -97,15 +51,17 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
         return prev;
       }
 
+      // The array order is the list order; a new city goes on top, where the
+      // old newest-first default showed it.
       result = 'added';
       return [
-        ...prev,
         createEntry({
           timezone: newTimezone.zone,
           label: newTimezone.city,
           lat: newTimezone.lat,
           lon: newTimezone.lon,
         }),
+        ...prev,
       ];
     });
 
@@ -119,74 +75,9 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
     }
   }, [onAddTimezone, addTimezone]); // 正确添加所有依赖项
 
-  // Offsets only move at DST switches, but re-sort periodically so an open
-  // popup picks one up without waiting for some other re-render.
-  useEffect(() => {
-    if (sortOrder !== 'offset') return;
-
-    const intervalId = setInterval(() => {
-      setTimeSortTick((prev) => prev + 1);
-    }, 30000);
-
-    return () => clearInterval(intervalId);
-  }, [sortOrder]);
-
-  useEffect(() => {
-    if (!activeSettingId) return;
-
-    const handleClickOutsideActiveCard = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const card = target?.closest('[data-timezone-id]') as
-        | HTMLElement
-        | null;
-      const clickedId = card?.dataset.timezoneId ?? null;
-
-      if (clickedId !== activeSettingId) {
-        setActiveSettingId(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutsideActiveCard);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutsideActiveCard);
-    };
-  }, [activeSettingId]);
-
-  const entryOrder = new Map(entries.map((entry, index) => [entry.id, index]));
-  const sortedAt = new Date();
-
-  const compareByMode = (a: Entry, b: Entry): number => {
-    if (sortOrder === 'name') {
-      return a.label.localeCompare(b.label);
-    }
-
-    // Furthest behind the base first, furthest ahead last — the same gap
-    // each card's footer shows.
-    if (sortOrder === 'offset') {
-      return (
-        relativeOffsetMinutes(a.timezone, referenceTimezone, sortedAt) -
-        relativeOffsetMinutes(b.timezone, referenceTimezone, sortedAt)
-      );
-    }
-
-    // manual(default): recently added first
-    const orderA = entryOrder.get(a.id) ?? 0;
-    const orderB = entryOrder.get(b.id) ?? 0;
-    return orderB - orderA;
-  };
-
-  // 置顶始终在前；同组内按排序命令排序。
-  const sortedEntries = [...entries].sort((a, b) => {
-    if (a.pinned !== b.pinned) {
-      return a.pinned ? -1 : 1;
-    }
-
-    return compareByMode(a, b);
-  });
-
   return (
     <div className="timezone-list">
-      {sortedEntries.length === 0 ? (
+      {entries.length === 0 ? (
         <div className="timezone-list__empty">
           <p className="timezone-list__empty-text">
             Press <span className="timezone-list__empty-addicon"></span> to add
@@ -194,7 +85,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
           </p>
         </div>
       ) : (
-        sortedEntries.map((entry, index) => (
+        entries.map((entry) => (
           <Timezone
             key={entry.id}
             id={entry.id}
@@ -207,14 +98,6 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
             showSeconds={showSeconds}
             isConvertModeOpen={isConvertModeOpen}
             convertPosition={convertPosition}
-            setting={activeSettingId === entry.id}
-            isPinned={entry.pinned}
-            toggleSetting={() => toggleSetting(entry.id)}
-            deleteTimezone={() => deleteTimezone(entry.id)}
-            pinTimezone={() => pinTimezone(entry.id)}
-            unpinTimezone={() => unpinTimezone(entry.id)}
-            playHint={index === 0 && !hintShown}
-            onHintPlayed={markHintPlayed}
           />
         ))
       )}

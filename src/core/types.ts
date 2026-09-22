@@ -27,8 +27,16 @@ export interface Entry {
   workHours: WorkHours | null;
   workDays: WorkDays | null;
   includeInCoreTime: boolean;
+  // Deprecated — no longer shown or editable. Kept in the schema because
+  // freezeDisplayOrder() reads it once to carry the pinned-first order the
+  // user last saw into `order`.
   pinned: boolean;
   groups: string[];
+  // Position in the list, 0 = top. At runtime the entries array order is the
+  // source of truth: saveAppData() writes each entry's index here and
+  // loadAppData() sorts by it. Missing on data saved before manual ordering,
+  // which is what tells migrate() to freeze the old display order first.
+  order: number;
   // Not part of spec-v2's schema — kept as an optional extension so the
   // existing sunrise/sunset-driven card gradient survives the v1→v2 cutover.
   lat?: number;
@@ -41,6 +49,8 @@ export type CoreTimePanelMode = 'always' | 'collapsed' | 'hidden';
 export interface AppSettings {
   hour24: boolean;
   showSeconds: boolean;
+  // Deprecated — manual order is the only order now. Kept for the same reason
+  // as Entry.pinned: freezeDisplayOrder() needs it to reproduce the old order.
   sortOrder: SortOrder;
   referenceTimezone: string | null;
   defaultWorkHours: WorkHours;

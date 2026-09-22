@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useState } from 'react';
 import '@styles/SettingsPanel.scss';
-import type { AppSettings, SortOrder } from '../core/types';
+import type { AppSettings } from '../core/types';
 import SegmentedControl from './SegmentedControl';
 import { version as appVersion } from '../../package.json';
 
@@ -17,11 +17,6 @@ interface SettingsPanelProps {
 }
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
-  { value: 'manual', label: 'Newest' },
-  { value: 'offset', label: 'By offset' },
-  { value: 'name', label: 'Alphabet' },
-];
 
 function formatHour(hour: number): string {
   return `${String(hour).padStart(2, '0')}:00`;
@@ -141,15 +136,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   { value: false, label: 'Off' },
                   { value: true, label: 'On' },
                 ]}
-              />
-            </div>
-
-            <div className="settings-panel__row">
-              <span className="settings-panel__label">Sort order</span>
-              <SegmentedControl
-                value={settings.sortOrder}
-                onChange={(sortOrder) => update({ sortOrder })}
-                options={SORT_OPTIONS}
               />
             </div>
           </section>
