@@ -17,6 +17,7 @@ interface TimezoneListProps {
   showSeconds: boolean;
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
+  onOpenCity: (id: string) => void;
 }
 
 const TimezoneList: React.FC<TimezoneListProps> = ({
@@ -28,6 +29,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   showSeconds,
   isConvertModeOpen,
   convertPosition,
+  onOpenCity,
 }) => {
   // 使用useCallback包装addTimezone函数，避免不必要的重新创建
   const addTimezone = useCallback((newTimezone: TimezoneInfo): AddTimezoneResult => {
@@ -98,6 +100,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
             showSeconds={showSeconds}
             isConvertModeOpen={isConvertModeOpen}
             convertPosition={convertPosition}
+            onOpen={() => onOpenCity(entry.id)}
           />
         ))
       )}

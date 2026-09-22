@@ -26,6 +26,7 @@ interface TimezoneProps extends TimezoneInfo {
   showSeconds: boolean;
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
+  onOpen: () => void;
 }
 
 interface SunTimes {
@@ -69,11 +70,11 @@ const Timezone: React.FC<TimezoneProps> = ({
   showSeconds,
   isConvertModeOpen,
   convertPosition,
+  onOpen,
 }) => {
   const stars = useMemo(() => makeStars(id, 20), [id]);
 
   const [timeData, setTimeData] = useState({
-    city,
     relativeOffset: '',
     utcOffset: '',
     time: '',
@@ -252,7 +253,18 @@ const Timezone: React.FC<TimezoneProps> = ({
   return (
     <div
       data-timezone-id={id}
-      className={`timezone timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}`}>
+      className={`timezone timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${city} settings`}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen();
+        }
+      }}>
       <div className="timezone-inner">
         {timeOfDay === 'night' && !isConvertModeOpen && (
           <svg className="timezone-stars" aria-hidden="true">
@@ -268,7 +280,7 @@ const Timezone: React.FC<TimezoneProps> = ({
             ))}
           </svg>
         )}
-        <div className="timezone-data__location">{timeData.city}</div>
+        <div className="timezone-data__location">{city}</div>
         <div className="timezone-data__time">{timeData.time}</div>
         {(isConvertModeOpen || hourFormat === '12') && timeData.meridiem && (
           <div

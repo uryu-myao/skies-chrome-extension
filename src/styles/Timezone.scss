@@ -20,6 +20,14 @@
   width: 100%;
   margin: 0 0 6px;
   transition: all 0.3s ease-in-out;
+  cursor: pointer;
+  border-radius: 22px;
+  outline: none;
+
+  &:focus-visible .timezone-inner {
+    outline: 2px solid var(--color-primary-blue);
+    outline-offset: 2px;
+  }
 
   &-inner {
     position: relative;
