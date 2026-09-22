@@ -13,7 +13,7 @@ function settingsWithReference(timezone: string): AppSettings {
 }
 
 describe('coreTime — §10.4 business cases', () => {
-  it('Tokyo + Boston, default hours: overlap is empty, closest is non-null', () => {
+  it('Tokyo + Boston, default hours: overlap is empty, NO_OVERLAP_TODAY carries a closest slot', () => {
     const entries = [
       createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' }),
       createEntry({ timezone: 'America/New_York', label: 'Boston' }),
@@ -24,10 +24,14 @@ describe('coreTime — §10.4 business cases', () => {
       referenceDate: REFERENCE_DATE,
     });
 
+    // Wednesday in both cities, so both are on a work day — the zero overlap
+    // is purely the hours not lining up (§5.3), not anyone being off.
     expect(result.overlap).toEqual([]);
-    expect(result.closest).not.toBeNull();
-    expect(result.closest!.perEntry).toHaveLength(2);
-    expect(result.closest!.gapMinutes).toBeGreaterThan(0);
+    const { conclusion } = result;
+    expect(conclusion.status).toBe('NO_OVERLAP_TODAY');
+    if (conclusion.status !== 'NO_OVERLAP_TODAY') return;
+    expect(conclusion.closest.perEntry).toHaveLength(2);
+    expect(conclusion.closest.gapMinutes).toBeGreaterThan(0);
   });
 
   it('Tokyo + Singapore + Berlin, default hours: overlap is 16:00-18:00 JST', () => {
@@ -56,7 +60,7 @@ describe('coreTime — §10.4 business cases', () => {
 
     // 9:00 = slot 18, 18:00 = slot 36
     expect(result.overlap).toEqual([{ startSlot: 18, endSlot: 36 }]);
-    expect(result.closest).toBeNull();
+    expect(result.conclusion).toEqual({ status: 'OVERLAP' });
   });
 
   it('all entries excluded from Core Time: empty state, no error', () => {
@@ -68,7 +72,7 @@ describe('coreTime — §10.4 business cases', () => {
 
     expect(result.rows).toEqual([]);
     expect(result.overlap).toEqual([]);
-    expect(result.closest).toBeNull();
+    expect(result.conclusion).toEqual({ status: 'NO_ENTRIES' });
   });
 
   it('an entry with an empty workDays list never participates, overlap stays empty', () => {
