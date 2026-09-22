@@ -292,6 +292,24 @@
       opacity: 0.35;
     }
 
+    // Footer left: the gap to the base timezone is what the user actually
+    // reads; the absolute UTC offset stays beside it as an unambiguous
+    // cross-check, one step quieter.
+    &__relative {
+      font-size: 11px;
+      font-weight: 700;
+      font-style: normal;
+      color: var(--color-font-timezone);
+      text-transform: none;
+    }
+
+    &__offset {
+      padding-left: 6px;
+      font-size: 9px;
+      font-weight: 500;
+      opacity: 0.6;
+    }
+
     &__tz {
       position: relative;
       padding-right: 10px;

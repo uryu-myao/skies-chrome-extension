@@ -5,6 +5,7 @@ import CoreTimePanel from './components/CoreTimePanel';
 import SettingsPanel from './components/SettingsPanel';
 import { TimezoneInfo } from './components/Timezone';
 import { loadAppData, saveAppData, DEFAULT_SETTINGS } from './core/model';
+import { getSystemTimezone } from './core/tz';
 import type { AppSettings, Entry } from './core/types';
 import '@styles/_reset.css';
 import '@styles/main.scss';
@@ -27,6 +28,7 @@ function App() {
   );
 
   const hourFormat: HourFormat = settings.hour24 ? '24' : '12';
+  const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
 
   const registerAddTimezone = useCallback(
     (fn: (timezone: TimezoneInfo) => AddTimezoneResult) => {
@@ -70,6 +72,7 @@ function App() {
           setEntries={setEntries}
           onAddTimezone={registerAddTimezone}
           sortOrder={settings.sortOrder}
+          referenceTimezone={referenceTimezone}
           hourFormat={hourFormat}
           showSeconds={settings.showSeconds}
           isConvertModeOpen={isConvertModeOpen}

@@ -4,7 +4,14 @@ import '@styles/Timezone.scss';
 import SettingButton from './SettingButton';
 import PinButton from './PinButton';
 import DeleteButton from './DeleteButton';
-import { timeOfDay as computeTimeOfDay, type TimeOfDay } from '../core/tz';
+import {
+  formatRelativeOffset,
+  formatUtcOffset,
+  offsetMinutes,
+  relativeOffsetMinutes,
+  timeOfDay as computeTimeOfDay,
+  type TimeOfDay,
+} from '../core/tz';
 import type { ConvertPosition, HourFormat } from '../App';
 
 export interface TimezoneInfo {
@@ -16,6 +23,7 @@ export interface TimezoneInfo {
 }
 
 interface TimezoneProps extends TimezoneInfo {
+  referenceTimezone: string;
   hourFormat: HourFormat;
   showSeconds: boolean;
   isConvertModeOpen: boolean;
@@ -66,6 +74,7 @@ const Timezone: React.FC<TimezoneProps> = ({
   zone,
   lat,
   lon,
+  referenceTimezone,
   hourFormat,
   showSeconds,
   isConvertModeOpen,
@@ -83,7 +92,8 @@ const Timezone: React.FC<TimezoneProps> = ({
 
   const [timeData, setTimeData] = useState({
     city,
-    offset: '',
+    relativeOffset: '',
+    utcOffset: '',
     time: '',
     second: '',
     meridiem: '',
@@ -93,23 +103,6 @@ const Timezone: React.FC<TimezoneProps> = ({
   });
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const sunTimesRef = useRef<SunTimes | null>(null);
-
-  const getTimezoneOffsetString = (timeZone: string): string => {
-    try {
-      const now = new Date();
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        timeZoneName: 'longOffset',
-      });
-      const parts = formatter.formatToParts(now);
-      const tzOffset = parts.find((p) => p.type === 'timeZoneName')?.value;
-      return tzOffset
-        ? tzOffset.replace('GMT', 'UTC').replace(':00', '')
-        : 'N/A';
-    } catch {
-      return 'N/A';
-    }
-  };
 
   useEffect(() => {
     if (!lat || !lon) return;
@@ -244,7 +237,12 @@ const Timezone: React.FC<TimezoneProps> = ({
         week: targetParts.weekday,
         date: targetParts.dayNumber.toString(),
         month: targetParts.monthShort,
-        offset: getTimezoneOffsetString(zone),
+        // Both read at the instant the card is showing (the converter's
+        // chosen time in convert mode), so a DST switch in between is honored.
+        relativeOffset: formatRelativeOffset(
+          relativeOffsetMinutes(zone, referenceTimezone, sourceDate)
+        ),
+        utcOffset: formatUtcOffset(offsetMinutes(zone, sourceDate)),
       }));
 
       setTimeOfDay(computeTimeOfDay(zone, sourceDate, sunTimesRef.current));
@@ -257,7 +255,7 @@ const Timezone: React.FC<TimezoneProps> = ({
 
     const intervalId = setInterval(updateTime, 1000);
     return () => clearInterval(intervalId);
-  }, [zone, hourFormat, isConvertModeOpen, convertPosition]);
+  }, [zone, referenceTimezone, hourFormat, isConvertModeOpen, convertPosition]);
 
   return (
     <div
@@ -286,9 +284,10 @@ const Timezone: React.FC<TimezoneProps> = ({
         )}
         <div className="timezone-footer">
           <p>
-            <span className="timezone-data__offset">
-              {timeData.offset || 'N/A'}
+            <span className="timezone-data__relative">
+              {zone === referenceTimezone ? 'Base' : timeData.relativeOffset}
             </span>
+            <span className="timezone-data__offset">{timeData.utcOffset}</span>
           </p>
           <p>
             <span>

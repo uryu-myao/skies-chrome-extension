@@ -14,6 +14,7 @@ interface TimezoneListProps {
     timezone: (timezone: TimezoneInfo) => AddTimezoneResult
   ) => void;
   sortOrder: SortOrder;
+  referenceTimezone: string;
   hourFormat: HourFormat;
   showSeconds: boolean;
   isConvertModeOpen: boolean;
@@ -59,6 +60,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   setEntries,
   onAddTimezone,
   sortOrder,
+  referenceTimezone,
   hourFormat,
   showSeconds,
   isConvertModeOpen,
@@ -225,6 +227,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
             zone={entry.timezone}
             lat={entry.lat}
             lon={entry.lon}
+            referenceTimezone={referenceTimezone}
             hourFormat={hourFormat}
             showSeconds={showSeconds}
             isConvertModeOpen={isConvertModeOpen}

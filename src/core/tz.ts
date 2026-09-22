@@ -29,6 +29,36 @@ export function offsetMinutes(timezone: string, date: Date): number {
   return (asUTC - Math.floor(date.getTime() / 1000) * 1000) / 60000;
 }
 
+// How far `timezone` is ahead of (+) or behind (−) the reference timezone at
+// `date`. Same rule as offsetMinutes: per specific date, never cached — a
+// pair like Tokyo/Berlin is 8h apart in winter and 7h in summer.
+export function relativeOffsetMinutes(timezone: string, referenceTimezone: string, date: Date): number {
+  return offsetMinutes(timezone, date) - offsetMinutes(referenceTimezone, date);
+}
+
+const MINUS_SIGN = '−';
+
+function splitSignedMinutes(minutes: number) {
+  const abs = Math.abs(minutes);
+  return { sign: minutes < 0 ? MINUS_SIGN : '+', hours: Math.floor(abs / 60), mins: abs % 60 };
+}
+
+// "+3h", "−13h", "+3:30h", "+5:45h" — minutes spelled out, never decimal
+// hours ("+3.5h"). Zero is "0h": the UI decides whether that entry is the
+// reference itself (shown as "Base") or just another zone at the same offset.
+export function formatRelativeOffset(minutes: number): string {
+  if (minutes === 0) return '0h';
+  const { sign, hours, mins } = splitSignedMinutes(minutes);
+  return `${sign}${hours}${mins ? `:${String(mins).padStart(2, '0')}` : ''}h`;
+}
+
+// "UTC+09", "UTC−04", "UTC+05:45"; plain "UTC" at zero.
+export function formatUtcOffset(minutes: number): string {
+  if (minutes === 0) return 'UTC';
+  const { sign, hours, mins } = splitSignedMinutes(minutes);
+  return `UTC${sign}${String(hours).padStart(2, '0')}${mins ? `:${String(mins).padStart(2, '0')}` : ''}`;
+}
+
 export function localMinutesOfDay(timezone: string, date: Date): number {
   const dtf = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
