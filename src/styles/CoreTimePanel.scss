@@ -37,7 +37,11 @@
       position: absolute;
       inset: 0;
       z-index: 0;
-      background: radial-gradient(40% 60% at 50% 0, rgba(91, 91, 91, 0.48) 0%, #202025 100%);
+      background: radial-gradient(
+        40% 70% at 50% 0,
+        rgba(91, 91, 91, 0.48) 0%,
+        #202025 100%
+      );
       opacity: 0;
       transition: opacity 0.2s ease-in-out;
       pointer-events: none;
@@ -133,6 +137,7 @@
   &__row-baseline-tag {
     flex-shrink: 0;
     font-size: 10px;
+    font-style: italic;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -206,6 +211,18 @@
     font-family: 'Lato', sans-serif;
     font-size: 10px;
     opacity: 0.45;
+    span {
+      display: inline-block;
+      &:nth-child(2) {
+        padding-left: 9px;
+      }
+      &:nth-child(3) {
+        padding-left: 8px;
+      }
+      &:nth-child(4) {
+        padding-left: 8px;
+      }
+    }
   }
 
   &__conclusion-row {
@@ -234,7 +251,8 @@
   // App's primary accent blue (same token Settings uses for its active
   // segmented-control/day-toggle states) — orange read as too jarring here.
   &__headline-range {
-    color: var(--color-primary-blue);
+    color: #9cb2e7;
+    padding-left: 4px;
   }
 
   &__detail {

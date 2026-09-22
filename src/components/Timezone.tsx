@@ -64,8 +64,8 @@ function makeStars(id: string, count: number) {
   return Array.from({ length: count }, () => ({
     cx: rand() * 372 + 4,
     cy: rand() * 74 + 4,
-    r:  rand() * 0.5 + 0.5,
-    o:  rand() * 0.4 + 0.55,
+    r: rand() * 0.5 + 0.5,
+    o: rand() * 0.4 + 0.55,
   }));
 }
 
@@ -110,7 +110,9 @@ const Timezone: React.FC<TimezoneProps> = ({
     if (!lat || !lon) return;
 
     const fetchSunTimes = async () => {
-      const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date());
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(
+        new Date()
+      );
       if (sunTimesRef.current?.date === today) return;
 
       const cacheKey = `timemate.sun.${zone}.${today}`;
@@ -123,14 +125,16 @@ const Timezone: React.FC<TimezoneProps> = ({
           sunTimesRef.current = result;
           setTimeOfDay(computeTimeOfDay(zone, new Date(), result));
           return;
-        } catch { /* corrupt entry, fall through to fetch */ }
+        } catch {
+          /* corrupt entry, fall through to fetch */
+        }
       }
 
       try {
         const res = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=sunrise,sunset&timezone=${encodeURIComponent(zone)}&forecast_days=1`
         );
-        const data = await res.json() as {
+        const data = (await res.json()) as {
           daily?: { sunrise?: string[]; sunset?: string[] };
         };
         const sunriseRaw = data.daily?.sunrise?.[0]?.split('T')[1] ?? '';
@@ -150,9 +154,9 @@ const Timezone: React.FC<TimezoneProps> = ({
         sunTimesRef.current = result;
         localStorage.setItem(cacheKey, JSON.stringify(result));
         // Evict yesterday's entry to keep storage tidy
-        const yesterday = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(
-          new Date(Date.now() - 86400000)
-        );
+        const yesterday = new Intl.DateTimeFormat('en-CA', {
+          timeZone: zone,
+        }).format(new Date(Date.now() - 86400000));
         localStorage.removeItem(`timemate.sun.${zone}.${yesterday}`);
         setTimeOfDay(computeTimeOfDay(zone, new Date(), result));
       } catch {
@@ -182,7 +186,9 @@ const Timezone: React.FC<TimezoneProps> = ({
 
         return {
           year: Number(parts.find((p) => p.type === 'year')?.value ?? 0),
-          monthNumber: Number(parts.find((p) => p.type === 'month')?.value ?? 0),
+          monthNumber: Number(
+            parts.find((p) => p.type === 'month')?.value ?? 0
+          ),
           dayNumber: Number(parts.find((p) => p.type === 'day')?.value ?? 0),
           hour: parts.find((p) => p.type === 'hour')?.value ?? '00',
           minute: parts.find((p) => p.type === 'minute')?.value ?? '00',
@@ -219,14 +225,16 @@ const Timezone: React.FC<TimezoneProps> = ({
         targetParts.monthNumber * 100 +
         targetParts.dayNumber;
       const dayOffset =
-        targetDateKey > sourceDateKey ? 1 : targetDateKey < sourceDateKey ? -1 : 0;
+        targetDateKey > sourceDateKey
+          ? 1
+          : targetDateKey < sourceDateKey
+            ? -1
+            : 0;
 
       setTimeData((prev) => ({
         ...prev,
         time: `${targetParts.hour}:${targetParts.minute}`,
-        second: isConvertModeOpen
-          ? ''
-          : targetParts.second.padStart(2, '0'),
+        second: isConvertModeOpen ? '' : targetParts.second.padStart(2, '0'),
         meridiem: isConvertModeOpen
           ? dayOffset > 0
             ? `+${dayOffset}`
@@ -273,14 +281,24 @@ const Timezone: React.FC<TimezoneProps> = ({
         {timeOfDay === 'night' && !isConvertModeOpen && (
           <svg className="timezone-stars" aria-hidden="true">
             {stars.map((s, i) => (
-              <circle key={i} cx={s.cx} cy={s.cy} r={s.r} fill="white" fillOpacity={s.o} />
+              <circle
+                key={i}
+                cx={s.cx}
+                cy={s.cy}
+                r={s.r}
+                fill="white"
+                fillOpacity={s.o}
+              />
             ))}
           </svg>
         )}
         <div className="timezone-data__location">{timeData.city}</div>
         <div className="timezone-data__time">{timeData.time}</div>
         {(isConvertModeOpen || hourFormat === '12') && timeData.meridiem && (
-          <div className={`timezone-data__meridiem${timeData.meridiem === 'AM' ? ' timezone-data__meridiem--am' : ''}${isConvertModeOpen ? ' timezone-data__meridiem--convert' : ''}`}>{timeData.meridiem}</div>
+          <div
+            className={`timezone-data__meridiem${timeData.meridiem === 'AM' ? ' timezone-data__meridiem--am' : ''}${isConvertModeOpen ? ' timezone-data__meridiem--convert' : ''}`}>
+            {timeData.meridiem}
+          </div>
         )}
         {showSeconds && !isConvertModeOpen && (
           <div className="timezone-data__second">{timeData.second}</div>
@@ -292,7 +310,18 @@ const Timezone: React.FC<TimezoneProps> = ({
             </span>
             <span className="timezone-data__offset">{timeData.utcOffset}</span>
           </p>
-          <p className={timeData.dayDelta !== 0 ? 'timezone-footer__day--shifted' : undefined}>
+          <p
+            className={
+              timeData.dayDelta !== 0
+                ? 'timezone-footer__day--shifted'
+                : undefined
+            }>
+            {/* ±2 (across the date line) keeps the accent but has no one-word label. */}
+            {Math.abs(timeData.dayDelta) === 1 && (
+              <span className="timezone-data__day-relative">
+                {timeData.dayDelta < 0 ? 'yesterday' : 'tomorrow'}
+              </span>
+            )}
             <span>
               <span className="timezone-data__week">{timeData.week}</span>
               <span>
@@ -300,12 +329,6 @@ const Timezone: React.FC<TimezoneProps> = ({
                 <span className="timezone-data__month">{timeData.month}</span>
               </span>
             </span>
-            {/* ±2 (across the date line) keeps the accent but has no one-word label. */}
-            {Math.abs(timeData.dayDelta) === 1 && (
-              <span className="timezone-data__day-relative">
-                · {timeData.dayDelta < 0 ? 'yesterday' : 'tomorrow'}
-              </span>
-            )}
           </p>
         </div>
       </div>

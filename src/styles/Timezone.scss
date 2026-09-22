@@ -127,8 +127,8 @@
     grid-template:
       'local time' auto
       'footer footer' 20px / 1fr 1fr;
-    gap: 4px;
-    padding-top: 5px;
+    gap: 3px 4px;
+    padding-top: 6px;
     background: linear-gradient(
       180deg,
       var(--tz-c0) 0%,
@@ -211,18 +211,18 @@
   }
 
   &-footer {
-    color: white;
-    background: rgba(0, 170, 255, 0.15);
-    padding: 0 27px 0 15px;
+    color: rgba(255, 255, 255, 0.85);
+    // background: rgba(0, 170, 255, 0.25);
+    padding: 0 27px 6px 15px;
     grid-area: footer;
     display: flex;
     justify-content: space-between;
     align-items: center;
     text-transform: uppercase;
     font-family: 'Poppins', serif;
-    font-style: italic;
     font-size: 10px;
-    font-weight: 300;
+    font-weight: 600;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
 
     p,
     span {
@@ -274,7 +274,7 @@
       font-size: 10px;
       text-transform: uppercase;
       margin: 0;
-      top: 7px;
+      top: 8px;
       right: 8px;
 
       &--am {
@@ -283,21 +283,21 @@
 
       &--convert {
         color: var(--color-secondary);
-        font-size: 9px;
-        right: 7px;
+        font-size: 10px;
+        right: 12px;
       }
     }
 
     &__second {
       position: absolute;
       top: 24px;
-      right: 8px;
+      right: 10px;
       font-family: 'Lato', sans-serif;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 300;
-      letter-spacing: 0.8px;
+      letter-spacing: 0.04em;
       font-style: normal;
-      opacity: 0.35;
+      opacity: 0.5;
     }
 
     // Footer left: the gap to the base timezone is what the user actually
@@ -312,20 +312,21 @@
     }
 
     &__offset {
+      position: relative;
       padding-left: 6px;
-      font-size: 9px;
+      font-size: 10px;
       font-weight: 500;
-      opacity: 0.6;
+      opacity: 0.75;
     }
 
     &__tz {
       position: relative;
-      padding-right: 10px;
+      padding-right: 6px;
     }
 
     &__week {
       position: relative;
-      padding-right: 10px;
+      padding-right: 4px;
 
       &::after {
         content: '';
@@ -349,8 +350,22 @@
     }
 
     &__day-relative {
-      padding-left: 5px;
+      position: relative;
+      padding-right: 12px;
+      display: inline-block;
       text-transform: none;
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        right: 6px;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 64%;
+        background-color: white;
+        opacity: 0.3;
+      }
     }
   }
 
@@ -400,8 +415,8 @@
 }
 .timezone--day .timezone-inner {
   --tz-c0: #3d83e5;
-  --tz-c1: #77b6e3;
-  --tz-c2: #d3e2f2;
+  --tz-c1: #74b6e6;
+  --tz-c2: #b2d0f0;
 }
 
 .timezone--converting .timezone-inner {

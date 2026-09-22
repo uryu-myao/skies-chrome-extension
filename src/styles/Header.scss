@@ -57,7 +57,7 @@
     &__button {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 10px;
       padding: 0;
       border: none;
       background: none;
@@ -85,11 +85,11 @@
       z-index: 16;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 0;
       height: 32px;
-      padding: 0 10px;
+      padding: 0 12px 0 14px;
       border-radius: 100vw;
-      background-color: var(--color-primary);
+      background-color: var(--color-bg-info);
       transition: background-color 0.2s ease-in-out;
 
       .header-tz-chip__button:hover & {
@@ -98,8 +98,9 @@
     }
 
     &__city {
+      padding-right: 5px;
       font-family: 'Poppins', serif;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
       max-width: 84px;
       overflow: hidden;
@@ -113,6 +114,7 @@
       font-weight: 500;
       letter-spacing: 0.06em;
       opacity: 0.85;
+      padding-right: 3px;
       // Poppins' digits aren't tabular (font-variant-numeric: tabular-nums
       // has no effect — measured, not assumed), so a ticking clock
       // otherwise reflows the pill's width every time the digits change.
@@ -171,11 +173,11 @@
       width: 100%;
       text-align: left;
       padding: 8px 10px;
-      border-radius: 8px;
+      border-radius: 10px;
       background-color: transparent;
       font-family: 'Poppins', serif;
       font-size: 13px;
-      font-weight: 400;
+      font-weight: 600;
       letter-spacing: 0.04em;
       color: var(--color-font-timezone);
       opacity: 0.85;
@@ -195,6 +197,7 @@
     &__option-sub {
       font-size: 11px;
       font-weight: 400;
+      padding-top: 2px;
       opacity: 0.6;
     }
 
@@ -350,7 +353,7 @@
         transform: translateY(-50%) scale(1.04);
         box-shadow:
           0 6px 14px rgba(0, 0, 0, 0.22),
-          0 0 16px 5px rgba(255, 255, 255, 0.25),
+          0 0 10px 3px rgba(255, 255, 255, 0.2),
           inset 0 1px 0 rgba(255, 255, 255, 0.32),
           inset 0 -6px 8px -6px rgba(0, 0, 0, 0.18);
         transition: none;
@@ -369,8 +372,8 @@
   }
 
   &-btn {
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     background-color: var(--color-primary);
     background-position: center;
