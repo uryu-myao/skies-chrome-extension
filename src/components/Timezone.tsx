@@ -7,6 +7,7 @@ import DeleteButton from './DeleteButton';
 import {
   formatRelativeOffset,
   formatUtcOffset,
+  localDayDelta,
   offsetMinutes,
   relativeOffsetMinutes,
   timeOfDay as computeTimeOfDay,
@@ -100,6 +101,7 @@ const Timezone: React.FC<TimezoneProps> = ({
     week: '',
     date: '',
     month: '',
+    dayDelta: 0,
   });
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const sunTimesRef = useRef<SunTimes | null>(null);
@@ -243,6 +245,7 @@ const Timezone: React.FC<TimezoneProps> = ({
           relativeOffsetMinutes(zone, referenceTimezone, sourceDate)
         ),
         utcOffset: formatUtcOffset(offsetMinutes(zone, sourceDate)),
+        dayDelta: localDayDelta(zone, referenceTimezone, sourceDate),
       }));
 
       setTimeOfDay(computeTimeOfDay(zone, sourceDate, sunTimesRef.current));
@@ -289,7 +292,7 @@ const Timezone: React.FC<TimezoneProps> = ({
             </span>
             <span className="timezone-data__offset">{timeData.utcOffset}</span>
           </p>
-          <p>
+          <p className={timeData.dayDelta !== 0 ? 'timezone-footer__day--shifted' : undefined}>
             <span>
               <span className="timezone-data__week">{timeData.week}</span>
               <span>
@@ -297,6 +300,12 @@ const Timezone: React.FC<TimezoneProps> = ({
                 <span className="timezone-data__month">{timeData.month}</span>
               </span>
             </span>
+            {/* ±2 (across the date line) keeps the accent but has no one-word label. */}
+            {Math.abs(timeData.dayDelta) === 1 && (
+              <span className="timezone-data__day-relative">
+                · {timeData.dayDelta < 0 ? 'yesterday' : 'tomorrow'}
+              </span>
+            )}
           </p>
         </div>
       </div>

@@ -228,6 +228,14 @@
     span {
       margin: 0;
     }
+
+    &__day--shifted {
+      color: var(--color-day-shift);
+
+      .timezone-data__week::after {
+        background-color: currentColor;
+      }
+    }
   }
 
   &-data {
@@ -338,6 +346,11 @@
 
     &__month {
       padding-left: 2px;
+    }
+
+    &__day-relative {
+      padding-left: 5px;
+      text-transform: none;
     }
   }
 

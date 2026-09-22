@@ -5,6 +5,10 @@
   --color-primary-blue: #4b6fd2;
   --color-primary-white: rgba(255, 255, 255, 1);
   --color-secondary: #ffa400;
+  // Placeholder: accent for a card whose local date isn't the base
+  // timezone's date. Its real value waits on the orange-semantics cleanup —
+  // change it here, never at the use site.
+  --color-day-shift: var(--color-secondary);
   --color-font-timezone: white;
   --color-bg-info: rgba(0, 170, 255, 0.12);
   --color-bg-timezone: #202025;

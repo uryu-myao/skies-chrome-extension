@@ -104,6 +104,14 @@ export function localDateKey(timezone: string, date: Date): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+// Calendar days between `timezone`'s local date and the reference timezone's
+// local date at the same instant: −1 = a day behind, +1 = a day ahead. Can
+// reach ±2 across the date line (Kiritimati +14 vs Niue −11 is 25h apart).
+export function localDayDelta(timezone: string, referenceTimezone: string, date: Date): number {
+  const epochDay = ({ year, month, day }: LocalDateParts) => Date.UTC(year, month - 1, day) / 86400000;
+  return epochDay(localDateParts(timezone, date)) - epochDay(localDateParts(referenceTimezone, date));
+}
+
 export function getSystemTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }

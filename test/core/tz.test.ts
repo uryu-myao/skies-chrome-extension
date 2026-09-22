@@ -4,6 +4,7 @@ import {
   formatRelativeOffset,
   formatUtcOffset,
   localDateKey,
+  localDayDelta,
   localMidnightUtcMillis,
   localMinutesOfDay,
   localWeekday,
@@ -167,5 +168,31 @@ describe('formatUtcOffset', () => {
 
   it('writes zero as plain UTC', () => {
     expect(formatUtcOffset(0)).toBe('UTC');
+  });
+});
+
+describe('localDayDelta', () => {
+  it('is 0 when both zones are on the same calendar date', () => {
+    // 21:00 Mon in Tokyo, 08:00 Mon in New York
+    expect(localDayDelta('America/New_York', 'Asia/Tokyo', new Date('2026-06-15T12:00:00Z'))).toBe(0);
+  });
+
+  it('is -1 / +1 when one side has already crossed midnight', () => {
+    // 01:00 Tue 16th in Tokyo, 12:00 Mon 15th in New York
+    const at = new Date('2026-06-15T16:00:00Z');
+    expect(localDayDelta('America/New_York', 'Asia/Tokyo', at)).toBe(-1);
+    expect(localDayDelta('Asia/Tokyo', 'America/New_York', at)).toBe(1);
+  });
+
+  it('counts calendar days across a month and year boundary', () => {
+    // 05:00 Jan 1 2027 in Tokyo, 15:00 Dec 31 2026 in New York
+    expect(localDayDelta('Asia/Tokyo', 'America/New_York', new Date('2026-12-31T20:00:00Z'))).toBe(1);
+  });
+
+  it('reaches ±2 across the date line — §10.3 Kiritimati vs Niue', () => {
+    // 00:30 Jun 16 in Kiritimati (+14), 23:30 Jun 14 in Niue (-11)
+    const at = new Date('2026-06-15T10:30:00Z');
+    expect(localDayDelta('Pacific/Kiritimati', 'Pacific/Niue', at)).toBe(2);
+    expect(localDayDelta('Pacific/Niue', 'Pacific/Kiritimati', at)).toBe(-2);
   });
 });
