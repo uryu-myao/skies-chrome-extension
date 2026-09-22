@@ -332,13 +332,13 @@ export async function isPro() { ... }
 **底部信息栏**
 
 ```
-左:相对差值(主) + UTC 偏移(次)        右:星期 | 日期 [· yesterday / tomorrow]
+左:相对差值(主) + UTC 偏移(次)        右:[yesterday / tomorrow |] 星期 | 日期
 
-Base   UTC+09                               TUE | 22 SEP            ← 基准时区对应的条目
-−13h   UTC−04                               MON | 21 SEP · yesterday (强调色)
-+5h    UTC+14                               WED | 23 SEP · tomorrow  (强调色)
+Base   UTC+09                          TUE | 22 SEP    ← 基准时区对应的条目
+−13h   UTC−04              yesterday | MON | 21 SEP    (强调色)
++5h    UTC+14               tomorrow | WED | 23 SEP    (强调色)
 
-+25h   UTC+14                               TUE | 23 SEP             (强调色,无说明)
++25h   UTC+14                          TUE | 23 SEP    (强调色,无说明)
        ↑ 基准换成 Niue(SUN 21 SEP 23:30)时的 Kiritimati:跨日期变更线相差两日
 ```
 
@@ -351,9 +351,10 @@ Base   UTC+09                               TUE | 22 SEP            ← 基准�
 - **UTC 偏移保留,降为次级**(更小、更暗):`UTC+09` / `UTC−04` / `UTC+05:45`,零偏移为 `UTC`。
   它是无歧义的可信度锚点,不删除。不显示时区缩写(§4.2)。
 - **右侧星期 + 日期对所有条目照常显示**,不做「仅在与基准不同日时显示」的条件隐藏。条目本地日期
-  与基准时区日期不同(`localDayDelta() ≠ 0`)时,整段改用强调色并追加相对说明:相差 ±1 日追加
-  `· yesterday` / `· tomorrow`;跨日期变更线相差 ±2 日(`Pacific/Kiritimati` vs `Pacific/Niue`)时
-  只保留强调色,不加说明。
+  与基准时区日期不同(`localDayDelta() ≠ 0`)时,整段改用强调色;相差 ±1 日时在星期**之前**加相对
+  说明 `yesterday` / `tomorrow`,与星期之间用和「星期 | 日期」相同的细分隔线隔开。强调状态下两条
+  分隔线都随强调色(`currentColor`),不单独保留白色。跨日期变更线相差 ±2 日
+  (`Pacific/Kiritimati` vs `Pacific/Niue`)时只保留强调色,不加说明。
 - 强调色使用 token `--color-day-shift`,目前为占位(暂指向 `--color-secondary`)。最终取值待橙色
   语义收敛后确定,届时只改 token,不改使用处。
 - 设置页排序项 **By offset** 按同一相对差值升序排列(最落后的在前)。
