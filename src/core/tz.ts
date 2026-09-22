@@ -52,7 +52,8 @@ export function formatRelativeOffset(minutes: number): string {
   return `${sign}${hours}${mins ? `:${String(mins).padStart(2, '0')}` : ''}h`;
 }
 
-// "UTC+09", "UTC−04", "UTC+05:45"; plain "UTC" at zero.
+// "UTC+09", "UTC−04", "UTC+05:45"; plain "UTC" at zero. This — never a zone
+// abbreviation like JST/EST/CST — is how a zone is identified (spec §4.2).
 export function formatUtcOffset(minutes: number): string {
   if (minutes === 0) return 'UTC';
   const { sign, hours, mins } = splitSignedMinutes(minutes);
