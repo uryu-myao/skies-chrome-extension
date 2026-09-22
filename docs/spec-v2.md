@@ -31,7 +31,9 @@
     {
       id: "e_01",              // 稳定唯一 ID,迁移时生成后不再变更
       timezone: "Europe/Berlin",  // IANA ID,唯一必填字段
-      label: "Berlin",         // 显示名,默认取城市名
+      label: "Berlin",         // 显示名,默认取城市名;可在城市设置面板中改名
+      defaultLabel: "Berlin",  // 添加时的城市名,城市名「重置」恢复到它;旧数据缺省时
+                               // 以当前 label 为准(改名前才会被记下)
       person: null,            // 【本版保留不用】{ name, initials, color, note }
       workHours: null,         // 或 { start: 9, end: 18 },null = 用全局默认
       workDays: null,          // 或 [1,2,3,4,5],null = 用全局默认
@@ -342,7 +344,8 @@ export async function isPro() { ... }
 - 本版不实现头像列。但卡片内部布局请预留左侧插入一列的余地,避免下一版重写
 - 保留天空渐变背景 —— 这是产品的核心视觉资产
 - 秒数默认关闭
-- **点击卡片打开该城市的设置面板**(城市名可编辑;工作时间 / 工作日只读,标 `default` 与
+- **点击卡片打开该城市的设置面板**(城市名可编辑,改过名时输入框左侧出现重置按钮,恢复为添加时的
+  名字 `defaultLabel`;工作时间 / 工作日只读,标 `default` 与
   `PRO`,点击提示是 Pro 功能;`Remove this city` 为红色破坏性样式)。原「悬停齿轮 → 横滑露出
   置顶 / 删除」菜单及其首次提示动画已移除,置顶一并移除(§3.4)。手势总表见 §9.5
 - 删除没有二次确认,立即生效,底部弹出 `Removed Bangkok · Undo`(约 5 秒),Undo 放回原位置

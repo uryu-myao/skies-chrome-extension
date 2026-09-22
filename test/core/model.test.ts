@@ -2,12 +2,15 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   createEntry,
   DEFAULT_SETTINGS,
+  defaultLabelOf,
   loadAppData,
+  renameEntry,
+  resetEntryLabel,
   resolveWorkDays,
   resolveWorkHours,
   saveAppData,
 } from '../../src/core/model';
-import type { AppSettings } from '../../src/core/types';
+import type { AppSettings, Entry } from '../../src/core/types';
 
 beforeEach(() => {
   localStorage.clear();
@@ -53,6 +56,36 @@ describe('createEntry', () => {
     expect(a.includeInCoreTime).toBe(true);
     expect(a.pinned).toBe(false);
     expect(a.groups).toEqual([]);
+  });
+
+  it('records the name it was added with as the default label', () => {
+    expect(createEntry({ timezone: 'Asia/Shanghai', label: 'Xuzhou' }).defaultLabel).toBe('Xuzhou');
+    expect(createEntry({ timezone: 'Europe/Berlin' }).defaultLabel).toBe('Europe/Berlin');
+  });
+});
+
+describe('renameEntry / resetEntryLabel', () => {
+  it('keeps the original default across several renames, and reset restores it', () => {
+    const entry = createEntry({ timezone: 'Asia/Kolkata', label: 'Mumbai' });
+    const renamed = renameEntry(renameEntry(entry, 'Bombay'), 'Office');
+    expect(renamed.label).toBe('Office');
+    expect(defaultLabelOf(renamed)).toBe('Mumbai');
+    expect(resetEntryLabel(renamed).label).toBe('Mumbai');
+  });
+
+  it('captures the current name as default for an entry saved before defaultLabel existed', () => {
+    const legacy: Entry = { ...createEntry({ timezone: 'Asia/Shanghai', label: 'Xuzhou' }) };
+    delete legacy.defaultLabel;
+    expect(defaultLabelOf(legacy)).toBe('Xuzhou');
+
+    const renamed = renameEntry(legacy, 'Home');
+    expect(renamed.defaultLabel).toBe('Xuzhou');
+    expect(resetEntryLabel(renamed).label).toBe('Xuzhou');
+  });
+
+  it('reset on a never-renamed entry is a no-op on the label', () => {
+    const entry = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    expect(resetEntryLabel(entry)).toEqual(entry);
   });
 });
 

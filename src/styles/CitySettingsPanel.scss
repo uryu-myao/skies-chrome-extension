@@ -1,8 +1,14 @@
 .city-settings {
-  &__name {
+  &__name-field {
+    position: relative;
     flex: 1;
     min-width: 0;
     max-width: 200px;
+    display: flex;
+  }
+
+  &__name {
+    width: 100%;
     padding: 5px 10px;
     border: 1px solid transparent;
     border-radius: 8px;
@@ -17,6 +23,55 @@
 
     &:focus {
       border-color: var(--color-primary-blue);
+    }
+
+    // Room for the reset button on the (otherwise empty) left side of the
+    // right-aligned name.
+    .city-settings__name-field--renamed & {
+      padding-left: 34px;
+    }
+  }
+
+  &__name-reset {
+    position: absolute;
+    top: 50%;
+    left: 5px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-font-timezone);
+    opacity: 0.7;
+    cursor: pointer;
+    transform: translateY(-50%);
+    animation: city-settings-reset-in 0.18s ease-out;
+    transition:
+      opacity 0.15s ease,
+      background-color 0.15s ease;
+
+    svg {
+      transition: transform 0.3s ease;
+    }
+
+    &:hover,
+    &:focus-visible {
+      opacity: 1;
+      background: rgba(255, 255, 255, 0.16);
+
+      svg {
+        transform: rotate(-60deg);
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary-blue);
+      outline-offset: 1px;
     }
   }
 
@@ -49,5 +104,16 @@
     font-family: 'Poppins', serif;
     font-size: 12px;
     font-weight: 600;
+  }
+}
+
+@keyframes city-settings-reset-in {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
+  to {
+    opacity: 0.7;
+    transform: translateY(-50%) scale(1);
   }
 }

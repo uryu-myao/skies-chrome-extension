@@ -6,7 +6,7 @@ import SettingsPanel from './components/SettingsPanel';
 import CitySettingsPanel from './components/CitySettingsPanel';
 import UndoToast from './components/UndoToast';
 import { TimezoneInfo } from './components/Timezone';
-import { saveAppData } from './core/model';
+import { renameEntry, resetEntryLabel, saveAppData } from './core/model';
 import { getSystemTimezone } from './core/tz';
 import type { AppData, AppSettings, Entry } from './core/types';
 import '@styles/_reset.css';
@@ -69,8 +69,8 @@ function App({ initialData }: AppProps) {
   };
   const closeCitySettings = useCallback(() => setIsCitySettingsOpen(false), []);
 
-  const renameEntry = (id: string, label: string) => {
-    setEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, label } : entry)));
+  const updateEntry = (id: string, update: (entry: Entry) => Entry) => {
+    setEntries((prev) => prev.map((entry) => (entry.id === id ? update(entry) : entry)));
   };
 
   // No confirmation step — removal is immediate and the toast offers Undo.
@@ -178,7 +178,8 @@ function App({ initialData }: AppProps) {
         entry={citySettingsEntry}
         settings={settings}
         onClose={closeCitySettings}
-        onRename={(label) => citySettingsId && renameEntry(citySettingsId, label)}
+        onRename={(label) => citySettingsId && updateEntry(citySettingsId, (entry) => renameEntry(entry, label))}
+        onResetLabel={() => citySettingsId && updateEntry(citySettingsId, resetEntryLabel)}
         onRemove={() => {
           if (citySettingsId) removeEntry(citySettingsId);
           closeCitySettings();

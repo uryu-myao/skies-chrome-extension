@@ -23,6 +23,10 @@ export interface Entry {
   id: string;
   timezone: string;
   label: string;
+  // The name the city was added with — what "Reset" in the city panel puts
+  // back. Optional: data saved before it existed doesn't have it, and
+  // defaultLabelOf() falls back to the current label.
+  defaultLabel?: string;
   person: PersonInfo | null;
   workHours: WorkHours | null;
   workDays: WorkDays | null;

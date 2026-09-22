@@ -25,10 +25,12 @@ export function createDefaultAppData(): AppData {
 }
 
 export function createEntry(partial: Partial<Entry> & { timezone: string }): Entry {
+  const label = partial.label ?? partial.timezone;
   return {
     id: partial.id ?? crypto.randomUUID(),
     timezone: partial.timezone,
-    label: partial.label ?? partial.timezone,
+    label,
+    defaultLabel: partial.defaultLabel ?? label,
     person: partial.person ?? null,
     workHours: partial.workHours ?? null,
     workDays: partial.workDays ?? null,
@@ -39,6 +41,21 @@ export function createEntry(partial: Partial<Entry> & { timezone: string }): Ent
     lat: partial.lat,
     lon: partial.lon,
   };
+}
+
+// An entry saved before defaultLabel existed still carries its original name
+// as its label: a label only changes through renameEntry(), which records the
+// default first.
+export function defaultLabelOf(entry: Entry): string {
+  return entry.defaultLabel ?? entry.label;
+}
+
+export function renameEntry(entry: Entry, label: string): Entry {
+  return { ...entry, label, defaultLabel: defaultLabelOf(entry) };
+}
+
+export function resetEntryLabel(entry: Entry): Entry {
+  return { ...entry, label: defaultLabelOf(entry) };
 }
 
 export interface ResolvedWorkHours extends WorkHours {

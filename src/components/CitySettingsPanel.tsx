@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import '@styles/SettingsPanel.scss';
 import '@styles/CitySettingsPanel.scss';
-import { resolveWorkDays, resolveWorkHours } from '../core/model';
+import { defaultLabelOf, resolveWorkDays, resolveWorkHours } from '../core/model';
 import type { AppSettings, Entry, WorkDays } from '../core/types';
 
 interface CitySettingsPanelProps {
@@ -10,6 +10,7 @@ interface CitySettingsPanelProps {
   settings: AppSettings;
   onClose: () => void;
   onRename: (label: string) => void;
+  onResetLabel: () => void;
   onRemove: () => void;
 }
 
@@ -45,6 +46,7 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
   settings,
   onClose,
   onRename,
+  onResetLabel,
   onRemove,
 }) => {
   // Keeps showing the last city while the panel fades out — after "Remove"
@@ -54,6 +56,7 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
   const shown = entry ?? lastEntryRef.current;
 
   const [draftLabel, setDraftLabel] = useState(shown?.label ?? '');
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [showProHint, setShowProHint] = useState(false);
 
   useEffect(() => {
@@ -73,6 +76,8 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  const defaultLabel = shown ? defaultLabelOf(shown) : '';
+  const isRenamed = !!shown && shown.label !== defaultLabel;
   const hours = shown ? resolveWorkHours(shown, settings) : null;
   const days = shown ? resolveWorkDays(shown, settings) : null;
 
@@ -107,21 +112,53 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
         {shown && hours && days && (
           <div className="settings-panel__body">
             <section className="settings-panel__section">
-              <label className="settings-panel__row">
-                <span className="settings-panel__label">City name</span>
-                <input
-                  className="city-settings__name"
-                  type="text"
-                  value={draftLabel}
-                  maxLength={MAX_LABEL_LENGTH}
-                  spellCheck={false}
-                  onChange={(event) => handleLabelChange(event.target.value)}
-                  onBlur={() => setDraftLabel(shown.label)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') event.currentTarget.blur();
-                  }}
-                />
-              </label>
+              <div className="settings-panel__row">
+                <label className="settings-panel__label" htmlFor="city-settings-name">
+                  City name
+                </label>
+                <div className={`city-settings__name-field${isRenamed ? ' city-settings__name-field--renamed' : ''}`}>
+                  {/* Only while the name differs from the one the city was added with. */}
+                  {isRenamed && (
+                    <button
+                      type="button"
+                      className="city-settings__name-reset"
+                      title={`Reset to “${defaultLabel}”`}
+                      aria-label={`Reset city name to ${defaultLabel}`}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        onResetLabel();
+                        setDraftLabel(defaultLabel);
+                        // The button disappears once the name is back to
+                        // default; don't leave keyboard focus on nothing.
+                        nameInputRef.current?.focus();
+                      }}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                        <path
+                          d="M2.2 4.6A4 4 0 1 1 2 6.6"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                        />
+                        <path d="M1.8 1.8v3h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
+                  <input
+                    ref={nameInputRef}
+                    id="city-settings-name"
+                    className="city-settings__name"
+                    type="text"
+                    value={draftLabel}
+                    maxLength={MAX_LABEL_LENGTH}
+                    spellCheck={false}
+                    onChange={(event) => handleLabelChange(event.target.value)}
+                    onBlur={() => setDraftLabel(shown.label)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') event.currentTarget.blur();
+                    }}
+                  />
+                </div>
+              </div>
             </section>
 
             <h3 className="settings-panel__section-title">
