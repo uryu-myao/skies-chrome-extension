@@ -36,15 +36,16 @@
       workHours: null,         // 或 { start: 9, end: 18 },null = 用全局默认
       workDays: null,          // 或 [1,2,3,4,5],null = 用全局默认
       includeInCoreTime: true,
-      pinned: false,
-      groups: []               // 【本版保留不用】group id 数组
+      pinned: false,           // 【废弃】不再有任何 UI 表现;仅迁移时读取一次,见 §3.4
+      groups: [],              // 【本版保留不用】group id 数组
+      order: 0                 // 列表位置,0 = 最上;手动顺序是唯一顺序,见 §3.4
     }
   ],
   groups: [],                  // 【本版保留不用】{ id, name }
   settings: {
     hour24: true,
     showSeconds: false,
-    sortOrder: "manual",       // manual | offset | name
+    sortOrder: "manual",       // 【废弃】manual | offset | name;仅迁移时读取一次,见 §3.4
     referenceTimezone: null,   // null = 使用系统时区
     defaultWorkHours: { start: 9, end: 18 },
     defaultWorkDays: [1, 2, 3, 4, 5],
@@ -92,6 +93,22 @@ entry.id 新生成
 
 用一份真实导出的 v1 数据跑一遍,确认:条目数量一致、顺序一致、置顶状态一致。
 **这一步先单独发一个版本上线,不带任何新 UI。** 静默迁移一周,确认没有异常反馈,再开始 v2 界面开发。
+
+### 3.4 固化显示顺序(移除置顶与排序模式)
+
+置顶(`pinned`)与排序模式(`sortOrder`)已移除,手动顺序成为唯一顺序。为了不让老用户
+打开后看到列表乱掉,首次读到**没有 `order` 字段**的数据时,`freezeDisplayOrder()` 按旧规则
+算出用户当时看到的顺序 —— 置顶项在前,组内按旧 `sortOrder`(manual = 最新在上,即存储数组
+倒序;offset = 相对基准时区最落后的在前;name = 字母序)—— 并把该顺序写入 `order`。
+
+- **不得回退到原始添加顺序**
+- 只重排,不删除任何条目
+- 只执行一次:之后用户的手动排序不会被旧规则覆盖
+- v1 → v2 迁移同样经过这一步
+- `pinned` / `sortOrder` 保留在 schema 中标为废弃,因为这一步需要读它们
+
+运行时以 entries 数组顺序为准:保存时把数组下标写入 `order`,读取时按 `order` 排序;
+新添加的城市放在最上方。
 
 ---
 
@@ -314,7 +331,7 @@ export async function isPro() { ... }
 `night / dawn / day / twilight` 四态),不引入新配色。
 
 右侧精简为三个动作:`+ 添加` / `⏱ 时间转换` / `⚙ 设置`。
-`12/24` 与排序移入设置页,原胶囊整体删除。
+`12/24` 移入设置页,原胶囊整体删除(排序已整体移除,见 §3.4)。
 
 原 logo 点击弹出的 Share / Rate / Feedback 菜单已移除 —— logo 的点击目标现在是上述
 基准时区 chip。该菜单的内容迁移到设置页的 About 分区,见 §9.4。
@@ -325,9 +342,10 @@ export async function isPro() { ... }
 - 本版不实现头像列。但卡片内部布局请预留左侧插入一列的余地,避免下一版重写
 - 保留天空渐变背景 —— 这是产品的核心视觉资产
 - 秒数默认关闭
-- 滑动菜单统一为左侧单列三格:`⚙ 设置 · 📌 置顶 · ✕ 删除`
-- **删除按钮改为红色**(当前为琥珀色,不符合破坏性操作惯例)
-- 首次使用时第一张卡片播放一次左移回弹动画,提供手势可发现性
+- **点击卡片打开该城市的设置面板**(城市名可编辑;工作时间 / 工作日只读,标 `default` 与
+  `PRO`,点击提示是 Pro 功能;`Remove this city` 为红色破坏性样式)。原「悬停齿轮 → 横滑露出
+  置顶 / 删除」菜单及其首次提示动画已移除,置顶一并移除(§3.4)。手势总表见 §9.5
+- 删除没有二次确认,立即生效,底部弹出 `Removed Bangkok · Undo`(约 5 秒),Undo 放回原位置
 
 **底部信息栏**
 
@@ -357,7 +375,6 @@ Base   UTC+09                          TUE | 22 SEP    ← 基准时区对应的
   (`Pacific/Kiritimati` vs `Pacific/Niue`)时只保留强调色,不加说明。
 - 强调色使用 token `--color-day-shift`,目前为占位(暂指向 `--color-secondary`)。最终取值待橙色
   语义收敛后确定,届时只改 token,不改使用处。
-- 设置页排序项 **By offset** 按同一相对差值升序排列(最落后的在前)。
 
 ### 9.3 Core Time 面板
 
@@ -370,7 +387,8 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 
 当前已实现的分区,按顺序:
 
-- **Display** — Hour format / Show seconds / Sort order
+- **Display** — Hour format / Show seconds / Edit timezone list(进入编辑模式,§9.5;
+  原 Sort order 已移除,不提供一次性排序按钮)
 - **Core time** — Core Time panel 显示模式 / Default work hours / Default work days
 - **About**(本版新增,不在最初的分区规划内)— Share TimeMate(复制商店链接,
   按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Version
@@ -383,6 +401,42 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 用途不同,不要合并成一个分区。
 
 (People 分区下一版加入)
+
+### 9.5 编辑模式与手势分配
+
+**入口**:设置页 Display 分区的 `Edit timezone list`。不做长按入口。
+
+**编辑态**:
+- 头部换成 `Edit list` + `Done`
+- 每张卡片左右缩进:左侧 24px 圆形红色减号,右侧常驻抓手
+- 卡片简化为单行 —— 城市名 + 时间,不显示底栏。popup 宽度减去两侧操作区后内容区仅约
+  320px,底栏会过挤;单行也让行更矮、同屏可见更多城市
+- **保留天空渐变**,用户靠颜色辨认卡片
+- Core Time 面板自动收起;退出编辑模式时展开并重算一次
+
+**交互**:
+- 拖动抓手排序,不需要长按
+- 点减号直接删除,弹出 `Removed X · Undo`,不做两步确认
+- 点卡片本身无行为
+- `Done` 或点击列表外空白区域退出;删光最后一个城市时也自动退出(Undo 仍可用)
+
+**实现要求**:
+- 使用 **dnd-kit**。不用 HTML5 原生 drag-and-drop API,不用已停止维护的 react-beautiful-dnd
+- 启用键盘操作:聚焦抓手,空格拾起,方向键移动,空格放下,Esc 取消;读屏播报使用城市名而非 id
+- 拖到可视区域边缘时列表自动滚动(popup 仅 540px 高,约 6 个城市即需滚动)
+- 顺序变更后立即持久化
+- **Core Time 面板的行顺序与列表顺序一致**(两者都按 entries 数组顺序)
+
+**手势总表** —— 每个手势只对应一个行为,不得重叠或遗留:
+
+| 模式 | 手势       | 行为             |
+| ---- | ---------- | ---------------- |
+| 普通 | 点击卡片   | 打开该城市设置   |
+| 普通 | 长按卡片   | 无(本版不实现) |
+| 普通 | 横滑       | 已移除           |
+| 编辑 | 拖抓手     | 排序             |
+| 编辑 | 点减号     | 删除 + Undo      |
+| 编辑 | 点卡片     | 无               |
 
 ---
 
