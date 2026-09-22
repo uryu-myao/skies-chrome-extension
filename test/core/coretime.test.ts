@@ -113,3 +113,122 @@ describe('coreTime — axis and rows', () => {
     expect(result.rows[0].crossesDay).toBe(true);
   });
 });
+
+// Saturday 2026-07-18 12:00 in Tokyo, 11:00 in Singapore/Shanghai — the
+// weekend on both sides.
+const SATURDAY_NOON_JST = new Date('2026-07-18T03:00:00Z');
+// Saturday 2026-07-18 10:00 in Tokyo, but still Friday 21:00 in New York.
+const SATURDAY_MORNING_JST = new Date('2026-07-18T01:00:00Z');
+// Sunday 2026-07-19 12:00 in Tokyo, 11:00 in Singapore.
+const SUNDAY_NOON_JST = new Date('2026-07-19T03:00:00Z');
+
+describe('coreTime — §5.3 off-day states', () => {
+  it('ALL_OFF: everyone is on their weekend, nextOverlap skips Sunday to Monday', () => {
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const singapore = createEntry({ timezone: 'Asia/Singapore', label: 'Singapore' });
+    const result = coreTime({
+      entries: [tokyo, singapore],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SATURDAY_NOON_JST,
+    });
+
+    expect(result.overlap).toEqual([]);
+    // Monday 10:00-18:00 JST: Singapore starts 09:00 SGT = 10:00 JST (slot
+    // 20), Tokyo ends 18:00 (slot 36)
+    expect(result.conclusion).toEqual({
+      status: 'ALL_OFF',
+      offEntryIds: [tokyo.id, singapore.id],
+      nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 20, endSlot: 36 },
+    });
+  });
+
+  it('ALL_OFF for an entry on the reference timezone itself, not a failed closest (§5.3 artifact a)', () => {
+    // Zero offset from the reference means a constant local weekday across
+    // the whole axis — the case that used to fall through to closest = null.
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const result = coreTime({
+      entries: [tokyo],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SATURDAY_NOON_JST,
+    });
+
+    expect(result.conclusion).toEqual({
+      status: 'ALL_OFF',
+      offEntryIds: [tokyo.id],
+      nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 18, endSlot: 36 },
+    });
+  });
+
+  it('nextOverlap counts from tomorrow: a Sunday finds Monday at daysFromToday 1', () => {
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const singapore = createEntry({ timezone: 'Asia/Singapore', label: 'Singapore' });
+    const result = coreTime({
+      entries: [tokyo, singapore],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SUNDAY_NOON_JST,
+    });
+
+    expect(result.conclusion).toEqual({
+      status: 'ALL_OFF',
+      offEntryIds: [tokyo.id, singapore.id],
+      nextOverlap: { daysFromToday: 1, weekday: 1, startSlot: 20, endSlot: 36 },
+    });
+  });
+
+  it('PARTIAL_OFF: only the entry whose own workDays include Saturday is working', () => {
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const shanghai = createEntry({
+      timezone: 'Asia/Shanghai',
+      label: 'Shanghai',
+      workDays: [1, 2, 3, 4, 5, 6],
+    });
+    const result = coreTime({
+      entries: [tokyo, shanghai],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SATURDAY_NOON_JST,
+    });
+
+    expect(result.overlap).toEqual([]);
+    // Next *full* overlap needs Tokyo back too: Monday, 09:00 CST = 10:00 JST
+    expect(result.conclusion).toEqual({
+      status: 'PARTIAL_OFF',
+      workingEntryIds: [shanghai.id],
+      offEntryIds: [tokyo.id],
+      nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 20, endSlot: 36 },
+    });
+  });
+
+  it("PARTIAL_OFF judges each entry by its own weekday at referenceDate: Tokyo's Saturday is New York's Friday", () => {
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const newYork = createEntry({ timezone: 'America/New_York', label: 'New York' });
+    const result = coreTime({
+      entries: [tokyo, newYork],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SATURDAY_MORNING_JST,
+    });
+
+    // Default hours never overlap across a 13h gap, so all 7 lookahead days
+    // come up empty: null, not a fallback suggestion.
+    expect(result.conclusion).toEqual({
+      status: 'PARTIAL_OFF',
+      workingEntryIds: [newYork.id],
+      offEntryIds: [tokyo.id],
+      nextOverlap: null,
+    });
+  });
+
+  it('nextOverlap is null when the 7-day search finds nothing — an entry that never works', () => {
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo', workDays: [] });
+    const result = coreTime({
+      entries: [tokyo],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: REFERENCE_DATE,
+    });
+
+    expect(result.conclusion).toEqual({
+      status: 'ALL_OFF',
+      offEntryIds: [tokyo.id],
+      nextOverlap: null,
+    });
+  });
+});
