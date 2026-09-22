@@ -291,17 +291,13 @@ const Timezone: React.FC<TimezoneProps> = ({
             </span>
           </p>
           <p>
-            {isConvertModeOpen ? (
-              <span className="timezone-data__convert-label">Converter Mode</span>
-            ) : (
+            <span>
+              <span className="timezone-data__week">{timeData.week}</span>
               <span>
-                <span className="timezone-data__week">{timeData.week}</span>
-                <span>
-                  <span className="timezone-data__date">{timeData.date}</span>
-                  <span className="timezone-data__month">{timeData.month}</span>
-                </span>
+                <span className="timezone-data__date">{timeData.date}</span>
+                <span className="timezone-data__month">{timeData.month}</span>
               </span>
-            )}
+            </span>
           </p>
         </div>
       </div>
