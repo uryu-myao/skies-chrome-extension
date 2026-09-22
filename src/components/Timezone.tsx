@@ -256,7 +256,6 @@ const Timezone: React.FC<TimezoneProps> = ({
 
   return (
     <div
-      data-timezone-id={id}
       className={`timezone timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}${isCompact ? ' timezone--compact' : ''}`}
       {...(!isCompact && {
         role: 'button',
