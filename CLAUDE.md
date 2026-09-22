@@ -9,9 +9,10 @@ npm run dev       # Vite dev server (popup UI development)
 npm run build     # tsc -b && vite build → outputs to dist/
 npm run lint      # ESLint
 npm run preview   # Preview production build
+npm test          # Vitest, runs test/**/*.test.ts (core/ modules only)
 ```
 
-There are no tests. Load the extension by pointing Chrome to `dist/` after building.
+`tsc -b` also type-checks `test/` (via `tsconfig.test.json`), so a test that drifts from a core module's types fails the build, not just at runtime. Load the extension by pointing Chrome to `dist/` after building.
 
 ## Architecture
 
