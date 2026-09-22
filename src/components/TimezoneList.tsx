@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Timezone, { TimezoneInfo } from './Timezone';
 import { createEntry } from '../core/model';
+import { relativeOffsetMinutes } from '../core/tz';
 import type { Entry, SortOrder } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition, HourFormat } from '../App';
 
@@ -20,40 +21,6 @@ interface TimezoneListProps {
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
 }
-
-const getDateTimeRankInZone = (zone: string): number => {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).formatToParts(new Date());
-
-    const year = Number(parts.find((p) => p.type === 'year')?.value ?? 0);
-    const month = Number(parts.find((p) => p.type === 'month')?.value ?? 0);
-    const day = Number(parts.find((p) => p.type === 'day')?.value ?? 0);
-    const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
-    const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
-    const second = Number(parts.find((p) => p.type === 'second')?.value ?? 0);
-
-    // Compare by local date first, then local time (YYYYMMDDHHmmss).
-    return (
-      year * 10000000000 +
-      month * 100000000 +
-      day * 1000000 +
-      hour * 10000 +
-      minute * 100 +
-      second
-    );
-  } catch {
-    return Number.MAX_SAFE_INTEGER;
-  }
-};
 
 const TimezoneList: React.FC<TimezoneListProps> = ({
   entries,
@@ -152,6 +119,8 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
     }
   }, [onAddTimezone, addTimezone]); // 正确添加所有依赖项
 
+  // Offsets only move at DST switches, but re-sort periodically so an open
+  // popup picks one up without waiting for some other re-render.
   useEffect(() => {
     if (sortOrder !== 'offset') return;
 
@@ -184,14 +153,20 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   }, [activeSettingId]);
 
   const entryOrder = new Map(entries.map((entry, index) => [entry.id, index]));
+  const sortedAt = new Date();
 
   const compareByMode = (a: Entry, b: Entry): number => {
     if (sortOrder === 'name') {
       return a.label.localeCompare(b.label);
     }
 
+    // Furthest behind the base first, furthest ahead last — the same gap
+    // each card's footer shows.
     if (sortOrder === 'offset') {
-      return getDateTimeRankInZone(a.timezone) - getDateTimeRankInZone(b.timezone);
+      return (
+        relativeOffsetMinutes(a.timezone, referenceTimezone, sortedAt) -
+        relativeOffsetMinutes(b.timezone, referenceTimezone, sortedAt)
+      );
     }
 
     // manual(default): recently added first
