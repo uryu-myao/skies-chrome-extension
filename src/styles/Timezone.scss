@@ -232,6 +232,7 @@
     &__day--shifted {
       color: var(--color-day-shift);
 
+      .timezone-data__day-relative::after,
       .timezone-data__week::after {
         background-color: currentColor;
       }
