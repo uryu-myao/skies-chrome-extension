@@ -75,13 +75,17 @@
     }
   }
 
-  &__pro-tag {
-    margin-left: 4px;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: var(--color-bg-info);
-    font-size: 9px;
-    letter-spacing: 0.08em;
+  // The section title's usual 0.45 opacity would dim the Pro badge too, so
+  // it moves onto the text alone.
+  &__section-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    opacity: 1;
+  }
+
+  &__section-label {
+    opacity: 0.45;
   }
 
   &__default {

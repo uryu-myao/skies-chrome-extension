@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import '@styles/SettingsPanel.scss';
 import '@styles/CitySettingsPanel.scss';
+import ProBadge from './ProBadge';
 import { defaultLabelOf, resolveWorkDays, resolveWorkHours } from '../core/model';
 import type { AppSettings, Entry, WorkDays } from '../core/types';
 
@@ -161,8 +162,9 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
               </div>
             </section>
 
-            <h3 className="settings-panel__section-title">
-              Work time <span className="city-settings__pro-tag">PRO</span>
+            <h3 className="settings-panel__section-title city-settings__section-title">
+              <span className="city-settings__section-label">Work time</span>
+              <ProBadge />
             </h3>
             <section className="settings-panel__section">
               <button
