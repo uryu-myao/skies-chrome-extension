@@ -27,6 +27,9 @@ interface TimezoneProps extends TimezoneInfo {
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
   onOpen: () => void;
+  // Edit mode: one row of city + time, no footer, and the card itself does
+  // nothing when clicked — the row's own controls handle remove / reorder.
+  isCompact?: boolean;
 }
 
 interface SunTimes {
@@ -71,6 +74,7 @@ const Timezone: React.FC<TimezoneProps> = ({
   isConvertModeOpen,
   convertPosition,
   onOpen,
+  isCompact = false,
 }) => {
   const stars = useMemo(() => makeStars(id, 20), [id]);
 
@@ -253,18 +257,20 @@ const Timezone: React.FC<TimezoneProps> = ({
   return (
     <div
       data-timezone-id={id}
-      className={`timezone timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}`}
-      role="button"
-      tabIndex={0}
-      aria-label={`${city} settings`}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onOpen();
-        }
-      }}>
+      className={`timezone timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}${isCompact ? ' timezone--compact' : ''}`}
+      {...(!isCompact && {
+        role: 'button',
+        tabIndex: 0,
+        'aria-label': `${city} settings`,
+        onClick: onOpen,
+        onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpen();
+          }
+        },
+      })}>
       <div className="timezone-inner">
         {timeOfDay === 'night' && !isConvertModeOpen && (
           <svg className="timezone-stars" aria-hidden="true">
@@ -282,43 +288,45 @@ const Timezone: React.FC<TimezoneProps> = ({
         )}
         <div className="timezone-data__location">{city}</div>
         <div className="timezone-data__time">{timeData.time}</div>
-        {(isConvertModeOpen || hourFormat === '12') && timeData.meridiem && (
+        {!isCompact && (isConvertModeOpen || hourFormat === '12') && timeData.meridiem && (
           <div
             className={`timezone-data__meridiem${timeData.meridiem === 'AM' ? ' timezone-data__meridiem--am' : ''}${isConvertModeOpen ? ' timezone-data__meridiem--convert' : ''}`}>
             {timeData.meridiem}
           </div>
         )}
-        {showSeconds && !isConvertModeOpen && (
+        {!isCompact && showSeconds && !isConvertModeOpen && (
           <div className="timezone-data__second">{timeData.second}</div>
         )}
-        <div className="timezone-footer">
-          <p>
-            <span className="timezone-data__relative">
-              {zone === referenceTimezone ? 'Base' : timeData.relativeOffset}
-            </span>
-            <span className="timezone-data__offset">{timeData.utcOffset}</span>
-          </p>
-          <p
-            className={
-              timeData.dayDelta !== 0
-                ? 'timezone-footer__day--shifted'
-                : undefined
-            }>
-            {/* ±2 (across the date line) keeps the accent but has no one-word label. */}
-            {Math.abs(timeData.dayDelta) === 1 && (
-              <span className="timezone-data__day-relative">
-                {timeData.dayDelta < 0 ? 'yesterday' : 'tomorrow'}
+        {!isCompact && (
+          <div className="timezone-footer">
+            <p>
+              <span className="timezone-data__relative">
+                {zone === referenceTimezone ? 'Base' : timeData.relativeOffset}
               </span>
-            )}
-            <span>
-              <span className="timezone-data__week">{timeData.week}</span>
+              <span className="timezone-data__offset">{timeData.utcOffset}</span>
+            </p>
+            <p
+              className={
+                timeData.dayDelta !== 0
+                  ? 'timezone-footer__day--shifted'
+                  : undefined
+              }>
+              {/* ±2 (across the date line) keeps the accent but has no one-word label. */}
+              {Math.abs(timeData.dayDelta) === 1 && (
+                <span className="timezone-data__day-relative">
+                  {timeData.dayDelta < 0 ? 'yesterday' : 'tomorrow'}
+                </span>
+              )}
               <span>
-                <span className="timezone-data__date">{timeData.date}</span>
-                <span className="timezone-data__month">{timeData.month}</span>
+                <span className="timezone-data__week">{timeData.week}</span>
+                <span>
+                  <span className="timezone-data__date">{timeData.date}</span>
+                  <span className="timezone-data__month">{timeData.month}</span>
+                </span>
               </span>
-            </span>
-          </p>
-        </div>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

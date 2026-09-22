@@ -14,6 +14,8 @@ interface SettingsPanelProps {
   onClose: () => void;
   settings: AppSettings;
   setSettings: Dispatch<SetStateAction<AppSettings>>;
+  canEditList: boolean;
+  onEditList: () => void;
 }
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -27,6 +29,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
   settings,
   setSettings,
+  canEditList,
+  onEditList,
 }) => {
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -138,6 +142,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 ]}
               />
             </div>
+
+            <button
+              type="button"
+              className="settings-panel__row settings-panel__row--link"
+              onClick={onEditList}
+              disabled={!canEditList}>
+              <span className="settings-panel__label">Edit timezone list</span>
+              <span className="settings-panel__chevron">›</span>
+            </button>
           </section>
 
           <h3 className="settings-panel__section-title">Core time</h3>

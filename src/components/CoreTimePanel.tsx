@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import '@styles/CoreTimePanel.scss';
 import { coreTime } from '../core/coretime';
 import { getSystemTimezone, SLOTS_PER_DAY } from '../core/tz';
@@ -7,6 +7,7 @@ import type { AppSettings, Entry } from '../core/types';
 interface CoreTimePanelProps {
   entries: Entry[];
   settings: AppSettings;
+  isEditMode: boolean;
 }
 
 interface SlotRange {
@@ -47,8 +48,23 @@ function joinLabels(labels: string[]): string {
   return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 }
 
-const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
+const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEditMode }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  // Bumped on leaving edit mode so the result is recomputed once for "now",
+  // even if the edit didn't change the entries.
+  const [recalcToken, setRecalcToken] = useState(0);
+
+  // Collapsed while the list is being edited; expanded again on the way out,
+  // so the rows' new order (which follows the list) is right there.
+  const wasEditModeRef = useRef(isEditMode);
+  useEffect(() => {
+    if (wasEditModeRef.current && !isEditMode) {
+      setIsExpanded(true);
+      setRecalcToken((token) => token + 1);
+    }
+    wasEditModeRef.current = isEditMode;
+  }, [isEditMode]);
+  const showExpanded = isExpanded && !isEditMode;
 
   const filteredEntries = useMemo(
     () => entries.filter((entry) => entry.includeInCoreTime),
@@ -57,7 +73,9 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
 
   const result = useMemo(
     () => coreTime({ entries: filteredEntries, settings, referenceDate: new Date() }),
-    [filteredEntries, settings]
+    // recalcToken isn't read, it only forces a fresh referenceDate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredEntries, settings, recalcToken]
   );
 
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
@@ -155,7 +173,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
     }
   };
 
-  const canExpand = filteredEntries.length > 0;
+  const canExpand = filteredEntries.length > 0 && !isEditMode;
   const cityWord = filteredEntries.length === 1 ? 'city' : 'cities';
 
   const rows = result.rows.map((row) => ({
@@ -167,12 +185,12 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
   }));
 
   return (
-    <div className={`core-time-panel ${isExpanded ? 'core-time-panel--expanded' : ''}`}>
+    <div className={`core-time-panel ${showExpanded ? 'core-time-panel--expanded' : ''}`}>
       <button
         type="button"
         className="core-time-panel__header"
         onClick={() => canExpand && setIsExpanded((prev) => !prev)}
-        aria-expanded={isExpanded}
+        aria-expanded={showExpanded}
         disabled={!canExpand}>
         <span className="core-time-panel__title">Core time</span>
         <span className="core-time-panel__meta">
@@ -191,7 +209,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings }) => {
         </span>
       </button>
 
-      {isExpanded && canExpand && (
+      {showExpanded && canExpand && (
         <div className="core-time-panel__band">
           {rows.map((row) => (
             <div

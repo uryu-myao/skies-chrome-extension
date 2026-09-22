@@ -40,6 +40,7 @@ function App({ initialData }: AppProps) {
   const [citySettingsId, setCitySettingsId] = useState<string | null>(null);
   const [isCitySettingsOpen, setIsCitySettingsOpen] = useState(false);
   const [removed, setRemoved] = useState<RemovedEntry | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const hourFormat: HourFormat = settings.hour24 ? '24' : '12';
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
@@ -96,11 +97,37 @@ function App({ initialData }: AppProps) {
 
   const citySettingsEntry = entries.find((entry) => entry.id === citySettingsId) ?? null;
 
+  const enterEditMode = () => {
+    setIsSettingsOpen(false);
+    setIsSearchOpen(false);
+    setIsConvertModeOpen(false);
+    setIsEditMode(true);
+  };
+
+  // Leaves edit mode on a press anywhere outside the list — blank space in
+  // the content area, the Core Time panel — other than the edit bar (Done
+  // does that) and the undo toast.
+  useEffect(() => {
+    if (!isEditMode) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest('.timezone-list, .edit-list-bar, .undo-toast')) return;
+      setIsEditMode(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [isEditMode]);
+
+  // Nothing left to edit once the last city is removed (Undo still works).
+  useEffect(() => {
+    if (isEditMode && entries.length === 0) setIsEditMode(false);
+  }, [isEditMode, entries.length]);
+
   return (
     <div
       className={`app ${isConvertModeOpen ? 'app--convert-open' : ''} ${
         isSearchOpen ? 'app--search-open' : ''
-      }`}>
+      }${isEditMode ? ' app--editing' : ''}`}>
       <Header
         addTimezone={handleAddTimezone}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -114,6 +141,14 @@ function App({ initialData }: AppProps) {
         settings={settings}
         setSettings={setSettings}
       />
+      {isEditMode && (
+        <div className="edit-list-bar">
+          <span className="edit-list-bar__title">Edit list</span>
+          <button type="button" className="edit-list-bar__done" onClick={() => setIsEditMode(false)}>
+            Done
+          </button>
+        </div>
+      )}
       <div className="app-content">
         <TimezoneList
           entries={entries}
@@ -125,14 +160,18 @@ function App({ initialData }: AppProps) {
           isConvertModeOpen={isConvertModeOpen}
           convertPosition={convertPosition}
           onOpenCity={openCitySettings}
+          isEditMode={isEditMode}
+          onRemoveCity={removeEntry}
         />
       </div>
-      <CoreTimePanel entries={entries} settings={settings} />
+      <CoreTimePanel entries={entries} settings={settings} isEditMode={isEditMode} />
       <SettingsPanel
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         setSettings={setSettings}
+        canEditList={entries.length > 0}
+        onEditList={enterEditMode}
       />
       <CitySettingsPanel
         isOpen={isCitySettingsOpen && citySettingsEntry !== null}

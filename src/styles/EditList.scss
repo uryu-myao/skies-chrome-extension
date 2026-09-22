@@ -1,0 +1,165 @@
+@keyframes edit-control-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// Top bar replacing the header while the list is being edited.
+.edit-list-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  padding: 0 var(--container-padding-horizontal) 0 24px;
+  background-color: var(--color-primary);
+
+  &__title {
+    color: var(--color-font-timezone);
+    font-family: 'Poppins', serif;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  &__done {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 100vw;
+    background: var(--color-primary-blue);
+    color: var(--color-primary-white);
+    font-family: 'Poppins', serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+
+    &:hover {
+      filter: brightness(1.1);
+    }
+  }
+}
+
+.timezone-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  &__card {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &--editing {
+    gap: 8px;
+    margin-bottom: 6px;
+
+    .timezone {
+      margin: 0;
+    }
+  }
+
+  // Lifted above its neighbours while being dragged.
+  &--dragging {
+    z-index: 5;
+
+    .timezone-inner {
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    }
+  }
+
+  &__remove,
+  &__handle {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    animation: edit-control-in 0.18s ease-out;
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary-blue);
+      outline-offset: 2px;
+    }
+  }
+
+  // 24px round minus
+  &__remove {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--color-danger);
+
+    &::before {
+      content: '';
+      width: 10px;
+      height: 2px;
+      border-radius: 1px;
+      background: white;
+    }
+  }
+
+  &__handle {
+    width: 24px;
+    height: 36px;
+    border-radius: 8px;
+    background: none;
+    color: var(--color-font-timezone);
+    opacity: 0.55;
+    cursor: grab;
+    touch-action: none;
+    transition: opacity 0.15s ease;
+
+    &:hover,
+    &:focus-visible {
+      opacity: 1;
+    }
+
+    .timezone-row--dragging & {
+      cursor: grabbing;
+      opacity: 1;
+    }
+  }
+}
+
+// Edit mode's single-row card: city + time only, sky gradient kept so rows
+// stay recognisable by colour.
+.timezone--compact {
+  cursor: default;
+
+  .timezone-inner {
+    grid-template: 'local time' 44px / 1fr auto;
+    align-items: center;
+    padding-top: 0;
+    border-radius: 16px;
+  }
+
+  .timezone-data__location {
+    padding: 0 0 0 14px;
+    font-size: 16px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .timezone-data__time {
+    padding-right: 14px;
+    font-size: 20px;
+  }
+}
+
+.settings-panel__row--link:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
