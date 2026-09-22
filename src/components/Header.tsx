@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type Dispatch, type SetStateAction } from 'react';
 import '@styles/Header.scss';
 import Searchbar from '../components/Searchbar';
+import ResetButton from './ResetButton';
 import { TimezoneInfo } from './Timezone';
 import { getSystemTimezone, localHHMM } from '../core/tz';
 import type { AppSettings, Entry } from '../core/types';
@@ -369,9 +370,10 @@ const Header: React.FC<HeaderProps> = ({
                   <div className="header-convert__menu">
                     {Math.abs(convertPosition - convertInitialPosition) >
                       0.05 && (
-                      <button
+                      <ResetButton
                         className="header-convert__reset"
-                        aria-label="Reset converter to current time"
+                        label="Reset converter to current time"
+                        title="Back to now"
                         onClick={handleResetConverter}
                       />
                     )}

@@ -225,27 +225,11 @@
       z-index: 10;
     }
 
+    // Look comes from .reset-button (shared with the city-name field).
     &__reset {
       position: absolute;
       top: 31px;
       left: 10px;
-      width: 22px;
-      height: 22px;
-      padding: 0;
-      border: none;
-      border-radius: 50%;
-      background-color: transparent;
-      background-image: var(--icon-reset);
-      background-position: center;
-      background-repeat: no-repeat;
-      background-size: 22px;
-      cursor: pointer;
-      opacity: 1;
-      transition: all 0.15s ease;
-
-      &:hover {
-        opacity: 0.7;
-      }
     }
 
     &__scale {

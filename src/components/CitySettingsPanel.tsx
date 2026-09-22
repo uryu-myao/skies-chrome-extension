@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import '@styles/SettingsPanel.scss';
 import '@styles/CitySettingsPanel.scss';
 import ProBadge from './ProBadge';
+import ResetButton from './ResetButton';
 import { defaultLabelOf, resolveWorkDays, resolveWorkHours } from '../core/model';
 import type { AppSettings, Entry, WorkDays } from '../core/types';
 
@@ -120,29 +121,19 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
                 <div className={`city-settings__name-field${isRenamed ? ' city-settings__name-field--renamed' : ''}`}>
                   {/* Only while the name differs from the one the city was added with. */}
                   {isRenamed && (
-                    <button
-                      type="button"
+                    <ResetButton
                       className="city-settings__name-reset"
+                      label={`Reset city name to ${defaultLabel}`}
                       title={`Reset to “${defaultLabel}”`}
-                      aria-label={`Reset city name to ${defaultLabel}`}
-                      onMouseDown={(event) => event.preventDefault()}
+                      keepFocus
                       onClick={() => {
                         onResetLabel();
                         setDraftLabel(defaultLabel);
                         // The button disappears once the name is back to
                         // default; don't leave keyboard focus on nothing.
                         nameInputRef.current?.focus();
-                      }}>
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                        <path
-                          d="M2.2 4.6A4 4 0 1 1 2 6.6"
-                          stroke="currentColor"
-                          strokeWidth="1.4"
-                          strokeLinecap="round"
-                        />
-                        <path d="M1.8 1.8v3h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
+                      }}
+                    />
                   )}
                   <input
                     ref={nameInputRef}

@@ -32,47 +32,16 @@
     }
   }
 
+  // Look comes from .reset-button; this only places it inside the field.
+  // Centred with auto margins, not a transform — .reset-button's entry
+  // animation owns transform.
   &__name-reset {
     position: absolute;
-    top: 50%;
+    top: 0;
+    bottom: 0;
     left: 5px;
     z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: none;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--color-font-timezone);
-    opacity: 0.7;
-    cursor: pointer;
-    transform: translateY(-50%);
-    animation: city-settings-reset-in 0.18s ease-out;
-    transition:
-      opacity 0.15s ease,
-      background-color 0.15s ease;
-
-    svg {
-      transition: transform 0.3s ease;
-    }
-
-    &:hover,
-    &:focus-visible {
-      opacity: 1;
-      background: rgba(255, 255, 255, 0.16);
-
-      svg {
-        transform: rotate(-60deg);
-      }
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--color-primary-blue);
-      outline-offset: 1px;
-    }
+    margin: auto 0;
   }
 
   // The section title's usual 0.45 opacity would dim the Pro badge too, so
@@ -108,16 +77,5 @@
     font-family: 'Poppins', serif;
     font-size: 12px;
     font-weight: 600;
-  }
-}
-
-@keyframes city-settings-reset-in {
-  from {
-    opacity: 0;
-    transform: translateY(-50%) scale(0.6);
-  }
-  to {
-    opacity: 0.7;
-    transform: translateY(-50%) scale(1);
   }
 }

@@ -1,0 +1,50 @@
+@keyframes reset-button-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+
+// Look only — each use positions it with its own class. No transform here
+// besides the entry scale, so callers mustn't centre it with one either.
+.reset-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-font-timezone);
+  opacity: 0.7;
+  cursor: pointer;
+  animation: reset-button-in 0.18s ease-out;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease;
+
+  svg {
+    transition: transform 0.3s ease;
+  }
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.16);
+
+    svg {
+      transform: rotate(-60deg);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-blue);
+    outline-offset: 1px;
+  }
+}
