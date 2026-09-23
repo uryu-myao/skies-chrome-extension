@@ -23,6 +23,64 @@ interface SettingsPanelProps {
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
+// Leaves the extension: arrow out of a frame.
+const ExternalIcon = () => (
+  <span className="settings-panel__row-icon" aria-hidden="true">
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path
+        d="M7.6 2h3.4v3.4M10.6 2.4 6.2 6.8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.6 8.1v1.9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.4a1 1 0 0 1 1-1h1.9"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </span>
+);
+
+// Copies to the clipboard rather than going anywhere: two sheets, and a
+// tick while the row reads "Copied!".
+const CopyIcon = ({ copied }: { copied: boolean }) => (
+  <span className="settings-panel__row-icon" aria-hidden="true">
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      {copied ? (
+        <path
+          d="M2.6 6.9 5.2 9.5l5.2-6"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : (
+        <>
+          <rect
+            x="4.6"
+            y="4.6"
+            width="6.9"
+            height="6.9"
+            rx="1.7"
+            stroke="currentColor"
+            strokeWidth="1.3"
+          />
+          <path
+            d="M8.4 2.9a1.4 1.4 0 0 0-1.4-1.4H3.2a1.7 1.7 0 0 0-1.7 1.7V7a1.4 1.4 0 0 0 1.4 1.4"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
+        </>
+      )}
+    </svg>
+  </span>
+);
+
 function formatHour(hour: number): string {
   return `${String(hour).padStart(2, '0')}:00`;
 }
@@ -256,7 +314,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <span className="settings-panel__label">
                 {shareCopied ? 'Copied!' : 'Share Everywhen'}
               </span>
-              <span className="settings-panel__chevron">›</span>
+              <CopyIcon copied={shareCopied} />
             </button>
 
             <a
@@ -265,7 +323,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               target="_blank"
               rel="noopener noreferrer">
               <span className="settings-panel__label">Rate on Chrome Store</span>
-              <span className="settings-panel__chevron">›</span>
+              <ExternalIcon />
             </a>
 
             <a
@@ -274,7 +332,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               target="_blank"
               rel="noopener noreferrer">
               <span className="settings-panel__label">Send Feedback</span>
-              <span className="settings-panel__chevron">›</span>
+              <ExternalIcon />
             </a>
 
             <div className="settings-panel__row">

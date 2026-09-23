@@ -405,7 +405,8 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - **About**(本版新增,不在最初的分区规划内)— Share Everywhen(复制商店链接,
   按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Version
   (读取 `package.json` 的版本号,而非写死字符串)。这里收纳的是原头部 logo 弹出
-  菜单的内容。
+  菜单的内容。行尾图标按动作区分:离开扩展的外链用「箭头出框」,Share 是复制到剪贴板、
+  用复制图标(复制后短暂变成勾),`›` 只留给 popup 内部的跳转(如 Edit city list)。
 
 **DST alerts** 与 **Account** 两个分区仍未实现,分别等待构建顺序(§11)第 7、8 步
 (`dst.js` 检测与横幅、接入 ExtPay)完成后再加入。注意 **About ≠ Account**:About 是

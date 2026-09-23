@@ -168,7 +168,22 @@
   &__chevron {
     color: var(--color-font-timezone);
     opacity: 0.4;
-    font-size: 14px;
+    font-size: 25px;
+  }
+
+  // Row-end icon for rows that leave the extension or copy something —
+  // the chevron is kept for navigation inside the popup.
+  &__row-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--color-font-timezone);
+    opacity: 0.45;
+    transition: opacity 0.15s ease;
+
+    .settings-panel__row--link:hover & {
+      opacity: 0.8;
+    }
   }
 
   &__value {
