@@ -48,6 +48,14 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
+// −1/+1 read naturally; ±2 only happens across the date line (Kiritimati vs
+// Niue) and has to be spelled out.
+function dayDeltaLabel(delta: number): string {
+  if (delta === -1) return 'yesterday';
+  if (delta === 1) return 'tomorrow';
+  return `${Math.abs(delta)} days ${delta < 0 ? 'back' : 'ahead'}`;
+}
+
 function makeStars(id: string, count: number) {
   let s = hashStr(id);
   const rand = () => {
@@ -281,16 +289,10 @@ const Timezone: React.FC<TimezoneProps> = ({
               </span>
               <span className="timezone-data__offset">{timeData.utcOffset}</span>
             </p>
-            <p
-              className={
-                timeData.dayDelta !== 0
-                  ? 'timezone-footer__day--shifted'
-                  : undefined
-              }>
-              {/* ±2 (across the date line) keeps the accent but has no one-word label. */}
-              {Math.abs(timeData.dayDelta) === 1 && (
+            <p>
+              {timeData.dayDelta !== 0 && (
                 <span className="timezone-data__day-relative">
-                  {timeData.dayDelta < 0 ? 'yesterday' : 'tomorrow'}
+                  {dayDeltaLabel(timeData.dayDelta)}
                 </span>
               )}
               <span>

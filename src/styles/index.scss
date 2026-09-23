@@ -6,12 +6,6 @@
   --color-primary-white: rgba(255, 255, 255, 1);
   // Reserved for Core Time (the overlap outline). Nothing else uses orange.
   --color-secondary: #ffa400;
-  // "This card's date isn't the base timezone's date." No single text colour
-  // is legible on all four sky gradients — light ones fall to ~1.2:1 on the
-  // day and dawn cards, dark ones disappear at night — so it's a warm text
-  // colour on a translucent dark chip: ~3.4:1 at worst, 6:1+ elsewhere.
-  --color-day-shift: #ffe08a;
-  --color-day-shift-bg: rgba(12, 14, 32, 0.45);
   --color-font-timezone: white;
   --color-bg-info: rgba(0, 170, 255, 0.12);
   --color-bg-timezone: #202025;

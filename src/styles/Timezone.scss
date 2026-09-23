@@ -13,6 +13,14 @@
   inherits: false;
   initial-value: #d3e2f2;
 }
+// Blue accent for "yesterday" / "tomorrow", per sky state: no single blue is
+// readable on both the light (day, dawn) and dark (night) gradients, so the
+// light ones get a deep blue and night a pale one.
+@property --tz-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #12307d;
+}
 
 .timezone {
   position: relative;
@@ -54,7 +62,8 @@
     transition:
       --tz-c0 0.6s ease,
       --tz-c1 0.6s ease,
-      --tz-c2 0.6s ease;
+      --tz-c2 0.6s ease,
+      --tz-accent 0.6s ease;
   }
 
   &-stars {
@@ -103,21 +112,6 @@
     p,
     span {
       margin: 0;
-    }
-
-    &__day--shifted {
-      // Negative margin keeps the date's right edge aligned with the
-      // unshifted cards; the chip grows into the footer's padding.
-      padding: 1px 7px;
-      margin-right: -7px;
-      border-radius: 100vw;
-      background: var(--color-day-shift-bg);
-      color: var(--color-day-shift);
-
-      .timezone-data__day-relative::after,
-      .timezone-data__week::after {
-        background-color: currentColor;
-      }
     }
   }
 
@@ -228,6 +222,8 @@
 
     &__day-relative {
       position: relative;
+      color: var(--tz-accent);
+      font-weight: 700;
       padding-right: 12px;
       display: inline-block;
       text-transform: none;
@@ -273,21 +269,25 @@
   --tz-c0: #12111e;
   --tz-c1: #1d1c27;
   --tz-c2: #2a2933;
+  --tz-accent: #9dc2ff;
 }
 .timezone--dawn .timezone-inner {
   --tz-c0: #608ebb;
   --tz-c1: #b994c3;
   --tz-c2: #e8cba1;
+  --tz-accent: #12307d;
 }
 .timezone--twilight .timezone-inner {
   --tz-c0: #102d58;
   --tz-c1: #3e4f85;
   --tz-c2: #df524e;
+  --tz-accent: #12307d;
 }
 .timezone--day .timezone-inner {
   --tz-c0: #3d83e5;
   --tz-c1: #74b6e6;
   --tz-c2: #b2d0f0;
+  --tz-accent: #12307d;
 }
 
 .timezone--converting .timezone-inner {
