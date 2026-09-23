@@ -218,7 +218,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="settings-panel__row settings-panel__row--link"
               onClick={handleShare}>
               <span className="settings-panel__label">
-                {shareCopied ? 'Copied!' : 'Share TimeMate'}
+                {shareCopied ? 'Copied!' : 'Share Everywhen'}
               </span>
               <span className="settings-panel__chevron">›</span>
             </button>

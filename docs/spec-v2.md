@@ -1,4 +1,4 @@
-# TimeMate v2 — 功能规格
+# Everywhen v2 — 功能规格
 
 本文件是 v2 开发的唯一事实来源。实现与本文冲突时,先改本文再改代码。
 
@@ -398,7 +398,7 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - **Display** — Hour format / Show seconds / Edit timezone list(进入编辑模式,§9.5;
   原 Sort order 已移除,不提供一次性排序按钮)
 - **Core time** — Core Time panel 显示模式 / Default work hours / Default work days
-- **About**(本版新增,不在最初的分区规划内)— Share TimeMate(复制商店链接,
+- **About**(本版新增,不在最初的分区规划内)— Share Everywhen(复制商店链接,
   按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Version
   (读取 `package.json` 的版本号,而非写死字符串)。这里收纳的是原头部 logo 弹出
   菜单的内容。

@@ -16,7 +16,7 @@ npm test          # Vitest, runs test/**/*.test.ts (core/ modules only)
 
 ## Architecture
 
-TimeMate is a **Chrome Manifest V3 popup extension** built with React + TypeScript + Vite. The popup is a single-page React app; there is no content script or injected UI.
+Everywhen is a **Chrome Manifest V3 popup extension** built with React + TypeScript + Vite. The popup is a single-page React app; there is no content script or injected UI.
 
 ### Component tree and state ownership
 
@@ -43,6 +43,8 @@ State flows down as props; children communicate upward via callbacks. There is n
 | `timemate.backup_v1`      | One-time pre-migration snapshot of the v1 data (`src/core/migrate.ts`) |
 | `timemate.swipe-hint-shown.v1` | Legacy — set by the removed swipe-hint animation; no longer read or written, left in place |
 | `theme`                   | `"light"` \| `"dark"`                  |
+
+Every key keeps the `timemate.` prefix from before the rename to Everywhen; renaming one would orphan existing users' data.
 
 ### Key implementation details
 

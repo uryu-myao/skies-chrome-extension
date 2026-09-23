@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "version": "2.1.0",
-  "name": "TimeMate — World Clock for Your Browser",
+  "name": "Everywhen — World Clock & Time Zones",
+  "short_name": "Everywhen",
   "description": "View multiple city time zones in one popup—now with a built-in Time Converter for instant cross-time-zone planning.",
   "background": {
     "service_worker": "background.js"

@@ -181,7 +181,7 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
             </section>
             {showProHint && (
               <p className="city-settings__pro-hint" role="status">
-                Custom work hours and days for each city are a TimeMate Pro feature. Until then,
+                Custom work hours and days for each city are an Everywhen Pro feature. Until then,
                 every city uses the defaults in Settings.
               </p>
             )}

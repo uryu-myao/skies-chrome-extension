@@ -1,5 +1,5 @@
 {
-  "name": "-timemate-chrome-extension",
+  "name": "everywhen-chrome-extension",
   "private": true,
   "version": "2.1.0",
   "type": "module",

@@ -135,7 +135,7 @@ function freezeOrderOnce(data: AppData, now: Date): AppData {
   try {
     saveAppData(frozen);
   } catch (err) {
-    console.error('[TimeMate] failed to persist the frozen list order:', err);
+    console.error('[Everywhen] failed to persist the frozen list order:', err);
   }
   return frozen;
 }
@@ -165,7 +165,7 @@ export function migrate(now: Date = new Date()): AppData {
     saveAppData(mapped);
     return mapped;
   } catch (err) {
-    console.error('[TimeMate] v1→v2 migration failed, v1 data left untouched:', err);
+    console.error('[Everywhen] v1→v2 migration failed, v1 data left untouched:', err);
     // Return the best-effort in-memory mapping even if persisting it failed,
     // so a caller never renders an empty list off the back of a write error.
     return mapped ?? createDefaultAppData();
