@@ -277,3 +277,17 @@
     }
   }
 }
+
+@keyframes settings-section-flash {
+  from {
+    box-shadow: 0 0 0 1.5px var(--color-primary-blue);
+  }
+  to {
+    box-shadow: 0 0 0 1.5px rgba(75, 111, 210, 0);
+  }
+}
+
+// Marks the section a deep link asked for, without moving anything.
+.settings-panel__section--flash {
+  animation: settings-section-flash 1.4s ease-out;
+}

@@ -44,24 +44,27 @@
     margin: auto 0;
   }
 
-  // The section title's usual 0.45 opacity would dim the Pro badge too, so
-  // it moves onto the text alone.
-  &__section-title {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    opacity: 1;
-  }
+  &__hint-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
 
-  &__section-label {
-    opacity: 0.45;
+    &:hover {
+      opacity: 0.75;
+    }
   }
 
   &__default {
     opacity: 0.7;
   }
 
-  &__pro-hint {
+  &__hint {
     margin: -8px 4px 16px;
     padding: 0 10px;
     color: var(--color-font-timezone);

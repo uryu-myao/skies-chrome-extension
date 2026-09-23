@@ -34,6 +34,8 @@ function App({ initialData }: AppProps) {
   const [convertPosition, setConvertPosition] = useState<ConvertPosition>(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // Set when Settings is opened from somewhere that points at one section.
+  const [settingsFocus, setSettingsFocus] = useState<'core-time' | null>(null);
   const [entries, setEntries] = useState<Entry[]>(initialData.entries);
   const [settings, setSettings] = useState<AppSettings>(initialData.settings);
   // The id stays set after closing so the panel can fade out on its content.
@@ -68,6 +70,12 @@ function App({ initialData }: AppProps) {
     setIsCitySettingsOpen(true);
   };
   const closeCitySettings = useCallback(() => setIsCitySettingsOpen(false), []);
+
+  const openWorkTimeSettings = () => {
+    setIsCitySettingsOpen(false);
+    setSettingsFocus('core-time');
+    setIsSettingsOpen(true);
+  };
 
   const updateEntry = (id: string, update: (entry: Entry) => Entry) => {
     setEntries((prev) => prev.map((entry) => (entry.id === id ? update(entry) : entry)));
@@ -130,7 +138,10 @@ function App({ initialData }: AppProps) {
       }${isEditMode ? ' app--editing' : ''}`}>
       <Header
         addTimezone={handleAddTimezone}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => {
+          setSettingsFocus(null);
+          setIsSettingsOpen(true);
+        }}
         isConvertModeOpen={isConvertModeOpen}
         onConvertModeChange={setIsConvertModeOpen}
         convertPosition={convertPosition}
@@ -167,7 +178,11 @@ function App({ initialData }: AppProps) {
       <CoreTimePanel entries={entries} settings={settings} isEditMode={isEditMode} />
       <SettingsPanel
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        focusSection={settingsFocus}
+        onClose={() => {
+          setIsSettingsOpen(false);
+          setSettingsFocus(null);
+        }}
         settings={settings}
         setSettings={setSettings}
         canEditList={entries.length > 0}
@@ -184,6 +199,7 @@ function App({ initialData }: AppProps) {
           if (citySettingsId) removeEntry(citySettingsId);
           closeCitySettings();
         }}
+        onOpenWorkTimeSettings={openWorkTimeSettings}
       />
       <UndoToast
         message={removed ? `Removed ${removed.entry.label}` : null}

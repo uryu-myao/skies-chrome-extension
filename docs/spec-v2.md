@@ -309,7 +309,9 @@ export async function isPro() { ... }
 ### 8.2 UI 规则
 
 - Pro 功能**不灰掉、不加锁图标**,点击后进入升级页
-- 设置页中 Pro 分区加 `PRO` 标签,标签是信息不是障碍
+- 设置页中 Pro 分区加 `PRO` 标签,标签是信息不是障碍。**但本版不显示该标签** —— 还没有购买
+  通道,标签会让用户以为这是当下可买的功能。下一版接入付费时加回,届时用中性样式(深灰底 +
+  浅灰字),不用紫色
 - Core Time 面板对免费用户完整渲染,每行下标注 `9:00–18:00 · default`,点击该处触发升级提示
 
 ### 8.3 离线降级
@@ -345,8 +347,10 @@ export async function isPro() { ... }
 - 保留天空渐变背景 —— 这是产品的核心视觉资产
 - 秒数默认关闭
 - **点击卡片打开该城市的设置面板**(城市名可编辑,改过名时输入框左侧出现重置按钮,恢复为添加时的
-  名字 `defaultLabel`;工作时间 / 工作日只读,标 `default` 与
-  `PRO`,点击提示是 Pro 功能;`Remove this city` 为红色破坏性样式)。原「悬停齿轮 → 横滑露出
+  名字 `defaultLabel`;工作时间 / 工作日只读,标 `default`,
+  点击后给出提示:`Custom work hours are coming in the next update. For now, every city
+  uses the defaults in Settings.` —— 其中 `Settings` 可点击,直接打开设置页并定位到 Core time
+  分区(看到这句话的人正想去改那个默认值);`Remove this city` 为红色破坏性样式)。原「悬停齿轮 → 横滑露出
   置顶 / 删除」菜单及其首次提示动画已移除,置顶一并移除(§3.4)。手势总表见 §9.5
 - 删除没有二次确认,立即生效,底部弹出 `Removed Bangkok · Undo`(约 5 秒),Undo 放回原位置
 

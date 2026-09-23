@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import '@styles/SettingsPanel.scss';
 import type { AppSettings } from '../core/types';
 import SegmentedControl from './SegmentedControl';
@@ -11,6 +11,9 @@ const FEEDBACK_URL = 'https://forms.gle/ncZLfTs8RKE59ETC9';
 
 interface SettingsPanelProps {
   isOpen: boolean;
+  // Scrolls that section into view and flashes it, for callers that send the
+  // user here to change one specific thing.
+  focusSection?: 'core-time' | null;
   onClose: () => void;
   settings: AppSettings;
   setSettings: Dispatch<SetStateAction<AppSettings>>;
@@ -26,6 +29,7 @@ function formatHour(hour: number): string {
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
   isOpen,
+  focusSection,
   onClose,
   settings,
   setSettings,
@@ -33,6 +37,34 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onEditList,
 }) => {
   const [shareCopied, setShareCopied] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const coreTimeRef = useRef<HTMLHeadingElement>(null);
+  const [flashCoreTime, setFlashCoreTime] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || focusSection !== 'core-time') {
+      setFlashCoreTime(false);
+      // The panel stays mounted, so an ordinary open would otherwise resume
+      // wherever a previous deep link left it.
+      if (isOpen && bodyRef.current) bodyRef.current.scrollTop = 0;
+      return;
+    }
+    // A timeout, not requestAnimationFrame: rAF never fires while the page is
+    // hidden, and this should still be in place whenever the popup is shown.
+    const timeout = setTimeout(() => {
+      const body = bodyRef.current;
+      const target = coreTimeRef.current;
+      // Layout offsets, not getBoundingClientRect: the panel is mid pop-in
+      // (and scaled) when this runs, and both elements share an offsetParent.
+      // The jump is instant because smooth scrolling is ignored in this
+      // panel — it happens while the panel is still appearing.
+      if (body && target) {
+        body.scrollTop = Math.max(0, target.offsetTop - body.offsetTop - 8);
+      }
+      setFlashCoreTime(true);
+    }, 0);
+    return () => clearTimeout(timeout);
+  }, [isOpen, focusSection]);
 
   const update = (patch: Partial<AppSettings>) =>
     setSettings((prev) => ({ ...prev, ...patch }));
@@ -116,7 +148,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             </svg>
           </button>
         </div>
-        <div className="settings-panel__body">
+        <div className="settings-panel__body" ref={bodyRef}>
           <h3 className="settings-panel__section-title">Display</h3>
           <section className="settings-panel__section">
             <div className="settings-panel__row">
@@ -153,8 +185,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             </button>
           </section>
 
-          <h3 className="settings-panel__section-title">Core time</h3>
-          <section className="settings-panel__section">
+          <h3 className="settings-panel__section-title" ref={coreTimeRef}>
+            Core time
+          </h3>
+          <section
+            className={`settings-panel__section${flashCoreTime ? ' settings-panel__section--flash' : ''}`}
+            onAnimationEnd={() => setFlashCoreTime(false)}>
             <div className="settings-panel__row">
               <span className="settings-panel__label">Core Time panel</span>
               <SegmentedControl

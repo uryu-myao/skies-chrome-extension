@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import '@styles/SettingsPanel.scss';
 import '@styles/CitySettingsPanel.scss';
-import ProBadge from './ProBadge';
 import ResetButton from './ResetButton';
 import { defaultLabelOf, resolveWorkDays, resolveWorkHours } from '../core/model';
 import type { AppSettings, Entry, WorkDays } from '../core/types';
@@ -14,6 +13,9 @@ interface CitySettingsPanelProps {
   onRename: (label: string) => void;
   onResetLabel: () => void;
   onRemove: () => void;
+  // Opens the app's Settings at the Core time section, where the defaults
+  // this panel points at actually live.
+  onOpenWorkTimeSettings: () => void;
 }
 
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -50,6 +52,7 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
   onRename,
   onResetLabel,
   onRemove,
+  onOpenWorkTimeSettings,
 }) => {
   // Keeps showing the last city while the panel fades out — after "Remove"
   // the entry is already gone from the list by the time the panel closes.
@@ -59,12 +62,12 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
 
   const [draftLabel, setDraftLabel] = useState(shown?.label ?? '');
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const [showProHint, setShowProHint] = useState(false);
+  const [showHint, setShowHint] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     setDraftLabel(entry?.label ?? '');
-    setShowProHint(false);
+    setShowHint(false);
     // Only on open / switching cities — not on every rename keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, entry?.id]);
@@ -153,15 +156,12 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
               </div>
             </section>
 
-            <h3 className="settings-panel__section-title city-settings__section-title">
-              <span className="city-settings__section-label">Work time</span>
-              <ProBadge />
-            </h3>
+            <h3 className="settings-panel__section-title">Work time</h3>
             <section className="settings-panel__section">
               <button
                 type="button"
                 className="settings-panel__row settings-panel__row--link"
-                onClick={() => setShowProHint(true)}>
+                onClick={() => setShowHint(true)}>
                 <span className="settings-panel__label">Work hours</span>
                 <span className="settings-panel__value">
                   {formatHour(hours.start)}–{formatHour(hours.end)}
@@ -171,7 +171,7 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
               <button
                 type="button"
                 className="settings-panel__row settings-panel__row--link"
-                onClick={() => setShowProHint(true)}>
+                onClick={() => setShowHint(true)}>
                 <span className="settings-panel__label">Work days</span>
                 <span className="settings-panel__value">
                   {formatWorkDays(days.days)}
@@ -179,10 +179,14 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
                 </span>
               </button>
             </section>
-            {showProHint && (
-              <p className="city-settings__pro-hint" role="status">
-                Custom work hours and days for each city are an Everywhen Pro feature. Until then,
-                every city uses the defaults in Settings.
+            {showHint && (
+              <p className="city-settings__hint" role="status">
+                Custom work hours are coming in the next update. For now, every city uses the
+                defaults in{' '}
+                <button type="button" className="city-settings__hint-link" onClick={onOpenWorkTimeSettings}>
+                  Settings
+                </button>
+                .
               </p>
             )}
 
