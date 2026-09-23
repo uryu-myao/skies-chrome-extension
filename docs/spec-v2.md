@@ -399,7 +399,7 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 
 当前已实现的分区,按顺序:
 
-- **Display** — Hour format / Show seconds / Edit timezone list(进入编辑模式,§9.5;
+- **Display** — Hour format / Show seconds / Edit city list(进入编辑模式,§9.5;
   原 Sort order 已移除,不提供一次性排序按钮)
 - **Core time** — Core Time panel 显示模式 / Default work hours / Default work days
 - **About**(本版新增,不在最初的分区规划内)— Share Everywhen(复制商店链接,
@@ -416,7 +416,7 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 
 ### 9.5 编辑模式与手势分配
 
-**入口**:设置页 Display 分区的 `Edit timezone list`。不做长按入口。
+**入口**:设置页 Display 分区的 `Edit city list`。不做长按入口。
 
 **编辑态**:
 - 头部换成 `Edit list` + `Done`

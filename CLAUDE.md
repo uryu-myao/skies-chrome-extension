@@ -28,7 +28,7 @@ App.tsx              ← global state: entries (v2 Entry[] — array order IS th
 ├── TimezoneList.tsx ← controlled by entries/setEntries from App; renders in entries order inside a dnd-kit DndContext (sorting enabled only in edit mode: grip to drag, minus to remove)
 │   └── Timezone.tsx  ← individual card; reads time with Intl.DateTimeFormat, updates every 1s; click opens that city's panel; `isCompact` = edit mode's single-row card
 ├── CoreTimePanel.tsx ← bottom-docked; runs src/core/coretime.ts over entries+settings, collapsed by default; collapsed during edit mode, expands on exit
-├── SettingsPanel.tsx ← full-popup slide-in; edits settings.{hour24,showSeconds,coreTimePanel,defaultWorkHours,defaultWorkDays} and has the "Edit timezone list" entry into edit mode. DST alerts/Account sections wait on steps 7/8 (dst banner, ExtPay) so the page doesn't point at features that don't exist yet
+├── SettingsPanel.tsx ← full-popup slide-in; edits settings.{hour24,showSeconds,coreTimePanel,defaultWorkHours,defaultWorkDays} and has the "Edit city list" entry into edit mode. DST alerts/Account sections wait on steps 7/8 (dst banner, ExtPay) so the page doesn't point at features that don't exist yet
 ├── CitySettingsPanel.tsx ← per-city panel: rename (entry.label), read-only work hours/days (Pro), Remove
 └── UndoToast.tsx    ← "Removed X · Undo" after any removal (city panel or edit mode)
 ```

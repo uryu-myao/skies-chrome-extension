@@ -180,7 +180,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="settings-panel__row settings-panel__row--link"
               onClick={onEditList}
               disabled={!canEditList}>
-              <span className="settings-panel__label">Edit timezone list</span>
+              <span className="settings-panel__label">Edit city list</span>
               <span className="settings-panel__chevron">›</span>
             </button>
           </section>

@@ -30,8 +30,8 @@ It is designed for quick cross-time-zone planning:
 - Keep a custom city list in local storage
 - Each card's footer leads with the gap to the reference time zone
   (`−13h`, `+3:30h`, or `Base`), with the UTC offset beside it
-- A date that isn't the reference zone's date is highlighted and labelled
-  `yesterday` / `tomorrow`
+- A date that isn't the reference zone's date is labelled `yesterday` /
+  `tomorrow` (or `2 days back` / `2 days ahead` across the date line)
 - Card background follows the city's local sky: night, dawn, day, twilight
 
 ### Reference Time Zone
@@ -56,7 +56,7 @@ It is designed for quick cross-time-zone planning:
 
 ### Edit Mode
 
-- Opened from Settings → `Edit timezone list`
+- Opened from Settings → `Edit city list`
 - Drag the grip to reorder; keyboard works too (Space to pick up, arrows to
   move, Space to drop)
 - Remove a city with the minus control
