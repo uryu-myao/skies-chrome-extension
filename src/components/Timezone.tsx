@@ -189,8 +189,6 @@ const Timezone: React.FC<TimezoneProps> = ({
       };
 
       const now = new Date();
-      const baseSourceDate = new Date(now);
-      baseSourceDate.setHours(0, 0, 0, 0);
       const converterHours = convertPosition * 3;
       const roundedHalfHours = Math.round(converterHours * 2) / 2;
       const converterHour = Math.floor(roundedHalfHours);
@@ -202,34 +200,13 @@ const Timezone: React.FC<TimezoneProps> = ({
       }
 
       const targetParts = getTargetDateParts(sourceDate, zone);
-      const sourceDateKey =
-        baseSourceDate.getFullYear() * 10000 +
-        (baseSourceDate.getMonth() + 1) * 100 +
-        baseSourceDate.getDate();
-      const targetDateKey =
-        targetParts.year * 10000 +
-        targetParts.monthNumber * 100 +
-        targetParts.dayNumber;
-      const dayOffset =
-        targetDateKey > sourceDateKey
-          ? 1
-          : targetDateKey < sourceDateKey
-            ? -1
-            : 0;
 
       setTimeData((prev) => ({
         ...prev,
         time: `${targetParts.hour}:${targetParts.minute}`,
         second: isConvertModeOpen ? '' : targetParts.second.padStart(2, '0'),
-        meridiem: isConvertModeOpen
-          ? dayOffset > 0
-            ? `+${dayOffset}`
-            : dayOffset < 0
-              ? `${dayOffset}`
-              : ''
-          : hourFormat === '12'
-            ? targetParts.dayPeriod.toUpperCase()
-            : '',
+        // Convert mode forces 24h, so there is no AM/PM to show there.
+        meridiem: isConvertModeOpen ? '' : targetParts.dayPeriod.toUpperCase(),
         week: targetParts.weekday,
         date: targetParts.dayNumber.toString(),
         month: targetParts.monthShort,
@@ -287,9 +264,9 @@ const Timezone: React.FC<TimezoneProps> = ({
         )}
         <div className="timezone-data__location">{city}</div>
         <div className="timezone-data__time">{timeData.time}</div>
-        {!isCompact && (isConvertModeOpen || hourFormat === '12') && timeData.meridiem && (
+        {!isCompact && hourFormat === '12' && timeData.meridiem && (
           <div
-            className={`timezone-data__meridiem${timeData.meridiem === 'AM' ? ' timezone-data__meridiem--am' : ''}${isConvertModeOpen ? ' timezone-data__meridiem--convert' : ''}`}>
+            className={`timezone-data__meridiem${timeData.meridiem === 'AM' ? ' timezone-data__meridiem--am' : ''}`}>
             {timeData.meridiem}
           </div>
         )}
