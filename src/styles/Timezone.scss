@@ -86,38 +86,6 @@
     }
   }
 
-  &-sun {
-    grid-area: sun;
-    display: flex;
-    gap: 12px;
-    padding: 0 12px 2px;
-
-    &__item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-family: 'Poppins', serif;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--color-secondary);
-      opacity: 0.7;
-      letter-spacing: 0.2px;
-
-      svg {
-        opacity: 0.8;
-        flex-shrink: 0;
-      }
-
-      &--rise {
-        color: #f5c87a;
-      }
-
-      &--set {
-        color: #a9c4e8;
-      }
-    }
-  }
-
   &-footer {
     color: rgba(255, 255, 255, 0.85);
     // background: rgba(0, 170, 255, 0.25);
@@ -138,6 +106,12 @@
     }
 
     &__day--shifted {
+      // Negative margin keeps the date's right edge aligned with the
+      // unshifted cards; the chip grows into the footer's padding.
+      padding: 1px 7px;
+      margin-right: -7px;
+      border-radius: 100vw;
+      background: var(--color-day-shift-bg);
       color: var(--color-day-shift);
 
       .timezone-data__day-relative::after,
