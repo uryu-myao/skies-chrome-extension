@@ -403,7 +403,8 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
   原 Sort order 已移除,不提供一次性排序按钮)
 - **Core time** — Core Time panel 显示模式 / Default work hours / Default work days
 - **About**(本版新增,不在最初的分区规划内)— Share Skies(复制商店链接,
-  按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Version
+  按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Website
+  (右侧灰字 `useskies.com`,打开 https://useskies.com;行文案用 "Website" 而非品牌名)/ Version
   (读取 `package.json` 的版本号,而非写死字符串)。这里收纳的是原头部 logo 弹出
   菜单的内容。行尾图标按动作区分:离开扩展的外链用「箭头出框」,Share 是复制到剪贴板、
   用复制图标(复制后短暂变成勾),`›` 只留给 popup 内部的跳转(如 Edit city list)。

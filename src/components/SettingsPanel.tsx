@@ -8,6 +8,7 @@ import { version as appVersion } from '../../package.json';
 const SHARE_URL = 'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik';
 const RATE_URL = `${SHARE_URL}/reviews`;
 const FEEDBACK_URL = 'https://forms.gle/ncZLfTs8RKE59ETC9';
+const WEBSITE_URL = 'https://useskies.com';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -333,6 +334,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               rel="noopener noreferrer">
               <span className="settings-panel__label">Send Feedback</span>
               <ExternalIcon />
+            </a>
+
+            <a
+              className="settings-panel__row settings-panel__row--link"
+              href={WEBSITE_URL}
+              target="_blank"
+              rel="noopener noreferrer">
+              <span className="settings-panel__label">Website</span>
+              <span className="settings-panel__value">useskies.com</span>
             </a>
 
             <div className="settings-panel__row">
