@@ -18,107 +18,15 @@
   position: relative;
   color: var(--color-font-timezone);
   width: 100%;
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   transition: all 0.3s ease-in-out;
+  cursor: pointer;
+  border-radius: 22px;
+  outline: none;
 
-  &-icon__setting {
-    opacity: 0;
-    position: absolute;
-    display: block;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background-color: var(--color-hover);
-    background-image: var(--icon-setting);
-    background-size: 15px;
-    background-position: center;
-    background-repeat: no-repeat;
-    top: 3px;
-    left: 3px;
-    cursor: pointer;
-    transition: all 0.3s ease-in-out;
-    transform: rotate(-90deg);
-  }
-
-  &:hover {
-    // transform: translateX(6px);
-
-    .timezone-icon__setting {
-      opacity: 1;
-      transform: rotate(0deg);
-    }
-  }
-
-  &-btn {
-    position: absolute;
-    top: 50%;
-    left: -50px;
-    transform: translateY(-50%);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    transition: all 0.3s ease-in-out;
-    visibility: hidden;
-    opacity: 0;
-
-    button {
-      display: block;
-      width: 42px;
-      height: 42px;
-      border: none;
-      border-radius: 16px;
-      cursor: pointer;
-      transition: all 0.3s ease-in-out;
-
-      &::before {
-        position: absolute;
-        display: block;
-        content: '';
-        background-position: center;
-        background-repeat: no-repeat;
-        background-size: auto;
-        z-index: 2;
-      }
-    }
-
-    &__pin {
-      position: relative;
-      background-color: var(--color-pin);
-
-      &::before {
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-image: url('/icons/icon-pin.svg');
-      }
-
-      &.pinned::before {
-        background-image: url(/icons/icon-unpin.svg);
-      }
-    }
-
-    &__delete {
-      position: relative;
-      background-color: var(--color-warning);
-
-      &::before {
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-image: url('/icons/icon-delete.svg');
-      }
-    }
-  }
-
-  &.setting {
-    transform: translateX(50px);
-
-    .timezone-btn {
-      opacity: 1;
-      visibility: visible;
-    }
+  &:focus-visible .timezone-inner {
+    outline: 2px solid var(--color-primary-blue);
+    outline-offset: 2px;
   }
 
   &-inner {
@@ -126,8 +34,8 @@
     display: grid;
     grid-template:
       'local time' auto
-      'footer footer' 26px / 1fr 1fr;
-    gap: 4px;
+      'footer footer' 20px / 1fr 1fr;
+    gap: 3px 4px;
     padding-top: 6px;
     background: linear-gradient(
       180deg,
@@ -135,9 +43,14 @@
       var(--tz-c1) 50%,
       var(--tz-c2) 100%
     );
-    border-radius: 32px;
+    border-radius: 22px;
     corner-shape: squircle;
     overflow: hidden;
+    box-shadow:
+      rgba(255, 255, 255, 0.1) 0px 1px 0px 0px inset,
+      rgba(7, 13, 79, 0.05) 0px 0px 20px 3px,
+      rgba(7, 13, 79, 0.05) 0px 0px 40px 20px,
+      rgba(255, 255, 255, 0.06) 0px 0px 0px 1px inset;
     transition:
       --tz-c0 0.6s ease,
       --tz-c1 0.6s ease,
@@ -173,51 +86,19 @@
     }
   }
 
-  &-sun {
-    grid-area: sun;
-    display: flex;
-    gap: 12px;
-    padding: 0 12px 2px;
-
-    &__item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-family: 'Poppins', serif;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--color-secondary);
-      opacity: 0.7;
-      letter-spacing: 0.2px;
-
-      svg {
-        opacity: 0.8;
-        flex-shrink: 0;
-      }
-
-      &--rise {
-        color: #f5c87a;
-      }
-
-      &--set {
-        color: #a9c4e8;
-      }
-    }
-  }
-
   &-footer {
-    color: white;
-    background: rgba(0, 170, 255, 0.15);
-    padding: 0 var(--container-padding-horizontal) 0 15px;
+    color: rgba(255, 255, 255, 0.85);
+    // background: rgba(0, 170, 255, 0.25);
+    padding: 0 27px 6px 13px;
     grid-area: footer;
     display: flex;
     justify-content: space-between;
     align-items: center;
     text-transform: uppercase;
     font-family: 'Poppins', serif;
-    font-style: italic;
-    font-size: 13px;
-    font-weight: 300;
+    font-size: 10px;
+    font-weight: 600;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
 
     p,
     span {
@@ -229,26 +110,26 @@
     &__location {
       grid-area: local;
       font-family: 'Poppins', serif;
-      font-size: 26px;
+      font-size: 22px;
       font-style: normal;
       font-weight: 700;
       display: flex;
       align-items: center;
       padding-left: 12px;
-      padding-top: 12px;
+      padding-top: 4px;
       text-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
     }
 
     &__time {
       grid-area: time;
       font-family: 'Lato', sans-serif;
-      font-size: 45px;
+      font-size: 30px;
       font-weight: 400;
-      letter-spacing: 1px;
+      letter-spacing: 0.5px;
       font-style: normal;
       display: flex;
       justify-content: flex-end;
-      padding-right: 30px;
+      padding-right: 26px;
       text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
 
@@ -258,49 +139,56 @@
       font-family: 'Poppins', serif;
       font-weight: 600;
       font-style: normal;
-      font-size: 11px;
+      font-size: 10px;
       text-transform: uppercase;
       margin: 0;
-      top: 17px;
+      top: 8px;
       right: 8px;
 
       &--am {
         color: var(--color-meridiem-am);
       }
-
-      &--convert {
-        color: var(--color-secondary);
-        font-size: 13px;
-        right: 10px;
-      }
-    }
-
-    &__convert-label {
-      opacity: 0.65;
-      text-transform: none;
-      padding-right: 15px;
     }
 
     &__second {
       position: absolute;
-      top: 36px;
+      top: 24px;
       right: 10px;
       font-family: 'Lato', sans-serif;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 300;
-      letter-spacing: 0.8px;
+      letter-spacing: 0.04em;
       font-style: normal;
-      opacity: 0.35;
+      opacity: 0.5;
+    }
+
+    // Footer left: the gap to the base timezone is what the user actually
+    // reads; the absolute UTC offset stays beside it as an unambiguous
+    // cross-check, one step quieter.
+    &__relative {
+      font-size: 11px;
+      font-weight: 700;
+      font-style: normal;
+      color: var(--color-font-timezone);
+      text-transform: none;
+    }
+
+    &__offset {
+      position: relative;
+      padding-left: 6px;
+      font-size: 10px;
+      font-weight: 500;
+      opacity: 0.75;
     }
 
     &__tz {
       position: relative;
-      padding-right: 10px;
+      padding-right: 6px;
     }
 
     &__week {
       position: relative;
-      padding-right: 10px;
+      padding-right: 4px;
 
       &::after {
         content: '';
@@ -316,11 +204,33 @@
     }
 
     &__date {
-      padding-left: 10px;
+      padding-left: 7px;
     }
 
     &__month {
       padding-left: 2px;
+    }
+
+    // The one emphasis in the footer: full-strength white against the
+    // surrounding 85%. Same on every sky state.
+    &__day-relative {
+      position: relative;
+      color: var(--color-font-timezone);
+      padding-right: 12px;
+      display: inline-block;
+      text-transform: none;
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        right: 5px;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 64%;
+        background-color: white;
+        opacity: 0.3;
+      }
     }
   }
 
@@ -334,12 +244,6 @@
     text-align: center;
     margin: 0;
     opacity: 0.35;
-  }
-}
-
-.pinned {
-  .timezone-inner {
-    border: 2px solid var(--color-secondary);
   }
 }
 
@@ -370,8 +274,8 @@
 }
 .timezone--day .timezone-inner {
   --tz-c0: #3d83e5;
-  --tz-c1: #77b6e3;
-  --tz-c2: #d3e2f2;
+  --tz-c1: #74b6e6;
+  --tz-c2: #b2d0f0;
 }
 
 .timezone--converting .timezone-inner {

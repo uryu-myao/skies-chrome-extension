@@ -1,167 +1,123 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback, type ReactNode } from 'react';
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type DragEndEvent,
+  type Modifier,
+  type UniqueIdentifier,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import Timezone, { TimezoneInfo } from './Timezone';
-import type {
-  AddTimezoneResult,
-  ConvertPosition,
-  HourFormat,
-  SortMode,
-} from '../App';
+import { createEntry } from '../core/model';
+import type { Entry } from '../core/types';
+import type { AddTimezoneResult, ConvertPosition, HourFormat } from '../App';
+import '@styles/EditList.scss';
 
-const TIMEZONE_STORAGE_KEY = 'timemate.timezones.v1';
-const TIMEZONE_PINNED_STORAGE_KEY = 'timemate.pinned.v1';
 const MAX_CITIES = 10;
 
-// 初始时区数据
-const initialTimezones: TimezoneInfo[] = [];
-
-const loadStoredTimezones = (): TimezoneInfo[] => {
-  try {
-    const raw = localStorage.getItem(TIMEZONE_STORAGE_KEY);
-    if (!raw) return initialTimezones;
-
-    const parsed = JSON.parse(raw) as TimezoneInfo[];
-    if (!Array.isArray(parsed)) return initialTimezones;
-
-    const valid = parsed.filter(
-      (item) =>
-        item &&
-        typeof item.id === 'string' &&
-        typeof item.city === 'string' &&
-        typeof item.zone === 'string'
-    );
-
-    // Migrate legacy seeded defaults (tokyo/newyork/rome) to empty list.
-    const legacySeedIds = ['tokyo', 'newyork', 'rome'];
-    const isLegacySeed =
-      valid.length === legacySeedIds.length &&
-      legacySeedIds.every((id) => valid.some((item) => item.id === id));
-    if (isLegacySeed) {
-      return [];
-    }
-
-    return valid.slice(0, MAX_CITIES);
-  } catch {
-    return initialTimezones;
-  }
-};
-
-const loadStoredPinnedIds = (validTimezoneIds: string[]): string[] => {
-  try {
-    const raw = localStorage.getItem(TIMEZONE_PINNED_STORAGE_KEY);
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw) as string[];
-    if (!Array.isArray(parsed)) return [];
-
-    const validIdSet = new Set(validTimezoneIds);
-    return parsed.filter(
-      (id) => typeof id === 'string' && validIdSet.has(id)
-    );
-  } catch {
-    return [];
-  }
-};
+// A reorder only ever moves a row up or down.
+const lockToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 interface TimezoneListProps {
+  entries: Entry[];
+  setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
   onAddTimezone?: (
     timezone: (timezone: TimezoneInfo) => AddTimezoneResult
   ) => void;
-  sortMode: SortMode;
+  referenceTimezone: string;
   hourFormat: HourFormat;
+  showSeconds: boolean;
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
+  onOpenCity: (id: string) => void;
+  isEditMode: boolean;
+  onRemoveCity: (id: string) => void;
 }
 
-const getDateTimeRankInZone = (zone: string): number => {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).formatToParts(new Date());
+interface SortableRowProps {
+  id: string;
+  label: string;
+  isEditMode: boolean;
+  onRemove: () => void;
+  children: ReactNode;
+}
 
-    const year = Number(parts.find((p) => p.type === 'year')?.value ?? 0);
-    const month = Number(parts.find((p) => p.type === 'month')?.value ?? 0);
-    const day = Number(parts.find((p) => p.type === 'day')?.value ?? 0);
-    const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
-    const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
-    const second = Number(parts.find((p) => p.type === 'second')?.value ?? 0);
+// Outside edit mode sorting is disabled and the row is a plain wrapper; the
+// same element tree in both modes means toggling doesn't remount the cards.
+const SortableRow: React.FC<SortableRowProps> = ({ id, label, isEditMode, onRemove, children }) => {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id, disabled: !isEditMode });
 
-    // Compare by local date first, then local time (YYYYMMDDHHmmss).
-    return (
-      year * 10000000000 +
-      month * 100000000 +
-      day * 1000000 +
-      hour * 10000 +
-      minute * 100 +
-      second
-    );
-  } catch {
-    return Number.MAX_SAFE_INTEGER;
-  }
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={`timezone-row${isEditMode ? ' timezone-row--editing' : ''}${isDragging ? ' timezone-row--dragging' : ''}`}>
+      {isEditMode && (
+        <button
+          type="button"
+          className="timezone-row__remove"
+          aria-label={`Remove ${label}`}
+          onClick={onRemove}
+        />
+      )}
+      <div className="timezone-row__card">{children}</div>
+      {isEditMode && (
+        // The handle is the only drag activator — always visible, no long
+        // press. Its attributes make it focusable: Space picks up, arrows
+        // move, Space drops, Escape cancels.
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          className="timezone-row__handle"
+          aria-label={`Reorder ${label}`}
+          {...attributes}
+          {...listeners}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M2 4h10M2 7h10M2 10h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
 };
 
 const TimezoneList: React.FC<TimezoneListProps> = ({
+  entries,
+  setEntries,
   onAddTimezone,
-  sortMode,
+  referenceTimezone,
   hourFormat,
+  showSeconds,
   isConvertModeOpen,
   convertPosition,
+  onOpenCity,
+  isEditMode,
+  onRemoveCity,
 }) => {
-  const [timezones, setTimezones] = useState<TimezoneInfo[]>(() =>
-    loadStoredTimezones()
-  );
-  const [activeSettingId, setActiveSettingId] = useState<string | null>(null);
-  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
-    const storedTimezones = loadStoredTimezones();
-    return loadStoredPinnedIds(storedTimezones.map((tz) => tz.id));
-  });
-  const [, setTimeSortTick] = useState(0);
-
-  // 切换设置状态
-  const toggleSetting = (id: string) => {
-    setActiveSettingId((prev) => (prev === id ? null : id));
-  };
-
-  // 删除时区
-  const deleteTimezone = (id: string) => {
-    setTimezones((prev) => prev.filter((tz) => tz.id !== id));
-    setPinnedIds((prev) => prev.filter((tid) => tid !== id));
-    if (activeSettingId === id) {
-      setActiveSettingId(null);
-    }
-  };
-
-  // 固定时区
-  const pinTimezone = (id: string) => {
-    setPinnedIds((prev) => [...prev.filter((tid) => tid !== id), id]);
-    setActiveSettingId(null); // 取消 setting 状态
-  };
-
-  // 取消固定
-  const unpinTimezone = (id: string) => {
-    setPinnedIds((prev) => prev.filter((tid) => tid !== id));
-    if (activeSettingId === id) {
-      setActiveSettingId(null);
-    }
-  };
-
   // 使用useCallback包装addTimezone函数，避免不必要的重新创建
   const addTimezone = useCallback((newTimezone: TimezoneInfo): AddTimezoneResult => {
     let result: AddTimezoneResult = 'duplicate';
 
     // 允许相同时区的不同城市；仅阻止完全重复（同 city + zone）
-    setTimezones((prev) => {
+    setEntries((prev) => {
       if (
         prev.some(
-          (tz) =>
-            tz.zone === newTimezone.zone &&
-            tz.city.toLowerCase() === newTimezone.city.toLowerCase()
+          (entry) =>
+            entry.timezone === newTimezone.zone &&
+            entry.label.toLowerCase() === newTimezone.city.toLowerCase()
         )
       ) {
         result = 'duplicate';
@@ -173,12 +129,22 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
         return prev;
       }
 
+      // The array order is the list order; a new city goes on top, where the
+      // old newest-first default showed it.
       result = 'added';
-      return [...prev, newTimezone]; // 否则添加新时区
+      return [
+        createEntry({
+          timezone: newTimezone.zone,
+          label: newTimezone.city,
+          lat: newTimezone.lat,
+          lon: newTimezone.lon,
+        }),
+        ...prev,
+      ];
     });
 
     return result;
-  }, []);
+  }, [setEntries]);
 
   // 使用useEffect在组件挂载后注册方法，而不是在渲染过程中
   useEffect(() => {
@@ -187,84 +153,39 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
     }
   }, [onAddTimezone, addTimezone]); // 正确添加所有依赖项
 
-  useEffect(() => {
-    localStorage.setItem(TIMEZONE_STORAGE_KEY, JSON.stringify(timezones));
-  }, [timezones]);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
-  useEffect(() => {
-    const validIdSet = new Set(timezones.map((tz) => tz.id));
-    setPinnedIds((prev) => {
-      const next = prev.filter((id) => validIdSet.has(id));
-      return next.length === prev.length ? prev : next;
+  // The new order is written to entries right away; App persists it.
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    setEntries((prev) => {
+      const from = prev.findIndex((entry) => entry.id === active.id);
+      const to = prev.findIndex((entry) => entry.id === over.id);
+      return from < 0 || to < 0 ? prev : arrayMove(prev, from, to);
     });
-  }, [timezones]);
-
-  useEffect(() => {
-    localStorage.setItem(TIMEZONE_PINNED_STORAGE_KEY, JSON.stringify(pinnedIds));
-  }, [pinnedIds]);
-
-  useEffect(() => {
-    if (sortMode !== 'time') return;
-
-    const intervalId = setInterval(() => {
-      setTimeSortTick((prev) => prev + 1);
-    }, 30000);
-
-    return () => clearInterval(intervalId);
-  }, [sortMode]);
-
-  useEffect(() => {
-    if (!activeSettingId) return;
-
-    const handleClickOutsideActiveCard = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const card = target?.closest('[data-timezone-id]') as
-        | HTMLElement
-        | null;
-      const clickedId = card?.dataset.timezoneId ?? null;
-
-      if (clickedId !== activeSettingId) {
-        setActiveSettingId(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutsideActiveCard);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutsideActiveCard);
-    };
-  }, [activeSettingId]);
-
-  const timezoneOrder = new Map(timezones.map((tz, index) => [tz.id, index]));
-
-  const compareByMode = (a: TimezoneInfo, b: TimezoneInfo): number => {
-    if (sortMode === 'alphabet') {
-      return a.city.localeCompare(b.city);
-    }
-
-    if (sortMode === 'time') {
-      return getDateTimeRankInZone(a.zone) - getDateTimeRankInZone(b.zone);
-    }
-
-    // newest(default): recently added first
-    const orderA = timezoneOrder.get(a.id) ?? 0;
-    const orderB = timezoneOrder.get(b.id) ?? 0;
-    return orderB - orderA;
   };
 
-  // 置顶始终在前；同组内按排序命令排序。
-  const sortedTimezones = [...timezones].sort((a, b) => {
-    const isPinnedA = pinnedIds.includes(a.id);
-    const isPinnedB = pinnedIds.includes(b.id);
-    if (isPinnedA !== isPinnedB) {
-      return isPinnedA ? -1 : 1;
-    }
-
-    return compareByMode(a, b);
-  });
+  // dnd-kit's default announcements read out the raw ids (UUIDs here).
+  const labelOf = (id: UniqueIdentifier) => entries.find((entry) => entry.id === id)?.label ?? '';
+  const positionOf = (id: UniqueIdentifier) => entries.findIndex((entry) => entry.id === id) + 1;
+  const announcements: Announcements = {
+    onDragStart: ({ active }) =>
+      `Picked up ${labelOf(active.id)}, position ${positionOf(active.id)} of ${entries.length}.`,
+    onDragOver: ({ active, over }) =>
+      over ? `${labelOf(active.id)} moved to position ${positionOf(over.id)} of ${entries.length}.` : undefined,
+    onDragEnd: ({ active, over }) =>
+      over
+        ? `${labelOf(active.id)} dropped at position ${positionOf(over.id)} of ${entries.length}.`
+        : `${labelOf(active.id)} dropped.`,
+    onDragCancel: ({ active }) => `Reordering cancelled. ${labelOf(active.id)} returned to its place.`,
+  };
 
   return (
-    <div className="timezone-list">
-      {sortedTimezones.length === 0 ? (
+    <div className={`timezone-list${isEditMode ? ' timezone-list--editing' : ''}`}>
+      {entries.length === 0 ? (
         <div className="timezone-list__empty">
           <p className="timezone-list__empty-text">
             Press <span className="timezone-list__empty-addicon"></span> to add
@@ -272,25 +193,38 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
           </p>
         </div>
       ) : (
-        sortedTimezones.map((tz) => (
-          <Timezone
-            key={tz.id}
-            id={tz.id}
-            city={tz.city}
-            zone={tz.zone}
-            lat={tz.lat}
-            lon={tz.lon}
-            hourFormat={hourFormat}
-            isConvertModeOpen={isConvertModeOpen}
-            convertPosition={convertPosition}
-            setting={activeSettingId === tz.id}
-            isPinned={pinnedIds.includes(tz.id)}
-            toggleSetting={() => toggleSetting(tz.id)}
-            deleteTimezone={() => deleteTimezone(tz.id)}
-            pinTimezone={() => pinTimezone(tz.id)}
-            unpinTimezone={() => unpinTimezone(tz.id)}
-          />
-        ))
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[lockToVerticalAxis]}
+          onDragEnd={handleDragEnd}
+          accessibility={{ announcements }}>
+          <SortableContext items={entries.map((entry) => entry.id)} strategy={verticalListSortingStrategy}>
+            {entries.map((entry) => (
+              <SortableRow
+                key={entry.id}
+                id={entry.id}
+                label={entry.label}
+                isEditMode={isEditMode}
+                onRemove={() => onRemoveCity(entry.id)}>
+                <Timezone
+                  id={entry.id}
+                  city={entry.label}
+                  zone={entry.timezone}
+                  lat={entry.lat}
+                  lon={entry.lon}
+                  referenceTimezone={referenceTimezone}
+                  hourFormat={hourFormat}
+                  showSeconds={showSeconds}
+                  isConvertModeOpen={isConvertModeOpen}
+                  convertPosition={convertPosition}
+                  onOpen={() => onOpenCity(entry.id)}
+                  isCompact={isEditMode}
+                />
+              </SortableRow>
+            ))}
+          </SortableContext>
+        </DndContext>
       )}
     </div>
   );

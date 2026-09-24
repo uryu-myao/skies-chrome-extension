@@ -1,0 +1,276 @@
+.core-time-panel {
+  flex-shrink: 0;
+  margin: 0 var(--container-padding-horizontal) 16px;
+  border-radius: 12px;
+  background: var(--color-bg-timezone);
+  color: var(--color-font-timezone);
+  overflow: hidden;
+  box-shadow:
+    rgba(255, 255, 255, 0.1) 0px 1px 0px 0px inset,
+    rgba(7, 13, 79, 0.05) 0px 0px 20px 3px,
+    rgba(7, 13, 79, 0.05) 0px 0px 40px 20px,
+    rgba(255, 255, 255, 0.06) 0px 0px 0px 1px inset;
+
+  &__header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 36px;
+    padding: 0 14px;
+    background: none;
+    border: none;
+    color: var(--color-font-timezone);
+    cursor: pointer;
+    text-align: left;
+
+    // Chrome doesn't smoothly interpolate background-image between two
+    // gradients (verified: getComputedStyle shows the end value on the very
+    // next frame, no in-between steps, regardless of how structurally
+    // similar the two gradients are) — so the hover fade can't live on
+    // `background` directly. A separate layer faded via opacity sidesteps
+    // that entirely, since opacity *is* always interpolatable.
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: radial-gradient(
+        40% 70% at 50% 0,
+        rgba(91, 91, 91, 0.48) 0%,
+        #202025 100%
+      );
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+      pointer-events: none;
+    }
+
+    &:hover:not(:disabled)::before {
+      opacity: 1;
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+  }
+
+  &__title {
+    position: relative;
+    z-index: 1;
+    font-family: 'Poppins', serif;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  &__meta {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    font-family: 'Poppins', serif;
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 0.5;
+  }
+
+  &__chevron {
+    color: var(--color-font-timezone);
+    transition: transform 0.2s ease;
+  }
+
+  &--expanded &__chevron {
+    transform: rotate(180deg);
+  }
+
+  &__band {
+    padding: 4px 14px 12px;
+    display: grid;
+    grid-template-columns: minmax(46px, max-content) 1fr;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 4px;
+  }
+
+  &__row {
+    display: contents;
+
+    // display:contents generates no box of its own, so opacity/title on the
+    // row itself would be silently ignored — dim each child directly, with
+    // enough specificity to still win on a row that's also the baseline row.
+    &--off {
+      .core-time-panel__row-label,
+      .core-time-panel__track {
+        opacity: 0.45;
+      }
+    }
+  }
+
+  &__row-label {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    max-width: 96px;
+    font-family: 'Poppins', serif;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.85;
+
+    &--baseline {
+      color: #9db8ea;
+      opacity: 1;
+    }
+  }
+
+  // Only the name truncates — the You/Off tags are short, fixed strings
+  // that should never be the thing ellipsis eats when space is tight.
+  &__row-name {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__row-baseline-tag {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-style: italic;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+  }
+
+  &__row-off-tag {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+  }
+
+  &__track {
+    position: relative;
+    height: 10px;
+    border-radius: 100vw;
+    background: var(--gradient-converter);
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 100vw;
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+
+  &__dot {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.6);
+
+    &.hour {
+      width: 3px;
+      height: 3px;
+      background-color: rgba(255, 247, 213, 0.72);
+    }
+  }
+
+  &__segment {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: #5c7cd6;
+  }
+
+  &__overlap {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    outline: 1.5px solid var(--color-secondary);
+    pointer-events: none;
+  }
+
+  &__scale-row {
+    display: contents;
+  }
+
+  &__scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+    font-family: 'Lato', sans-serif;
+    font-size: 10px;
+    opacity: 0.45;
+    span {
+      display: inline-block;
+      &:nth-child(2) {
+        padding-left: 9px;
+      }
+      &:nth-child(3) {
+        padding-left: 8px;
+      }
+      &:nth-child(4) {
+        padding-left: 8px;
+      }
+    }
+  }
+
+  &__conclusion-row {
+    padding: 10px 16px 12px;
+  }
+
+  &--expanded &__conclusion-row {
+    border-top: 1px solid var(--color-division);
+  }
+
+  &__conclusion {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  &__headline {
+    font-family: 'Poppins', serif;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // App's primary accent blue (same token Settings uses for its active
+  // segmented-control/day-toggle states) — orange read as too jarring here.
+  &__headline-range {
+    color: #9cb2e7;
+    padding-left: 4px;
+  }
+
+  &__detail {
+    font-family: 'Poppins', serif;
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.75;
+  }
+
+  &__muted-line {
+    font-family: 'Poppins', serif;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: 0.5;
+  }
+
+  &__muted {
+    opacity: 0.6;
+    padding-left: 6px;
+  }
+}

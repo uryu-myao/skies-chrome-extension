@@ -15,9 +15,9 @@
         content: '';
         display: block;
         position: absolute;
-        top: 50%;
+        top: calc(50% - 1px);
         transform: translateY(-50%);
-        left: 30px;
+        left: 25px;
         width: 32px;
         height: 32px;
         background-image: var(--icon-search);
@@ -36,11 +36,14 @@
         left: 50%;
         width: max-content;
         font-family: 'Poppins', serif;
-        font-size: 14px;
-        font-weight: 600;
+        font-size: 12px;
+        font-weight: 500;
         color: var(--color-font-timezone);
-        background-color: var(--color-secondary);
-        padding: 10px 15px;
+        // Same pill as the undo toast — one look for transient messages.
+        background: rgba(32, 32, 37, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+        padding: 9px 16px;
         border-radius: 100vw;
         z-index: 2;
       }
@@ -54,19 +57,20 @@
       color: var(--color-font-timezone);
       background-color: var(--color-bg-timezone);
       width: 100%;
-      height: 50px;
-      border: 2px solid var(--color-secondary);
+      height: 44px;
+      border: 2px solid var(--color-primary-blue);
       border-radius: 25px;
       padding: 0 20px 0 44px;
       font-family: 'Poppins', serif;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
+      letter-spacing: 0.02em;
       font-style: normal;
       outline: none;
       transition: border-color 0.3s;
 
       &:focus {
-        border-color: var(--color-secondary);
+        border-color: var(--color-primary-blue);
       }
 
       &::placeholder {
@@ -98,9 +102,9 @@
     transform: translateX(-50%);
     margin-top: 6px;
     padding: 0px 0;
-    border: 2px solid var(--color-secondary);
+    border: 2px solid var(--color-primary-blue);
     border-radius: 25px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-bg-timezone);
     backdrop-filter: blur(8px);
     box-sizing: border-box;
     max-height: 400px;
@@ -119,7 +123,7 @@
     &__item {
       color: var(--color-font-timezone);
       font-family: 'Poppins', serif;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.02em;
       padding: 10px 20px;
       display: flex;
       flex-direction: row;
@@ -129,7 +133,7 @@
 
       &:hover,
       &--active {
-        background-color: var(--color-hover);
+        background-color: var(--color-primary);
         cursor: pointer;
       }
 
@@ -142,8 +146,8 @@
       }
 
       .city-name {
-        font-weight: 600;
-        font-size: 18px;
+        font-weight: 300;
+        font-size: 16px;
         line-height: 1.3;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -151,8 +155,9 @@
 
         mark {
           background: transparent;
-          color: var(--color-secondary);
+          color: var(--color-font-timezone);
           font-weight: 700;
+          opacity: 1;
         }
       }
 

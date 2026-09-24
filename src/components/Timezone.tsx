@@ -1,9 +1,15 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import '@styles/_reset.css';
 import '@styles/Timezone.scss';
-import SettingButton from './SettingButton';
-import PinButton from './PinButton';
-import DeleteButton from './DeleteButton';
+import {
+  formatRelativeOffset,
+  formatUtcOffset,
+  localDayDelta,
+  offsetMinutes,
+  relativeOffsetMinutes,
+  timeOfDay as computeTimeOfDay,
+  type TimeOfDay,
+} from '../core/tz';
 import type { ConvertPosition, HourFormat } from '../App';
 
 export interface TimezoneInfo {
@@ -15,15 +21,15 @@ export interface TimezoneInfo {
 }
 
 interface TimezoneProps extends TimezoneInfo {
+  referenceTimezone: string;
   hourFormat: HourFormat;
+  showSeconds: boolean;
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
-  setting: boolean;
-  isPinned: boolean;
-  toggleSetting: (id: string) => void;
-  deleteTimezone: () => void;
-  pinTimezone: () => void;
-  unpinTimezone: () => void;
+  onOpen: () => void;
+  // Edit mode: one row of city + time, no footer, and the card itself does
+  // nothing when clicked — the row's own controls handle remove / reorder.
+  isCompact?: boolean;
 }
 
 interface SunTimes {
@@ -34,16 +40,20 @@ interface SunTimes {
   date: string;
 }
 
-type TimeOfDay = 'night' | 'dawn' | 'day' | 'twilight';
-
-const TWILIGHT_MINUTES = 45;
-
 function hashStr(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
     h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
   }
   return h >>> 0;
+}
+
+// −1/+1 read naturally; ±2 only happens across the date line (Kiritimati vs
+// Niue) and has to be spelled out.
+function dayDeltaLabel(delta: number): string {
+  if (delta === -1) return 'yesterday';
+  if (delta === 1) return 'tomorrow';
+  return `${Math.abs(delta)} days ${delta < 0 ? 'back' : 'ahead'}`;
 }
 
 function makeStars(id: string, count: number) {
@@ -55,8 +65,8 @@ function makeStars(id: string, count: number) {
   return Array.from({ length: count }, () => ({
     cx: rand() * 372 + 4,
     cy: rand() * 74 + 4,
-    r:  rand() * 0.5 + 0.5,
-    o:  rand() * 0.4 + 0.55,
+    r: rand() * 0.5 + 0.5,
+    o: rand() * 0.4 + 0.55,
   }));
 }
 
@@ -66,90 +76,37 @@ const Timezone: React.FC<TimezoneProps> = ({
   zone,
   lat,
   lon,
+  referenceTimezone,
   hourFormat,
+  showSeconds,
   isConvertModeOpen,
   convertPosition,
-  setting,
-  isPinned,
-  toggleSetting,
-  deleteTimezone,
-  pinTimezone,
-  unpinTimezone,
+  onOpen,
+  isCompact = false,
 }) => {
   const stars = useMemo(() => makeStars(id, 20), [id]);
 
   const [timeData, setTimeData] = useState({
-    city,
-    offset: '',
+    relativeOffset: '',
+    utcOffset: '',
     time: '',
     second: '',
     meridiem: '',
     week: '',
     date: '',
     month: '',
+    dayDelta: 0,
   });
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const sunTimesRef = useRef<SunTimes | null>(null);
-
-  const getTimezoneOffsetString = (timeZone: string): string => {
-    try {
-      const now = new Date();
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        timeZoneName: 'longOffset',
-      });
-      const parts = formatter.formatToParts(now);
-      const tzOffset = parts.find((p) => p.type === 'timeZoneName')?.value;
-      return tzOffset
-        ? tzOffset.replace('GMT', 'UTC').replace(':00', '')
-        : 'N/A';
-    } catch {
-      return 'N/A';
-    }
-  };
-
-  const computeTimeOfDay = (st: SunTimes | null, refDate: Date = new Date()): TimeOfDay => {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).formatToParts(refDate);
-
-    const h = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0');
-    const m = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0');
-    const nowMin = h * 60 + m;
-
-    // Fall back to generic 6:00 / 18:00 when no sun data is available (no lat/lon).
-    const sunriseMinutes = st?.sunriseMinutes ?? 360;
-    const sunsetMinutes = st?.sunsetMinutes ?? 1080;
-
-    if (
-      nowMin >= sunriseMinutes + TWILIGHT_MINUTES &&
-      nowMin <= sunsetMinutes - TWILIGHT_MINUTES
-    ) {
-      return 'day';
-    }
-    if (
-      nowMin >= sunriseMinutes - TWILIGHT_MINUTES &&
-      nowMin <= sunriseMinutes + TWILIGHT_MINUTES
-    ) {
-      return 'dawn';
-    }
-    if (
-      nowMin >= sunsetMinutes - TWILIGHT_MINUTES &&
-      nowMin <= sunsetMinutes + TWILIGHT_MINUTES
-    ) {
-      return 'twilight';
-    }
-    return 'night';
-  };
 
   useEffect(() => {
     if (!lat || !lon) return;
 
     const fetchSunTimes = async () => {
-      const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date());
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(
+        new Date()
+      );
       if (sunTimesRef.current?.date === today) return;
 
       const cacheKey = `timemate.sun.${zone}.${today}`;
@@ -160,16 +117,18 @@ const Timezone: React.FC<TimezoneProps> = ({
         try {
           const result = JSON.parse(cached) as SunTimes;
           sunTimesRef.current = result;
-          setTimeOfDay(computeTimeOfDay(result));
+          setTimeOfDay(computeTimeOfDay(zone, new Date(), result));
           return;
-        } catch { /* corrupt entry, fall through to fetch */ }
+        } catch {
+          /* corrupt entry, fall through to fetch */
+        }
       }
 
       try {
         const res = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=sunrise,sunset&timezone=${encodeURIComponent(zone)}&forecast_days=1`
         );
-        const data = await res.json() as {
+        const data = (await res.json()) as {
           daily?: { sunrise?: string[]; sunset?: string[] };
         };
         const sunriseRaw = data.daily?.sunrise?.[0]?.split('T')[1] ?? '';
@@ -189,11 +148,11 @@ const Timezone: React.FC<TimezoneProps> = ({
         sunTimesRef.current = result;
         localStorage.setItem(cacheKey, JSON.stringify(result));
         // Evict yesterday's entry to keep storage tidy
-        const yesterday = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(
-          new Date(Date.now() - 86400000)
-        );
+        const yesterday = new Intl.DateTimeFormat('en-CA', {
+          timeZone: zone,
+        }).format(new Date(Date.now() - 86400000));
         localStorage.removeItem(`timemate.sun.${zone}.${yesterday}`);
-        setTimeOfDay(computeTimeOfDay(result));
+        setTimeOfDay(computeTimeOfDay(zone, new Date(), result));
       } catch {
         // silently ignore fetch errors
       }
@@ -202,7 +161,6 @@ const Timezone: React.FC<TimezoneProps> = ({
     fetchSunTimes();
     const interval = setInterval(fetchSunTimes, 60 * 60 * 1000);
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lon, zone]);
 
   useEffect(() => {
@@ -222,7 +180,9 @@ const Timezone: React.FC<TimezoneProps> = ({
 
         return {
           year: Number(parts.find((p) => p.type === 'year')?.value ?? 0),
-          monthNumber: Number(parts.find((p) => p.type === 'month')?.value ?? 0),
+          monthNumber: Number(
+            parts.find((p) => p.type === 'month')?.value ?? 0
+          ),
           dayNumber: Number(parts.find((p) => p.type === 'day')?.value ?? 0),
           hour: parts.find((p) => p.type === 'hour')?.value ?? '00',
           minute: parts.find((p) => p.type === 'minute')?.value ?? '00',
@@ -237,8 +197,6 @@ const Timezone: React.FC<TimezoneProps> = ({
       };
 
       const now = new Date();
-      const baseSourceDate = new Date(now);
-      baseSourceDate.setHours(0, 0, 0, 0);
       const converterHours = convertPosition * 3;
       const roundedHalfHours = Math.round(converterHours * 2) / 2;
       const converterHour = Math.floor(roundedHalfHours);
@@ -250,39 +208,26 @@ const Timezone: React.FC<TimezoneProps> = ({
       }
 
       const targetParts = getTargetDateParts(sourceDate, zone);
-      const sourceDateKey =
-        baseSourceDate.getFullYear() * 10000 +
-        (baseSourceDate.getMonth() + 1) * 100 +
-        baseSourceDate.getDate();
-      const targetDateKey =
-        targetParts.year * 10000 +
-        targetParts.monthNumber * 100 +
-        targetParts.dayNumber;
-      const dayOffset =
-        targetDateKey > sourceDateKey ? 1 : targetDateKey < sourceDateKey ? -1 : 0;
 
       setTimeData((prev) => ({
         ...prev,
         time: `${targetParts.hour}:${targetParts.minute}`,
-        second: isConvertModeOpen
-          ? ''
-          : targetParts.second.padStart(2, '0'),
-        meridiem: isConvertModeOpen
-          ? dayOffset > 0
-            ? `+${dayOffset}`
-            : dayOffset < 0
-              ? `${dayOffset}`
-              : ''
-          : hourFormat === '12'
-            ? targetParts.dayPeriod.toUpperCase()
-            : '',
+        second: isConvertModeOpen ? '' : targetParts.second.padStart(2, '0'),
+        // Convert mode forces 24h, so there is no AM/PM to show there.
+        meridiem: isConvertModeOpen ? '' : targetParts.dayPeriod.toUpperCase(),
         week: targetParts.weekday,
         date: targetParts.dayNumber.toString(),
         month: targetParts.monthShort,
-        offset: getTimezoneOffsetString(zone),
+        // Both read at the instant the card is showing (the converter's
+        // chosen time in convert mode), so a DST switch in between is honored.
+        relativeOffset: formatRelativeOffset(
+          relativeOffsetMinutes(zone, referenceTimezone, sourceDate)
+        ),
+        utcOffset: formatUtcOffset(offsetMinutes(zone, sourceDate)),
+        dayDelta: localDayDelta(zone, referenceTimezone, sourceDate),
       }));
 
-      setTimeOfDay(computeTimeOfDay(sunTimesRef.current, sourceDate));
+      setTimeOfDay(computeTimeOfDay(zone, sourceDate, sunTimesRef.current));
     };
 
     updateTime();
@@ -292,39 +237,64 @@ const Timezone: React.FC<TimezoneProps> = ({
 
     const intervalId = setInterval(updateTime, 1000);
     return () => clearInterval(intervalId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zone, hourFormat, isConvertModeOpen, convertPosition]);
+  }, [zone, referenceTimezone, hourFormat, isConvertModeOpen, convertPosition]);
 
   return (
     <div
-      data-timezone-id={id}
-      className={`timezone ${setting ? 'setting' : ''} ${isPinned ? 'pinned' : ''} timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}`}>
+      className={`timezone timezone--${timeOfDay}${isConvertModeOpen ? ' timezone--converting' : ''}${isCompact ? ' timezone--compact' : ''}`}
+      {...(!isCompact && {
+        role: 'button',
+        tabIndex: 0,
+        'aria-label': `${city} settings`,
+        onClick: onOpen,
+        onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpen();
+          }
+        },
+      })}>
       <div className="timezone-inner">
         {timeOfDay === 'night' && !isConvertModeOpen && (
           <svg className="timezone-stars" aria-hidden="true">
             {stars.map((s, i) => (
-              <circle key={i} cx={s.cx} cy={s.cy} r={s.r} fill="white" fillOpacity={s.o} />
+              <circle
+                key={i}
+                cx={s.cx}
+                cy={s.cy}
+                r={s.r}
+                fill="white"
+                fillOpacity={s.o}
+              />
             ))}
           </svg>
         )}
-        <div className="timezone-data__location">{timeData.city}</div>
+        <div className="timezone-data__location">{city}</div>
         <div className="timezone-data__time">{timeData.time}</div>
-        {(isConvertModeOpen || hourFormat === '12') && timeData.meridiem && (
-          <div className={`timezone-data__meridiem${timeData.meridiem === 'AM' ? ' timezone-data__meridiem--am' : ''}${isConvertModeOpen ? ' timezone-data__meridiem--convert' : ''}`}>{timeData.meridiem}</div>
+        {!isCompact && hourFormat === '12' && timeData.meridiem && (
+          <div
+            className={`timezone-data__meridiem${timeData.meridiem === 'AM' ? ' timezone-data__meridiem--am' : ''}`}>
+            {timeData.meridiem}
+          </div>
         )}
-        {!isConvertModeOpen && (
+        {!isCompact && showSeconds && !isConvertModeOpen && (
           <div className="timezone-data__second">{timeData.second}</div>
         )}
-        <div className="timezone-footer">
-          <p>
-            <span className="timezone-data__offset">
-              {timeData.offset || 'N/A'}
-            </span>
-          </p>
-          <p>
-            {isConvertModeOpen ? (
-              <span className="timezone-data__convert-label">Converter Mode</span>
-            ) : (
+        {!isCompact && (
+          <div className="timezone-footer">
+            <p>
+              <span className="timezone-data__relative">
+                {zone === referenceTimezone ? 'Base' : timeData.relativeOffset}
+              </span>
+              <span className="timezone-data__offset">{timeData.utcOffset}</span>
+            </p>
+            <p>
+              {timeData.dayDelta !== 0 && (
+                <span className="timezone-data__day-relative">
+                  {dayDeltaLabel(timeData.dayDelta)}
+                </span>
+              )}
               <span>
                 <span className="timezone-data__week">{timeData.week}</span>
                 <span>
@@ -332,23 +302,9 @@ const Timezone: React.FC<TimezoneProps> = ({
                   <span className="timezone-data__month">{timeData.month}</span>
                 </span>
               </span>
-            )}
-          </p>
-        </div>
-      </div>
-      <SettingButton onClick={() => toggleSetting(id)} />
-      <div className="timezone-btn">
-        <PinButton
-          isPinned={isPinned}
-          onClick={() => {
-            if (isPinned) {
-              unpinTimezone();
-            } else {
-              pinTimezone();
-            }
-          }}
-        />
-        <DeleteButton onClick={deleteTimezone} />
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

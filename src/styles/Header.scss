@@ -1,3 +1,20 @@
+@keyframes header-menu-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.92);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(4px) scale(1.02);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .header {
   position: relative;
   width: 420px;
@@ -17,27 +34,11 @@
     justify-content: space-between;
     align-items: center;
     background-color: var(--color-primary);
-    backdrop-filter: blur(10px);
-  }
-
-  &-logo {
-    display: block;
-    width: 29px;
-    height: 29px;
-    padding: 0;
-    border-radius: 50%;
-    border: none;
-    background-color: transparent;
-    background-image: var(--logo);
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: cover;
-    cursor: pointer;
   }
 
   &-btns {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
 
     &__inner {
@@ -49,93 +50,161 @@
     }
   }
 
-  &-logo-menu {
+  &-tz-chip {
     position: relative;
+    flex-shrink: 0;
+
+    &__button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--color-font-timezone);
+      cursor: pointer;
+    }
+
+    &__logo {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background-image: var(--logo);
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: cover;
+    }
+
+    &__pill {
+      position: relative;
+      // Above __overlay (z-index: 15) so the pill reads as part of the
+      // same surface as __menu (16) instead of getting dimmed with
+      // everything else behind the overlay — visually ties trigger and
+      // popup together as one unit.
+      z-index: 16;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      height: 32px;
+      padding: 0 12px 0 14px;
+      border-radius: 100vw;
+      background-color: var(--color-bg-info);
+      transition: background-color 0.2s ease-in-out;
+
+      .header-tz-chip__button:hover & {
+        background-color: var(--color-hover);
+      }
+    }
+
+    &__city {
+      padding-right: 5px;
+      font-family: 'Poppins', serif;
+      font-size: 13px;
+      font-weight: 700;
+      max-width: 84px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &__time {
+      font-family: 'Poppins', serif;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      opacity: 0.85;
+      padding-right: 3px;
+      // Poppins' digits aren't tabular (font-variant-numeric: tabular-nums
+      // has no effect — measured, not assumed), so a ticking clock
+      // otherwise reflows the pill's width every time the digits change.
+      // 38px comfortably covers the widest of all 1440 HH:MM combinations
+      // (06:46, measured at ~36.5px).
+      min-width: 38px;
+      text-align: right;
+    }
+
+    &__chevron {
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    &__overlay {
+      // fixed, not absolute: this sits inside .header, which is its own
+      // stacking context (position:relative + z-index:2) — an absolute
+      // overlay here would be capped at z-index 2 from the outside, no
+      // matter what z-index it's given, and would end up UNDER the rest
+      // of the popup instead of over it. Fixed positioning still paints
+      // within .header's stacking context (so it correctly stays below
+      // __menu's z-index:16) but sizes against the viewport instead of
+      // .header's own small box, covering the whole popup either way.
+      position: fixed;
+      inset: 0;
+      z-index: 15;
+      background: rgba(8, 8, 12, 0.55);
+    }
 
     &__menu {
       position: absolute;
       top: 40px;
       left: 0;
-      min-width: 220px;
+      z-index: 16;
+      min-width: 180px;
+      max-width: 240px;
+      max-height: 240px;
       padding: 4px;
-      border-radius: 12px;
-      border: 2px solid var(--color-secondary);
-      background-color: var(--color-primary);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+      border-radius: 16px;
+      background: rgba(44, 43, 50, 0.1);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 20px 44px rgba(0, 0, 0, 0.38);
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      z-index: 10;
+      gap: 2px;
+      overflow-y: auto;
+      animation: header-menu-pop-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    &__item {
+    &__option {
+      display: flex;
+      flex-direction: column;
       border: none;
       width: 100%;
       text-align: left;
       padding: 8px 10px;
-      border-radius: 6px;
+      border-radius: 10px;
       background-color: transparent;
       font-family: 'Poppins', serif;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
+      letter-spacing: 0.02em;
       color: var(--color-font-timezone);
+      opacity: 0.85;
       cursor: pointer;
 
       &:hover {
         background-color: var(--color-hover);
       }
 
-      a {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--color-font-timezone);
-      }
-
-      &--share {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-    }
-  }
-
-  &-sort {
-    position: relative;
-
-    &__menu {
-      position: absolute;
-      top: 40px;
-      right: 0;
-      min-width: 220px;
-      padding: 4px;
-      border-radius: 12px;
-      border: 2px solid var(--color-secondary);
-      background-color: var(--color-primary);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      z-index: 10;
-    }
-
-    &__item {
-      border: none;
-      width: 100%;
-      text-align: left;
-      padding: 8px 10px;
-      border-radius: 6px;
-      color: var(--color-font-timezone);
-      background-color: transparent;
-      font-family: 'Poppins', serif;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-
-      &:hover,
       &.active {
-        background-color: var(--color-hover);
+        opacity: 1;
+        background-color: var(--color-primary-blue);
+        color: var(--color-primary-white);
       }
+    }
+
+    &__option-sub {
+      font-size: 11px;
+      font-weight: 400;
+      padding-top: 2px;
+      opacity: 0.6;
+    }
+
+    &__divider {
+      height: 1px;
+      margin: 4px 6px;
+      background: var(--color-division);
     }
   }
 
@@ -148,7 +217,7 @@
       width: 100%;
       padding: 12px 40px 18px;
       border-radius: 0;
-      border-top: 2px solid var(--color-secondary);
+      border-top: 2px solid var(--color-primary-blue);
       background-color: var(--color-bg-timezone);
       display: flex;
       flex-direction: column;
@@ -156,27 +225,11 @@
       z-index: 10;
     }
 
+    // Look comes from .reset-button (shared with the city-name field).
     &__reset {
       position: absolute;
       top: 31px;
       left: 10px;
-      width: 22px;
-      height: 22px;
-      padding: 0;
-      border: none;
-      border-radius: 50%;
-      background-color: transparent;
-      background-image: var(--icon-reset);
-      background-position: center;
-      background-repeat: no-repeat;
-      background-size: 22px;
-      cursor: pointer;
-      opacity: 1;
-      transition: all 0.15s ease;
-
-      &:hover {
-        opacity: 0.7;
-      }
     }
 
     &__scale {
@@ -246,10 +299,16 @@
       z-index: 2;
       width: 36px;
       height: 22px;
-      border-radius: 6px;
-      border: 2px solid #ffffff;
-      background-color: var(--color-secondary);
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+      border-radius: 7px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(9px) saturate(160%);
+      -webkit-backdrop-filter: blur(9px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      box-shadow:
+        0 3px 8px rgba(0, 0, 0, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.28),
+        inset 0 -6px 8px -6px rgba(0, 0, 0, 0.15);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -260,28 +319,47 @@
         transform 0.14s ease-out,
         box-shadow 0.14s ease-out;
 
+      &::before {
+        content: '';
+        position: absolute;
+        top: -60%;
+        left: -15%;
+        right: -15%;
+        height: 90%;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        filter: blur(6px);
+        pointer-events: none;
+      }
+
       &.dragging {
         cursor: grabbing;
         transform: translateY(-50%) scale(1.04);
-        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14);
+        box-shadow:
+          0 6px 14px rgba(0, 0, 0, 0.22),
+          0 0 10px 3px rgba(255, 255, 255, 0.2),
+          inset 0 1px 0 rgba(255, 255, 255, 0.32),
+          inset 0 -6px 8px -6px rgba(0, 0, 0, 0.18);
         transition: none;
       }
 
       span {
+        position: relative;
+        z-index: 1;
         display: block;
         width: 2px;
         height: 10px;
         border-radius: 100vw;
-        background-color: rgba(0, 0, 0, 0.35);
+        background-color: rgba(255, 255, 255, 0.4);
       }
     }
   }
 
   &-btn {
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
-    background-color: var(--color-primary);
+    background-color: inherit;
     background-position: center;
     background-repeat: no-repeat;
     transition: all 0.2s ease-in-out;
@@ -305,20 +383,56 @@
       background-image: var(--icon-convert);
     }
 
-    &__sort {
-      background-size: 15px;
-      background-image: var(--icon-sort);
+    &__settings {
+      background-size: 20px;
+      background-position: 4px 4px;
+      background-image: var(--icon-setting-header);
     }
+  }
+}
 
-    &__hour-format {
-      border: none;
-      color: var(--color-font-timezone);
-      font-family: 'Poppins', serif;
-      font-size: 15px;
-      font-weight: 700;
-      line-height: 32px;
-      text-align: center;
-      text-transform: uppercase;
-    }
+.header-logo-menu__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  background: rgba(8, 8, 12, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+
+  &--open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.header-logo-menu__menu {
+  position: absolute;
+  top: 55px;
+  left: var(--container-padding-horizontal);
+  z-index: 16;
+  min-width: 220px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(44, 43, 50, 0.1);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.38);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
+  pointer-events: none;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+
+  &--open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    animation: header-menu-pop-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 }

@@ -2,22 +2,24 @@
   --container-padding-horizontal: 18px;
   --color-opacity: rgba(255, 255, 255, 0);
   --color-primary: #2c2b32;
+  --color-primary-blue: #4b6fd2;
+  --color-primary-white: rgba(255, 255, 255, 1);
+  // Reserved for Core Time (the overlap outline). Nothing else uses orange.
   --color-secondary: #ffa400;
   --color-font-timezone: white;
   --color-bg-info: rgba(0, 170, 255, 0.12);
-  --color-bg-timezone: #141416;
+  --color-bg-timezone: #202025;
+  // --color-bg-timezone: #142552;
   --color-border: rgba(0, 170, 255, 0.1);
   --color-hover: rgba(255, 255, 255, 0.2);
   --logo: url('/icons/logos/logo-header.svg');
   --icon-plus: url('/icons/icon-plus-dark.svg');
   --icon-convert: url('/icons/icon-convert-dark.svg');
-  --icon-setting: url('/icons/icon-setting-dark.svg');
+  --icon-setting-header: url('/icons/icon-setting-header.svg');
   --icon-search: url('/icons/icon-search-dark.svg');
   --icon-sort: url('/icons/icon-sort-dark.svg');
-  --icon-reset: url('/icons/icon-reset-dark.svg');
-  --color-division: #45444d;
-  --color-warning: #b27610;
-  --color-pin: #5d55c4;
+  --color-division: rgba(255, 255, 255, 0.075);
+  --color-danger: #e5484d;
   --color-meridiem-am: rgb(255, 255, 255, 0.6);
   --gradient-converter: linear-gradient(
     90deg,

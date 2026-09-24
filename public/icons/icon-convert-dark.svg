@@ -1,8 +1,8 @@
 <svg width="21" height="21" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
 <g filter="url(#filter0_d_350_16)">
-<path d="M10 5L10 11L6 11" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10 5L10 11L6 11" stroke="white" stroke-width="2"/>
 <path d="M5.49995 2.20001V2.21001M2.19995 5.50001V5.51001" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M1 10C1 11.78 1.52784 13.5201 2.51677 15.0001C3.50571 16.4802 4.91131 17.6337 6.55585 18.3149C8.20038 18.9961 10.01 19.1743 11.7558 18.8271C13.5016 18.4798 15.1053 17.6226 16.364 16.364C17.6226 15.1053 18.4798 13.5016 18.8271 11.7558C19.1743 10.01 18.9961 8.20038 18.3149 6.55585C17.6337 4.91131 16.4802 3.50571 15.0001 2.51677C13.5201 1.52784 11.78 1 10 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1 10C1 11.78 1.52784 13.5201 2.51677 15.0001C3.50571 16.4802 4.91131 17.6337 6.55585 18.3149C8.20038 18.9961 10.01 19.1743 11.7558 18.8271C13.5016 18.4798 15.1053 17.6226 16.364 16.364C17.6226 15.1053 18.4798 13.5016 18.8271 11.7558C19.1743 10.01 18.9961 8.20038 18.3149 6.55585C17.6337 4.91131 16.4802 3.50571 15.0001 2.51677C13.5201 1.52784 11.78 1 10 1" stroke="white" stroke-width="2" stroke-linecap="square" stroke-linejoin="round"/>
 </g>
 <defs>
 <filter id="filter0_d_350_16" x="0" y="0" width="21" height="21" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">

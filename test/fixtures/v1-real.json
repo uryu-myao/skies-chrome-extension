@@ -1,0 +1,27 @@
+{
+  "timezones": [
+    {
+      "id": "tokyo-asia/tokyo",
+      "city": "Tokyo",
+      "zone": "Asia/Tokyo",
+      "country": "Japan",
+      "countryCode": "JP",
+      "region": "Tokyo",
+      "lat": 35.6895,
+      "lon": 139.69171
+    },
+    {
+      "id": "xuzhou-asia/shanghai",
+      "city": "Xuzhou",
+      "zone": "Asia/Shanghai",
+      "country": "China",
+      "countryCode": "CN",
+      "region": "Jiangsu",
+      "lat": 34.20442,
+      "lon": 117.28386
+    }
+  ],
+  "pinned": ["tokyo-asia/tokyo"],
+  "sortMode": "newest",
+  "hourFormat": "12"
+}

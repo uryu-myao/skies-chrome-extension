@@ -1,0 +1,84 @@
+.city-settings {
+  &__name-field {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    max-width: 200px;
+    display: flex;
+  }
+
+  &__name {
+    width: 100%;
+    padding: 5px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: var(--color-bg-info);
+    color: var(--color-font-timezone);
+    font-family: 'Poppins', serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.15s ease;
+
+    &:focus {
+      border-color: var(--color-primary-blue);
+    }
+
+    // Room for the reset button on the (otherwise empty) left side of the
+    // right-aligned name.
+    .city-settings__name-field--renamed & {
+      padding-left: 34px;
+    }
+  }
+
+  // Look comes from .reset-button; this only places it inside the field.
+  // Centred with auto margins, not a transform — .reset-button's entry
+  // animation owns transform.
+  &__name-reset {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 5px;
+    z-index: 1;
+    margin: auto 0;
+  }
+
+  &__hint-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+
+    &:hover {
+      opacity: 0.75;
+    }
+  }
+
+  &__default {
+    opacity: 0.7;
+  }
+
+  &__hint {
+    margin: -8px 4px 16px;
+    padding: 0 10px;
+    color: var(--color-font-timezone);
+    font-family: 'Poppins', serif;
+    font-size: 11px;
+    line-height: 1.5;
+    opacity: 0.6;
+  }
+
+  &__remove {
+    justify-content: center;
+    color: var(--color-danger);
+    font-family: 'Poppins', serif;
+    font-size: 12px;
+    font-weight: 600;
+  }
+}

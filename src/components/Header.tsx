@@ -1,40 +1,44 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type Dispatch, type SetStateAction } from 'react';
 import '@styles/Header.scss';
 import Searchbar from '../components/Searchbar';
+import ResetButton from './ResetButton';
 import { TimezoneInfo } from './Timezone';
-import type {
-  AddTimezoneResult,
-  ConvertPosition,
-  HourFormat,
-  SortMode,
-} from '../App';
+import { getSystemTimezone, localHHMM } from '../core/tz';
+import type { AppSettings, Entry } from '../core/types';
+import type { AddTimezoneResult, ConvertPosition } from '../App';
 
 interface HeaderProps {
   addTimezone: (timezone: TimezoneInfo) => AddTimezoneResult;
-  sortMode: SortMode;
-  onSortChange: (mode: SortMode) => void;
-  hourFormat: HourFormat;
-  onToggleHourFormat: () => void;
+  onOpenSettings: () => void;
   isConvertModeOpen: boolean;
   onConvertModeChange: (isOpen: boolean) => void;
   convertPosition: ConvertPosition;
   onConvertPositionChange: (position: ConvertPosition) => void;
   isSearchOpen: boolean;
   onSearchOpenChange: (isOpen: boolean) => void;
+  entries: Entry[];
+  settings: AppSettings;
+  setSettings: Dispatch<SetStateAction<AppSettings>>;
+}
+
+// "Asia/Tokyo" -> "Tokyo" — same convention as an entry's default label.
+function friendlyZoneName(zone: string): string {
+  const last = zone.split('/').pop() ?? zone;
+  return last.replace(/_/g, ' ');
 }
 
 const Header: React.FC<HeaderProps> = ({
   addTimezone,
-  sortMode,
-  onSortChange,
-  hourFormat,
-  onToggleHourFormat,
+  onOpenSettings,
   isConvertModeOpen,
   onConvertModeChange,
   convertPosition,
   onConvertPositionChange,
   isSearchOpen,
   onSearchOpenChange,
+  entries,
+  settings,
+  setSettings,
 }) => {
   const convertStops = [0, 3, 6, 9, 12, 15, 18, 21, 24];
 
@@ -46,21 +50,48 @@ const Header: React.FC<HeaderProps> = ({
   const [isDraggingConvert, setIsDraggingConvert] = useState(false);
   const [convertInitialPosition, setConvertInitialPosition] = useState(0);
   const toggleSearch = () => {
-    setShowSortMenu(false);
     onConvertModeChange(false);
     onSearchOpenChange(!isSearchOpen);
   };
-  const [showSortMenu, setShowSortMenu] = useState(false);
-  const sortRef = useRef<HTMLDivElement>(null);
-  const [showLogoMenu, setShowLogoMenu] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
-  const logoRef = useRef<HTMLDivElement>(null);
-  const toggleSortMenu = () => {
+
+  // Reference timezone chip ============================
+  const [showTzMenu, setShowTzMenu] = useState(false);
+  const [chipNow, setChipNow] = useState(() => new Date());
+  const tzChipRef = useRef<HTMLDivElement>(null);
+  const tzMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => setChipNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const effectiveTimezone = settings.referenceTimezone ?? getSystemTimezone();
+  const chipEntry = entries.find((entry) => entry.timezone === effectiveTimezone);
+  const chipCityLabel = chipEntry?.label ?? friendlyZoneName(effectiveTimezone);
+  const chipTime = localHHMM(effectiveTimezone, chipNow);
+
+  const referenceOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { timezone: string; label: string }[] = [];
+    entries.forEach((entry) => {
+      if (seen.has(entry.timezone)) return;
+      seen.add(entry.timezone);
+      options.push({ timezone: entry.timezone, label: entry.label });
+    });
+    return options;
+  }, [entries]);
+
+  const toggleTzMenu = () => {
     onSearchOpenChange(false);
-    setShowLogoMenu(false);
     onConvertModeChange(false);
-    setShowSortMenu((prev) => !prev);
+    setShowTzMenu((prev) => !prev);
   };
+
+  const selectReferenceTimezone = (timezone: string | null) => {
+    setSettings((prev) => ({ ...prev, referenceTimezone: timezone }));
+    setShowTzMenu(false);
+  };
+
   const getLocalConvertPosition = (): number => {
     const now = new Date();
     const totalHours =
@@ -71,8 +102,7 @@ const Header: React.FC<HeaderProps> = ({
   };
   const toggleConvertMenu = () => {
     onSearchOpenChange(false);
-    setShowLogoMenu(false);
-    setShowSortMenu(false);
+    setShowTzMenu(false);
     if (!isConvertModeOpen) {
       const localPos = getLocalConvertPosition();
       onConvertPositionChange(localPos);
@@ -85,20 +115,6 @@ const Header: React.FC<HeaderProps> = ({
     const localPos = getLocalConvertPosition();
     onConvertPositionChange(localPos);
     setConvertInitialPosition(localPos);
-  };
-  const toggleLogoMenu = () => {
-    onSearchOpenChange(false);
-    setShowSortMenu(false);
-    onConvertModeChange(false);
-    setShowLogoMenu((prev) => !prev);
-  };
-
-  const handleShare = () => {
-    navigator.clipboard.writeText(
-      'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik'
-    );
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
   };
 
   const getConvertMetrics = useCallback(() => {
@@ -124,35 +140,41 @@ const Header: React.FC<HeaderProps> = ({
     };
   }, []);
 
-  const updateConvertPosition = useCallback((clientX: number) => {
-    const metrics = getConvertMetrics();
-    if (!metrics) return;
+  const updateConvertPosition = useCallback(
+    (clientX: number) => {
+      const metrics = getConvertMetrics();
+      if (!metrics) return;
 
-    const relativeX = clientX - metrics.rect.left;
-    const clampedX = Math.min(Math.max(relativeX, metrics.minX), metrics.maxX);
-    const nearestDot = metrics.dotPositions.reduce(
-      (closest, dotX, index) => {
-        const distance = Math.abs(dotX - clampedX);
-        return distance < closest.distance ? { index, distance } : closest;
-      },
-      { index: 0, distance: Number.POSITIVE_INFINITY }
-    );
+      const relativeX = clientX - metrics.rect.left;
+      const clampedX = Math.min(
+        Math.max(relativeX, metrics.minX),
+        metrics.maxX
+      );
+      const nearestDot = metrics.dotPositions.reduce(
+        (closest, dotX, index) => {
+          const distance = Math.abs(dotX - clampedX);
+          return distance < closest.distance ? { index, distance } : closest;
+        },
+        { index: 0, distance: Number.POSITIVE_INFINITY }
+      );
 
-    let nextX = clampedX;
+      let nextX = clampedX;
 
-    // Apply a soft magnetic pull near markers without forcing a full snap.
-    if (nearestDot.distance <= 14) {
-      const snapX = metrics.dotPositions[nearestDot.index];
-      const pullStrength = (14 - nearestDot.distance) / 14;
-      nextX = clampedX + (snapX - clampedX) * pullStrength * 0.45;
-    }
+      // Apply a soft magnetic pull near markers without forcing a full snap.
+      if (nearestDot.distance <= 14) {
+        const snapX = metrics.dotPositions[nearestDot.index];
+        const pullStrength = (14 - nearestDot.distance) / 14;
+        nextX = clampedX + (snapX - clampedX) * pullStrength * 0.45;
+      }
 
-    const progress =
-      (nextX - metrics.minX) / (metrics.maxX - metrics.minX || 1);
-    const rawIndex = progress * (convertStops.length - 1);
-    onConvertPositionChange(rawIndex);
-    setConvertThumbX(nextX);
-  }, [convertStops.length, getConvertMetrics, onConvertPositionChange]);
+      const progress =
+        (nextX - metrics.minX) / (metrics.maxX - metrics.minX || 1);
+      const rawIndex = progress * (convertStops.length - 1);
+      onConvertPositionChange(rawIndex);
+      setConvertThumbX(nextX);
+    },
+    [convertStops.length, getConvertMetrics, onConvertPositionChange]
+  );
 
   const getThumbXForPosition = (
     dotPositions: number[],
@@ -193,14 +215,16 @@ const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (sortRef.current && !sortRef.current.contains(target)) {
-        setShowSortMenu(false);
-      }
       if (convertRef.current && !convertRef.current.contains(target)) {
         onConvertModeChange(false);
       }
-      if (logoRef.current && !logoRef.current.contains(target)) {
-        setShowLogoMenu(false);
+      if (
+        tzChipRef.current &&
+        !tzChipRef.current.contains(target) &&
+        tzMenuRef.current &&
+        !tzMenuRef.current.contains(target)
+      ) {
+        setShowTzMenu(false);
       }
     };
 
@@ -256,165 +280,157 @@ const Header: React.FC<HeaderProps> = ({
 
   return (
     <header
-      className={`header ${isConvertModeOpen ? 'header--convert-open' : ''}`}>
+      className={`header ${
+        isConvertModeOpen ? 'header--convert-open' : ''
+      }`}>
       <div className="header-inner">
-        <div className="header-logo-menu" ref={logoRef}>
-          <button
-            className="header-logo"
-            aria-label="Open logo menu"
-            onClick={toggleLogoMenu}></button>
-          {showLogoMenu && (
-            <div className="header-logo-menu__menu">
-              <button className="header-logo-menu__item header-logo-menu__item--share" onClick={handleShare}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                  <path d="M7 8.5V1.5M7 1.5L4.5 4M7 1.5L9.5 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M2 9.5V12H12V9.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                {shareCopied ? 'Copied!' : 'Share TimeMate'}
-              </button>
-              <button className="header-logo-menu__item">
-                <a
-                  href=" https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik/reviews"
-                  target="_blank"
-                  rel="noopener noreferrer">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-                    <path d="M7 1l1.545 3.13L12 4.636l-2.5 2.435.59 3.44L7 8.886l-3.09 1.625.59-3.44L2 4.636l3.455-.505L7 1z"/>
-                  </svg>
-                  Back Me with 5 Stars
-                </a>
-              </button>
-              <button className="header-logo-menu__item">
-                <a
-                  href="https://forms.gle/ncZLfTs8RKE59ETC9"
-                  target="_blank"
-                  rel="noopener noreferrer">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                    <path d="M1.5 2.5a1 1 0 011-1h9a1 1 0 011 1v6a1 1 0 01-1 1H5l-3.5 2.5V2.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                  </svg>
-                  Send Feedback
-                </a>
-              </button>
-            </div>
-          )}
-        </div>
-        <div className="header-btns">
-          <div className="header-btns__inner">
-            <div>
-              <button
-                className="header-btn header-btn__plus"
-                aria-label="Toggle search"
-                onClick={toggleSearch}></button>
-            </div>
-            <div className="header-convert" ref={convertRef}>
-              <button
-                className={`header-btn header-btn__convert ${
-                  isConvertModeOpen ? 'active' : ''
-                }`}
-                aria-label="Toggle convert panel"
-                onClick={toggleConvertMenu}></button>
-              {isConvertModeOpen && (
-                <div className="header-convert__menu">
-                  {Math.abs(convertPosition - convertInitialPosition) > 0.05 && (
-                    <button
-                      className="header-convert__reset"
-                      aria-label="Reset converter to current time"
-                      onClick={handleResetConverter}
-                    />
-                  )}
-                  <div className="header-convert__scale">
-                    <span className="header-convert__scale-label">0</span>
-                    <span className="header-convert__scale-label">6</span>
-                    <span className="header-convert__scale-label">12</span>
-                    <span className="header-convert__scale-label">18</span>
-                    <span className="header-convert__scale-label">24</span>
-                  </div>
-                  <div
-                    className="header-convert__track"
-                    ref={convertTrackRef}
-                    onPointerDown={handleConvertTrackPointerDown}>
-                    {convertStops.map((hour, index) => (
-                      <span
-                        key={hour}
-                        ref={(element) => {
-                          convertDotRefs.current[index] = element;
-                        }}
-                        className={`header-convert__dot ${
-                          index % 2 === 0 ? 'hour' : ''
-                        }`}></span>
-                    ))}
-                    <span
-                      className={`header-convert__thumb ${
-                        isDraggingConvert ? 'dragging' : ''
-                      }`}
-                      style={{
-                        left: `${convertThumbX - 18}px`,
-                      }}
-                      onPointerDown={handleConvertPointerDown}>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="header-btns__inner">
-            <div className="header-sort" ref={sortRef}>
-              <button
-                className="header-btn header-btn__sort"
-                aria-label="Sort options"
-                onClick={toggleSortMenu}></button>
-              {showSortMenu && (
-                <div className="header-sort__menu">
-                  <button
-                    className={`header-sort__item ${
-                      sortMode === 'newest' ? 'active' : ''
-                    }`}
-                    onClick={() => {
-                      onSortChange('newest');
-                      setShowSortMenu(false);
-                    }}>
-                    Sort by newest (default)
-                  </button>
-                  <button
-                    className={`header-sort__item ${
-                      sortMode === 'time' ? 'active' : ''
-                    }`}
-                    onClick={() => {
-                      onSortChange('time');
-                      setShowSortMenu(false);
-                    }}>
-                    Sort by time
-                  </button>
-                  <button
-                    className={`header-sort__item ${
-                      sortMode === 'alphabet' ? 'active' : ''
-                    }`}
-                    onClick={() => {
-                      onSortChange('alphabet');
-                      setShowSortMenu(false);
-                    }}>
-                    Sort by alphabet
-                  </button>
-                </div>
-              )}
-            </div>
+          <div className="header-tz-chip" ref={tzChipRef}>
             <button
-              className="header-btn header-btn__hour-format"
-              aria-label="Toggle 12/24 hour format"
-              onClick={onToggleHourFormat}>
-              {hourFormat === '12' ? '24' : '12'}
+              type="button"
+              className="header-tz-chip__button"
+              aria-label="Change reference timezone"
+              aria-expanded={showTzMenu}
+              onClick={toggleTzMenu}>
+              <span className="header-tz-chip__logo" />
+              <span className="header-tz-chip__pill">
+                <span className="header-tz-chip__city">{chipCityLabel}</span>
+                <span className="header-tz-chip__time">{chipTime}</span>
+                <svg
+                  className="header-tz-chip__chevron"
+                  width="8"
+                  height="8"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  aria-hidden="true">
+                  <path
+                    d="M2 3.5L5 6.5L8 3.5"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
             </button>
+
+            {showTzMenu && (
+              <div
+                className="header-tz-chip__overlay"
+                onClick={() => setShowTzMenu(false)}
+                aria-hidden="true"
+              />
+            )}
+
+            {showTzMenu && (
+              <div className="header-tz-chip__menu" ref={tzMenuRef}>
+                <button
+                  type="button"
+                  className={`header-tz-chip__option ${
+                    settings.referenceTimezone === null ? 'active' : ''
+                  }`}
+                  onClick={() => selectReferenceTimezone(null)}>
+                  System timezone
+                  <span className="header-tz-chip__option-sub">
+                    {friendlyZoneName(getSystemTimezone())}
+                  </span>
+                </button>
+                {referenceOptions.length > 0 && (
+                  <div className="header-tz-chip__divider" />
+                )}
+                {referenceOptions.map((option) => (
+                  <button
+                    type="button"
+                    key={option.timezone}
+                    className={`header-tz-chip__option ${
+                      settings.referenceTimezone === option.timezone ? 'active' : ''
+                    }`}
+                    onClick={() => selectReferenceTimezone(option.timezone)}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="header-btns">
+            <div className="header-btns__inner">
+              <div>
+                <button
+                  className="header-btn header-btn__plus"
+                  aria-label="Toggle search"
+                  onClick={toggleSearch}></button>
+              </div>
+              <div className="header-convert" ref={convertRef}>
+                <button
+                  className={`header-btn header-btn__convert ${
+                    isConvertModeOpen ? 'active' : ''
+                  }`}
+                  aria-label="Toggle convert panel"
+                  onClick={toggleConvertMenu}></button>
+                {isConvertModeOpen && (
+                  <div className="header-convert__menu">
+                    {Math.abs(convertPosition - convertInitialPosition) >
+                      0.05 && (
+                      <ResetButton
+                        className="header-convert__reset"
+                        label="Reset converter to current time"
+                        title="Back to now"
+                        onClick={handleResetConverter}
+                      />
+                    )}
+                    <div className="header-convert__scale">
+                      <span className="header-convert__scale-label">0</span>
+                      <span className="header-convert__scale-label">6</span>
+                      <span className="header-convert__scale-label">12</span>
+                      <span className="header-convert__scale-label">18</span>
+                      <span className="header-convert__scale-label">24</span>
+                    </div>
+                    <div
+                      className="header-convert__track"
+                      ref={convertTrackRef}
+                      onPointerDown={handleConvertTrackPointerDown}>
+                      {convertStops.map((hour, index) => (
+                        <span
+                          key={hour}
+                          ref={(element) => {
+                            convertDotRefs.current[index] = element;
+                          }}
+                          className={`header-convert__dot ${
+                            index % 2 === 0 ? 'hour' : ''
+                          }`}></span>
+                      ))}
+                      <span
+                        className={`header-convert__thumb ${
+                          isDraggingConvert ? 'dragging' : ''
+                        }`}
+                        style={{
+                          left: `${convertThumbX - 18}px`,
+                        }}
+                        onPointerDown={handleConvertPointerDown}>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="header-btns__inner">
+              <div>
+                <button
+                  className="header-btn header-btn__settings"
+                  aria-label="Open settings"
+                  onClick={onOpenSettings}></button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      {isSearchOpen && (
-        <Searchbar
-          addTimezone={addTimezone}
-          onSelect={() => onSearchOpenChange(false)}
-        />
-      )}
+        {isSearchOpen && (
+          <Searchbar
+            addTimezone={addTimezone}
+            onSelect={() => onSearchOpenChange(false)}
+          />
+        )}
     </header>
   );
 };
