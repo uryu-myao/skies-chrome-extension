@@ -259,6 +259,16 @@ Your 16:00 slot becomes 17:00 for Kenji.
 
 第 3 层第一版不做。
 
+**权限约束(第 3 层实现时必须遵守)**:
+
+- `notifications` 只能声明在 manifest 的 `optional_permissions` 中,在用户打开该设置开关时
+  通过 `chrome.permissions.request()` 运行时申请。
+- **不得**加入 `permissions` 字段。新增必需权限会让 Chrome 在更新时禁用扩展、要求全体用户
+  重新授权,而该功能默认关闭、多数用户不会使用,为它让所有人承担被禁用(进而卸载)的风险不划算。
+- 当前版本的 manifest 不声明任何权限(`permissions` / `optional_permissions` /
+  `host_permissions` 均无)。这是商店页面上的信任优势 —— 新增任何权限(包括可选权限)前,
+  都应先评估必要性。
+
 ---
 
 ## 7. 人物模式(推迟)
