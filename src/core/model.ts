@@ -1,6 +1,6 @@
 import type { AppData, AppSettings, Entry, WorkDays, WorkHours } from './types';
 
-// The `timemate.` prefix predates the rename to Everywhen and must stay —
+// The `timemate.` prefix predates the rename to Skies and must stay —
 // it is where every existing user's data already lives. Same for the v1 keys
 // and the backup key in migrate.ts, and the sun cache in Timezone.tsx.
 export const APP_DATA_STORAGE_KEY = 'timemate.data.v2';

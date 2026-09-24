@@ -1,6 +1,6 @@
-# Everywhen
+# Skies
 
-Everywhen is a Chrome extension built with React, TypeScript, and Vite for viewing multiple city time zones in a single popup.
+Skies is a Chrome extension built with React, TypeScript, and Vite for viewing multiple city time zones in a single popup.
 
 It is designed for quick cross-time-zone planning:
 

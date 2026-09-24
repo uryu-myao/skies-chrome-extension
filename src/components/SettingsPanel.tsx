@@ -312,7 +312,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="settings-panel__row settings-panel__row--link"
               onClick={handleShare}>
               <span className="settings-panel__label">
-                {shareCopied ? 'Copied!' : 'Share Everywhen'}
+                {shareCopied ? 'Copied!' : 'Share Skies'}
               </span>
               <CopyIcon copied={shareCopied} />
             </button>
