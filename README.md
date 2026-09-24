@@ -2,6 +2,10 @@
 
 Skies is a Chrome extension built with React, TypeScript, and Vite for viewing multiple city time zones in a single popup.
 
+- Website: [useskies.com](https://useskies.com)
+- Chrome Web Store: [Skies — World Clock & Time Zones](https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik)
+- Contact: [hi@useskies.com](mailto:hi@useskies.com)
+
 It is designed for quick cross-time-zone planning:
 
 - Search and add cities from around the world
@@ -61,6 +65,14 @@ It is designed for quick cross-time-zone planning:
   move, Space to drop)
 - Remove a city with the minus control
 - Order is saved immediately
+
+### Settings
+
+- Opened from the header; slides in over the popup
+- Display: hour format, show seconds, `Edit city list`
+- Core time: panel mode, default work hours and work days
+- About: Share Skies (copies the store link), Rate on Chrome Store,
+  Send Feedback (Google Form), Website (`useskies.com`), Version
 
 ### Core Time Panel
 
@@ -174,14 +186,14 @@ If you rebuild, reload the extension from the extensions page.
 - Timezone card rendering lives in [src/components/Timezone.tsx](src/components/Timezone.tsx)
 - List order, reordering, and edit mode live in [src/components/TimezoneList.tsx](src/components/TimezoneList.tsx)
 - Persistence and the schema live in [src/core/model.ts](src/core/model.ts); migrations in [src/core/migrate.ts](src/core/migrate.ts)
-- Storage keys keep the `timemate.` prefix from before the rename — renaming one would orphan existing users' data
+- Storage keys keep the `timemate.` prefix from before the product was renamed to Skies — renaming one would orphan existing users' data
 - The feature spec is [docs/spec-v2.md](docs/spec-v2.md); update it before changing behavior
 
 ## Publish Checklist
 
 Before publishing a new version:
 
-1. Update the extension version in [public/manifest.json](public/manifest.json)
+1. Update the version in both [public/manifest.json](public/manifest.json) and [package.json](package.json) (Settings → About reads it from `package.json`)
 2. Run `npm run lint`
 3. Run `npm test`
 4. Run `npm run build`
