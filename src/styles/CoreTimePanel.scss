@@ -163,19 +163,17 @@
     // display:contents generates no box of its own, so opacity/title on the
     // row itself would be silently ignored — dim each child directly, with
     // enough specificity to still win on a row that's also the baseline row.
-    &--off {
-      .core-time-panel__row-label,
-      .core-time-panel__track {
-        opacity: 0.45;
-      }
-    }
-
-    // Excluded from Core Time by the user: kept in place so it can be tapped
-    // back in, which means the name must stay readable. On #202025 white
-    // text measures 2.3:1 at 25% and 3.2:1 at 35%; 50% is 5.1:1, past AA
-    // for 12px. The baseline blue would drop to 3.1:1 at 50%, so an
-    // excluded row goes neutral (its YOU tag still says whose it is).
-    // Told apart from an off day by the strike-through, not by being darker.
+    //
+    // A dimmed row — off today, or excluded by the user — still has a
+    // button for a name, so the name must stay readable. Measured on
+    // #202025: white at 50% is 5.1:1, past AA for 12px (45% was 4.4:1, 25%
+    // 2.3:1). The baseline blue would drop to 3.1:1 at 50%, so a dimmed row
+    // goes neutral; its YOU tag still says whose it is. The tags take the
+    // row's 50% as is: their own extra dimming on top put them at 2.4–4.0:1.
+    // The strike-through is drawn in the text colour, so it's 5.1:1 too.
+    // Off and excluded are told apart by the Off tag vs the strike-through
+    // and by how far the band dims — not by the name's brightness.
+    &--off,
     &--excluded {
       .core-time-panel__row-label {
         color: var(--color-font-timezone);
@@ -186,6 +184,17 @@
         }
       }
 
+      .core-time-panel__row-baseline-tag,
+      .core-time-panel__row-off-tag {
+        opacity: 1;
+      }
+    }
+
+    &--off .core-time-panel__track {
+      opacity: 0.45;
+    }
+
+    &--excluded {
       .core-time-panel__row-name,
       .core-time-panel__row-label:hover .core-time-panel__row-name {
         text-decoration: line-through;
