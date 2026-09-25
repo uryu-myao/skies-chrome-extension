@@ -256,3 +256,41 @@ describe('migrate — freezing the pre-manual-order display order', () => {
     expect(labels(migrate(FREEZE_AT))).toEqual(['Xuzhou', 'Tokyo']);
   });
 });
+
+// The user's reproduction: five cities, Boston and Shanghai pinned.
+const FIVE_CITIES = [
+  { id: 'c1', city: 'Bangkok', zone: 'Asia/Bangkok' },
+  { id: 'c2', city: 'Boston', zone: 'America/New_York' },
+  { id: 'c3', city: 'Kathmandu', zone: 'Asia/Kathmandu' },
+  { id: 'c4', city: 'Shanghai', zone: 'Asia/Shanghai' },
+  { id: 'c5', city: 'Tokyo', zone: 'Asia/Tokyo' },
+];
+// US on DST: Boston −4, Kathmandu +5:45, Bangkok +7, Shanghai +8, Tokyo +9.
+const SEP_25 = new Date('2026-09-25T07:00:00Z');
+
+function seedFiveCities(sortMode: string): void {
+  localStorage.setItem(V1_TIMEZONES_KEY, JSON.stringify(FIVE_CITIES));
+  localStorage.setItem(V1_PINNED_KEY, JSON.stringify(['c2', 'c4']));
+  localStorage.setItem(V1_SORT_MODE_KEY, sortMode);
+}
+
+describe('migrate — pure v1, end to end through every sort mode', () => {
+  it('alphabet: pinned first, each group by name', () => {
+    seedFiveCities('alphabet');
+    const data = migrate(SEP_25);
+    expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Bangkok', 'Kathmandu', 'Tokyo']);
+    expect(data.settings.sortOrder).toBe('name');
+  });
+
+  it('time: pinned first, each group furthest behind first (v1 sorted by local time)', () => {
+    seedFiveCities('time');
+    const data = migrate(SEP_25);
+    expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Kathmandu', 'Bangkok', 'Tokyo']);
+    expect(data.settings.sortOrder).toBe('offset');
+  });
+
+  it('newest: pinned first, each group newest first (stored array reversed)', () => {
+    seedFiveCities('newest');
+    expect(labels(migrate(SEP_25))).toEqual(['Shanghai', 'Boston', 'Tokyo', 'Kathmandu', 'Bangkok']);
+  });
+});
