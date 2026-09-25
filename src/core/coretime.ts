@@ -65,6 +65,16 @@ export type CoreTimeConclusion =
   | { status: 'NO_ENTRIES' }
   | { status: 'OVERLAP' }
   | { status: 'NO_OVERLAP_TODAY'; closest: CoreTimeClosest }
+  // Everyone is on a work day and the full overlap is empty, but dropping
+  // exactly one entry — the one outlier — leaves a non-empty one. Not the
+  // same thing as PARTIAL_OFF: that's someone off today (workDays), this is
+  // work *hours* that don't line up. `overlap` is the subset's.
+  | {
+      status: 'PARTIAL_OVERLAP';
+      overlap: CoreTimeOverlapRange[];
+      includedIds: string[];
+      excludedId: string;
+    }
   | { status: 'ALL_OFF'; offEntryIds: string[]; nextOverlap: CoreTimeNextOverlap | null }
   | {
       status: 'PARTIAL_OFF';
@@ -255,11 +265,40 @@ function findNextOverlap(
   return null;
 }
 
+// Leave-one-out: drop each row in turn and recompute the overlap of the rest.
+// Returns the PARTIAL_OVERLAP conclusion only when exactly one drop works —
+// several candidates means no single outlier to name, none means it isn't
+// one city's fault; both fall back to closest. Deliberately no search for
+// the largest workable subset: that's exponential in the number of cities
+// and not something the panel could explain in a sentence. Needs three
+// rows: "all but X" with two cities is just the other city's own hours.
+function findSingleOutlier(
+  rows: CoreTimeRow[]
+): Extract<CoreTimeConclusion, { status: 'PARTIAL_OVERLAP' }> | null {
+  if (rows.length < 3) return null;
+
+  let found: Extract<CoreTimeConclusion, { status: 'PARTIAL_OVERLAP' }> | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    const rest = rows.filter((_, j) => j !== i);
+    const overlap = computeOverlapRanges(rest);
+    if (overlap.length === 0) continue;
+    if (found) return null;
+    found = {
+      status: 'PARTIAL_OVERLAP',
+      overlap,
+      includedIds: rest.map((row) => row.entryId),
+      excludedId: rows[i].entryId,
+    };
+  }
+  return found;
+}
+
 function computeConclusion(
   entries: Entry[],
   settings: AppSettings,
   referenceTimezone: string,
   referenceDate: Date,
+  rows: CoreTimeRow[],
   overlap: CoreTimeOverlapRange[],
   slotInstants: Date[]
 ): CoreTimeConclusion {
@@ -288,6 +327,11 @@ function computeConclusion(
       nextOverlap: findNextOverlap(entries, settings, referenceTimezone, referenceDate),
     };
   }
+
+  // Everyone's on a work day, so the empty overlap is the hours. With several
+  // cities that's usually one outlier.
+  const partialOverlap = findSingleOutlier(rows);
+  if (partialOverlap) return partialOverlap;
 
   // Every entry is on its own work day today, so some slot on this axis
   // should satisfy all of them simultaneously — computeClosest returning
@@ -321,6 +365,7 @@ export function coreTime({ entries, settings, referenceDate }: CoreTimeInput): C
     settings,
     referenceTimezone,
     referenceDate,
+    rows,
     overlap,
     slotInstants
   );

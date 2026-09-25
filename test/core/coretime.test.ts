@@ -97,15 +97,24 @@ function slotOf(refTime: string): number {
   return (hours * 60 + minutes) / 30;
 }
 
+function asiaAndBoston() {
+  return {
+    shanghai: createEntry({ timezone: 'Asia/Shanghai', label: 'Shanghai' }),
+    boston: createEntry({ timezone: 'America/New_York', label: 'Boston' }),
+    tokyo: createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' }),
+    kathmandu: createEntry({ timezone: 'Asia/Kathmandu', label: 'Kathmandu' }),
+    bangkok: createEntry({ timezone: 'Asia/Bangkok', label: 'Bangkok' }),
+  };
+}
+
 describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
-  it('five cities, one outlier: closest avoids the end boundary and names Boston as the bottleneck', () => {
-    const shanghai = createEntry({ timezone: 'Asia/Shanghai', label: 'Shanghai' });
-    const boston = createEntry({ timezone: 'America/New_York', label: 'Boston' });
-    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
-    const kathmandu = createEntry({ timezone: 'Asia/Kathmandu', label: 'Kathmandu' });
-    const bangkok = createEntry({ timezone: 'Asia/Bangkok', label: 'Bangkok' });
+  it('closest avoids the end boundary; tied bottlenecks name the first in list order', () => {
+    // Two cities on US Eastern, so dropping either one alone still leaves
+    // no overlap — no single outlier, this stays NO_OVERLAP_TODAY.
+    const { shanghai, boston, tokyo, kathmandu, bangkok } = asiaAndBoston();
+    const newYork = createEntry({ timezone: 'America/New_York', label: 'New York' });
     const result = coreTime({
-      entries: [shanghai, boston, tokyo, kathmandu, bangkok],
+      entries: [shanghai, boston, tokyo, kathmandu, bangkok, newYork],
       settings: settingsWithReference('Asia/Tokyo'),
       referenceDate: FRIDAY_AFTERNOON_JST,
     });
@@ -115,17 +124,24 @@ describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
     if (conclusion.status !== 'NO_OVERLAP_TODAY') return;
     const { closest } = conclusion;
 
-    // Not 18:00: that is Tokyo's end, outside [09:00, 18:00), and used to
-    // score 0. 17:30, 18:00 and 18:30 now all total 270 min; earliest wins.
-    expect(closest.refTime).toBe('17:30');
-    // Every entry here ends at 18:00, so no local time may sit on it.
+    // 18:30, 19:00 and 19:30 all total 480 min; earliest wins. Every entry
+    // here ends at 18:00, and none sits on it — 18:00 used to score 0.
+    expect(closest.refTime).toBe('18:30');
     expect(closest.perEntry.map((p) => p.localTime)).not.toContain('18:00');
-    expect(closest.gapMinutes).toBe(270);
+    // Boston and New York are both 210 min out; Boston is listed first.
+    expect(closest.gapMinutes).toBe(210);
     expect(closest.bottleneckEntryId).toBe(boston.id);
     expect(closest.perEntry.find((p) => p.entryId === boston.id)).toMatchObject({
-      localTime: '04:30',
-      deviationMinutes: 270,
+      localTime: '05:30',
+      deviationMinutes: 210,
       direction: 'BEFORE_START',
+    });
+    // Kathmandu's +5:45 puts its local times on :15/:45, off the 30-min
+    // grid; inside its window that must still be exactly 0, no residue.
+    expect(closest.perEntry.find((p) => p.entryId === kathmandu.id)).toMatchObject({
+      localTime: '15:15',
+      deviationMinutes: 0,
+      direction: null,
     });
   });
 
@@ -155,13 +171,17 @@ describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
     expect(conclusion.closest.gapMinutes).toBeGreaterThan(0);
   });
 
-  it('bottleneck after its day ends: the reference city, when the others are ahead of it', () => {
-    const newYork = createEntry({ timezone: 'America/New_York', label: 'New York' });
+  it('bottleneck after its day ends: the outnumbered side stays late', () => {
+    // Three cities on +9 against two on US Eastern: keeping the three inside
+    // their day is cheapest, so the two absorb it — the evening before.
     const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
     const seoul = createEntry({ timezone: 'Asia/Seoul', label: 'Seoul' });
+    const palau = createEntry({ timezone: 'Pacific/Palau', label: 'Palau' });
+    const newYork = createEntry({ timezone: 'America/New_York', label: 'New York' });
+    const toronto = createEntry({ timezone: 'America/Toronto', label: 'Toronto' });
     const result = coreTime({
-      entries: [newYork, tokyo, seoul],
-      settings: settingsWithReference('America/New_York'),
+      entries: [tokyo, seoul, palau, newYork, toronto],
+      settings: settingsWithReference('Asia/Tokyo'),
       referenceDate: REFERENCE_DATE,
     });
 
@@ -169,14 +189,92 @@ describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
     expect(conclusion.status).toBe('NO_OVERLAP_TODAY');
     if (conclusion.status !== 'NO_OVERLAP_TODAY') return;
 
-    // 20:00 EDT = 09:00 JST/KST the next morning. New York's meeting runs
-    // 20:00–20:30, 150 min past its 18:00 end.
-    expect(conclusion.closest.refTime).toBe('20:00');
+    // 09:00 JST = 20:00 EDT the evening before. A meeting there runs
+    // 20:00–20:30, 150 min past New York's 18:00 end.
+    expect(conclusion.closest.refTime).toBe('09:00');
     expect(conclusion.closest.bottleneckEntryId).toBe(newYork.id);
     expect(conclusion.closest.gapMinutes).toBe(150);
-    expect(conclusion.closest.perEntry.find((p) => p.entryId === newYork.id)?.direction).toBe(
-      'AFTER_END'
-    );
+    expect(conclusion.closest.perEntry.find((p) => p.entryId === newYork.id)).toMatchObject({
+      localTime: '20:00',
+      direction: 'AFTER_END',
+    });
+  });
+});
+
+describe('coreTime — PARTIAL_OVERLAP (§5.3 leave-one-out)', () => {
+  it('one outlier: all but Boston overlap, and the full overlap stays empty', () => {
+    const { shanghai, boston, tokyo, kathmandu, bangkok } = asiaAndBoston();
+    const result = coreTime({
+      entries: [shanghai, boston, tokyo, kathmandu, bangkok],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: FRIDAY_AFTERNOON_JST,
+    });
+
+    expect(result.overlap).toEqual([]);
+    // 12:30 JST = 09:15 in Kathmandu (its first working slot on this axis),
+    // 18:00 = Tokyo's end. Slots 25–36.
+    expect(result.conclusion).toEqual({
+      status: 'PARTIAL_OVERLAP',
+      overlap: [{ startSlot: 25, endSlot: 36 }],
+      includedIds: [shanghai.id, tokyo.id, kathmandu.id, bangkok.id],
+      excludedId: boston.id,
+    });
+  });
+
+  it('several candidates: no single outlier to name, falls back to closest', () => {
+    // Dropping Boston leaves Tokyo + London (17:00–18:00 JST); dropping Tokyo
+    // leaves Boston + London. Two candidates, so neither is "the" outlier.
+    const entries = [
+      createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' }),
+      createEntry({ timezone: 'America/New_York', label: 'Boston' }),
+      createEntry({ timezone: 'Europe/London', label: 'London' }),
+    ];
+    const result = coreTime({
+      entries,
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: REFERENCE_DATE,
+    });
+
+    expect(result.conclusion.status).toBe('NO_OVERLAP_TODAY');
+  });
+
+  it('no candidate: two cities on each side, no single drop helps, falls back to closest', () => {
+    const entries = [
+      createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' }),
+      createEntry({ timezone: 'Asia/Seoul', label: 'Seoul' }),
+      createEntry({ timezone: 'America/New_York', label: 'Boston' }),
+      createEntry({ timezone: 'America/New_York', label: 'New York' }),
+    ];
+    const result = coreTime({
+      entries,
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: REFERENCE_DATE,
+    });
+
+    expect(result.conclusion.status).toBe('NO_OVERLAP_TODAY');
+  });
+
+  it('someone off today is PARTIAL_OFF, even when the rest would overlap without them', () => {
+    // Saturday: Tokyo is off. Dropping Tokyo would leave Shanghai + Singapore
+    // overlapping, but that's a workDays matter, not an hours outlier.
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const shanghai = createEntry({
+      timezone: 'Asia/Shanghai',
+      label: 'Shanghai',
+      workDays: [1, 2, 3, 4, 5, 6],
+    });
+    const singapore = createEntry({
+      timezone: 'Asia/Singapore',
+      label: 'Singapore',
+      workDays: [1, 2, 3, 4, 5, 6],
+    });
+    const result = coreTime({
+      entries: [tokyo, shanghai, singapore],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SATURDAY_NOON_JST,
+    });
+
+    expect(result.conclusion.status).toBe('PARTIAL_OFF');
   });
 });
 

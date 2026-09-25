@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import '@styles/CoreTimePanel.scss';
 import { coreTime } from '../core/coretime';
+import type { CoreTimeOverlapRange } from '../core/coretime';
 import { getSystemTimezone, SLOTS_PER_DAY } from '../core/tz';
 import type { AppSettings, Entry } from '../core/types';
 
@@ -154,6 +155,24 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
         );
       }
 
+      case 'PARTIAL_OVERLAP': {
+        const [first, ...rest] = conclusion.overlap;
+        const range = `${formatSlotTime(result.axis, first.startSlot)}–${formatSlotTime(result.axis, first.endSlot)}`;
+        const excludedLabel = labelOf(conclusion.excludedId);
+        return (
+          <div className="core-time-panel__conclusion">
+            <span className="core-time-panel__headline">
+              All but {excludedLabel} overlap{' '}
+              <span className="core-time-panel__headline-range">{range}</span>
+              {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
+            </span>
+            <span className="core-time-panel__muted-line">
+              {excludedLabel} is outside its work hours — tap to exclude it
+            </span>
+          </div>
+        );
+      }
+
       case 'ALL_OFF':
         return (
           <div className="core-time-panel__conclusion">
@@ -185,10 +204,19 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
   const canExpand = filteredEntries.length > 0 && !isEditMode;
   const cityWord = filteredEntries.length === 1 ? 'city' : 'cities';
 
+  // PARTIAL_OVERLAP outlines the subset's overlap on the subset's rows only;
+  // otherwise the full overlap (empty unless OVERLAP) goes on every row.
+  const overlapOf = (entryId: string): CoreTimeOverlapRange[] => {
+    const { conclusion } = result;
+    if (conclusion.status !== 'PARTIAL_OVERLAP') return result.overlap;
+    return conclusion.includedIds.includes(entryId) ? conclusion.overlap : [];
+  };
+
   const rows = result.rows.map((row) => ({
     key: row.entryId,
     label: labelOf(row.entryId),
     blocks: row.blocks,
+    overlap: overlapOf(row.entryId),
     isBaseline: entryOf(row.entryId)?.timezone === referenceTimezone,
     isOff: row.blocks.every((block) => !block),
   }));
@@ -256,7 +284,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
                     }}
                   />
                 ))}
-                {result.overlap.map((range, i) => (
+                {row.overlap.map((range, i) => (
                   <span
                     key={i}
                     className="core-time-panel__overlap"
