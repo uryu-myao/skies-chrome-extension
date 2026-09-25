@@ -47,7 +47,8 @@
   settings: {
     hour24: true,
     showSeconds: false,
-    sortOrder: "manual",       // 【废弃】manual | offset | name;仅迁移时读取一次,见 §3.4
+    sortOrder: "manual",       // 【废弃】manual | offset | name(由 v1 的 newest | time | alphabet
+                               // 映射而来,见 §3.2);仅迁移时读取一次,见 §3.4
     referenceTimezone: null,   // null = 使用系统时区
     defaultWorkHours: { start: 9, end: 18 },
     defaultWorkDays: [1, 2, 3, 4, 5],
@@ -73,23 +74,53 @@
 
 ## 3. 迁移 v1 → v2
 
+**所有 storage key 保留 `timemate.` 前缀,改名后不得变更**(产品已从 TimeMate 两次改名,现为 Skies)。
+key 是老用户数据所在的位置,改一个字就等于让所有老用户的城市消失。扩展 ID 同理:`localStorage`
+按扩展的 origin(`chrome-extension://<ID>/`)隔离,ID 变了,旧数据同样读不到。
+
+存储全部在 popup 页的 `localStorage`,不使用 `chrome.storage`:
+
+| key                         | 内容                                             |
+| --------------------------- | ------------------------------------------------ |
+| `timemate.data.v2`          | v2 数据(§2.1)                                   |
+| `timemate.backup_v1`        | 迁移前的 v1 快照,只写一次                        |
+| `timemate.timezones.v1`     | v1 城市列表(只读,迁移后保留不删)               |
+| `timemate.pinned.v1`        | v1 置顶 id 列表(同上)                          |
+| `timemate.sort-mode.v1`     | v1 排序模式(同上)                              |
+| `timemate.hour-format.v1`   | v1 12/24 小时制(同上)                          |
+| `timemate.sun.<zone>.<日期>` | 卡片天色用的日出日落缓存,每个时区每天一条        |
+
 ### 3.1 要求
 
-- 入口:扩展启动时,读取 storage 后立即执行,早于任何渲染
-- 判定:`data.version` 缺失或 < 2 即执行迁移
-- 迁移前**必须**把原始 v1 数据完整备份到 `storage.local` 的 `backup_v1` 键
+- 入口:`src/main.tsx` 在 `createRoot().render()` 之前同步调用 `migrate()`,每次打开 popup 都执行;
+  应用以 `migrate()` 的返回值作为初始数据渲染
+- 判定:`timemate.data.v2` 不存在(或不是有效的 v2 数据)即从 v1 的 key 读取并迁移;
+  已有 v2 数据时只读取,外加一次性的 `freezeDisplayOrder()`(§3.4)
+- 写入 v2 之前**必须**把读到的 v1 数据完整备份到 `localStorage` 的 `timemate.backup_v1` 键
+  (附 `migratedAt` 时间戳);该键已存在时不覆盖
+- v1 的 key 只读不删、不改
 - 迁移必须幂等:重复执行不产生副作用
-- 迁移失败时,保留 v1 数据、不写入、上报错误,不能让用户看到空列表
+- 迁移失败时,保留 v1 数据、不写入、`console.error` 记录,不能让用户看到空列表:返回已映射的
+  内存数据(若已算出),否则返回默认数据
 
 ### 3.2 映射
 
+v1 的数据分散在四个 key 里,城市条目结构为 `{ id, city, zone, lat?, lon? }`,置顶状态不在条目上,
+而是单独存在 `timemate.pinned.v1`(v1 条目 id 的 `string[]`):
+
 ```
-v1 city.timezone  →  entry.timezone
-v1 city.name      →  entry.label
-v1 city.pinned    →  entry.pinned
+v1 zone                          →  entry.timezone
+v1 city                          →  entry.label(同时记为 entry.defaultLabel)
+v1 lat / lon                     →  entry.lat / entry.lon
+v1 id ∈ timemate.pinned.v1       →  entry.pinned
+timemate.sort-mode.v1            →  settings.sortOrder
+    newest → manual,time → offset,alphabet → name;缺失或无效 → 默认值
+timemate.hour-format.v1          →  settings.hour24('24' → true,'12' → false;缺失 → 默认值)
 (其余字段填 null / 默认值)
-entry.id 新生成
+entry.id 新生成(v1 的 id 只用于匹配置顶列表)
 ```
+
+条目顺序与 v1 存储数组一一对应,随后经过 §3.4 固化为用户当时看到的显示顺序。
 
 ### 3.3 验收
 
@@ -102,6 +133,8 @@ entry.id 新生成
 打开后看到列表乱掉,首次读到**没有 `order` 字段**的数据时,`freezeDisplayOrder()` 按旧规则
 算出用户当时看到的顺序 —— 置顶项在前,组内按旧 `sortOrder`(manual = 最新在上,即存储数组
 倒序;offset = 相对基准时区最落后的在前;name = 字母序)—— 并把该顺序写入 `order`。
+这里的 `sortOrder` 是 v2 的取值;v1 用户的 `newest` / `time` / `alphabet` 已在 §3.2 映射成
+`manual` / `offset` / `name`,所以 `freezeDisplayOrder()` 只需认 v2 的三个值。
 
 - **不得回退到原始添加顺序**
 - 只重排,不删除任何条目
