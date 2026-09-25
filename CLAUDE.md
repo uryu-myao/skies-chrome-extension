@@ -25,7 +25,7 @@ Skies is a **Chrome Manifest V3 popup extension** built with React + TypeScript 
 
 ```
 App.tsx              ← global state: entries (v2 Entry[] — array order IS the list order), settings (v2 AppSettings), isConvertModeOpen + convertPosition, isSearchOpen, isSettingsOpen + settingsFocus (a section to scroll to), isEditMode, the open city panel, and the last removed entry (for Undo); seeded from migrate()'s return value, persists entries+settings to localStorage on every change
-├── Header.tsx       ← reference-timezone chip (logo, city, live time; its menu sets settings.referenceTimezone) + 3 actions: search toggle, converter, open-settings
+├── Header.tsx       ← reference-timezone chip (logo, city, live time) + 3 actions: search toggle, converter, open-settings. The chip's menu lists System and every city (no dedupe) and stores referenceTimezone + referenceEntryId; the chip's name and selected option come from core's resolveReferenceChip(). The name follows the picked city, while Base / YOU follow the zone — on purpose (spec §9.1)
 │   ├── Searchbar.tsx  ← city search via Open-Meteo Geocoding API; passes selected city up via callback
 │   └── Converter panel (inline in Header)
 ├── TimezoneList.tsx ← controlled by entries/setEntries from App; renders in entries order inside a dnd-kit DndContext (sorting enabled only in edit mode: grip to drag, minus to remove)
