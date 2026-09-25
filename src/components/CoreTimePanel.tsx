@@ -281,7 +281,9 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
     overlap: overlapOf(row.entryId, row.included),
     included: row.included,
     isBaseline: entryOf(row.entryId)?.timezone === referenceTimezone,
-    isOff: row.blocks.every((block) => !block),
+    // From core, not from the blocks: the axis can graze another day's
+    // working hours, which left a city that's off today without its tag.
+    isOff: row.offToday,
     closestTime: closestTimeOf(row.entryId)?.localTime ?? null,
     isBottleneck: closest?.bottleneckEntryIds.includes(row.entryId) ?? false,
   }));

@@ -25,6 +25,10 @@ export interface CoreTimeRow {
   // panel can show it dimmed rather than hide it, but it takes no part in
   // the overlap or the conclusion.
   included: boolean;
+  // Not a work day for this entry at referenceDate — the same test the
+  // conclusion's offEntryIds come from. Not derivable from `blocks`: the
+  // axis can graze yesterday's or tomorrow's working hours (§5.3).
+  offToday: boolean;
   blocks: boolean[];
   localDate: string;
   crossesDay: boolean;
@@ -155,7 +159,12 @@ function workWindowPosition(
   return { deviationMinutes: 0, direction: null };
 }
 
-function buildRow(entry: Entry, settings: AppSettings, slotInstants: Date[]): CoreTimeRow {
+function buildRow(
+  entry: Entry,
+  settings: AppSettings,
+  slotInstants: Date[],
+  referenceDate: Date
+): CoreTimeRow {
   const blocks = slotInstants.map(
     (instant) => workWindowPosition(entry, settings, instant)?.deviationMinutes === 0
   );
@@ -165,7 +174,14 @@ function buildRow(entry: Entry, settings: AppSettings, slotInstants: Date[]): Co
     (instant) => localDateKey(entry.timezone, instant) !== localDate
   );
 
-  return { entryId: entry.id, included: entry.includeInCoreTime, blocks, localDate, crossesDay };
+  return {
+    entryId: entry.id,
+    included: entry.includeInCoreTime,
+    offToday: !isOnWorkdayToday(entry, settings, referenceDate),
+    blocks,
+    localDate,
+    crossesDay,
+  };
 }
 
 // Intersection of every row's working slots, collapsed into contiguous ranges.
@@ -265,7 +281,7 @@ function findNextOverlap(
     const { year, month, day } = addLocalCalendarDays(referenceTimezone, referenceDate, daysFromToday);
     const dayAnchor = new Date(localMidnightUtcMillis(referenceTimezone, year, month, day));
     const slotInstants = buildSlotInstants(referenceTimezone, dayAnchor);
-    const rows = entries.map((entry) => buildRow(entry, settings, slotInstants));
+    const rows = entries.map((entry) => buildRow(entry, settings, slotInstants, dayAnchor));
     const overlap = computeOverlapRanges(rows);
 
     if (overlap.length > 0) {
@@ -320,9 +336,9 @@ function computeConclusion(
   if (entries.length === 0) return { status: 'NO_ENTRIES' };
   if (overlap.length > 0) return { status: 'OVERLAP' };
 
-  const offEntryIds = entries
-    .filter((entry) => !isOnWorkdayToday(entry, settings, referenceDate))
-    .map((entry) => entry.id);
+  // From the rows, so the panel's per-row Off tag and this list can't
+  // disagree.
+  const offEntryIds = rows.filter((row) => row.offToday).map((row) => row.entryId);
 
   if (offEntryIds.length === entries.length) {
     return {
@@ -378,7 +394,7 @@ export function coreTime({ entries, settings, referenceDate }: CoreTimeInput): C
     refTime: formatHHMM(slot * MINUTES_PER_SLOT),
   }));
 
-  const rows = entries.map((entry) => buildRow(entry, settings, slotInstants));
+  const rows = entries.map((entry) => buildRow(entry, settings, slotInstants, referenceDate));
   const includedEntries = entries.filter((entry) => entry.includeInCoreTime);
   const includedRows = rows.filter((row) => row.included);
   const overlap = computeOverlapRanges(includedRows);

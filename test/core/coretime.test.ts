@@ -477,6 +477,24 @@ describe('coreTime — §5.3 off-day states', () => {
     });
   });
 
+  it("a row's offToday matches offEntryIds even when the axis grazes another day's hours", () => {
+    const { shanghai, boston, tokyo, kathmandu, bangkok } = asiaAndBoston();
+    const result = coreTime({
+      entries: [shanghai, boston, tokyo, kathmandu, bangkok],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: MONDAY_MORNING_JST,
+    });
+
+    const bostonRow = result.rows.find((row) => row.entryId === boston.id)!;
+    // 22:00–23:30 on the Monday JST axis is Monday 09:00–10:30 in Boston:
+    // working blocks, although Boston is off today (it's Sunday there now).
+    expect(bostonRow.blocks.some(Boolean)).toBe(true);
+    expect(bostonRow.offToday).toBe(true);
+    expect(result.rows.filter((row) => row.offToday).map((row) => row.entryId)).toEqual([
+      boston.id,
+    ]);
+  });
+
   it("PARTIAL_OFF's working overlap is empty when the working cities don't line up either", () => {
     // Saturday: Tokyo is off; Shanghai (works Saturdays) and New York (still
     // Friday) are working, 12h apart.
