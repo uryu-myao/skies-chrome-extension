@@ -66,7 +66,14 @@ const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const effectiveTimezone = settings.referenceTimezone ?? getSystemTimezone();
-  const chipEntry = entries.find((entry) => entry.timezone === effectiveTimezone);
+  // System is named after the system zone itself, never after a list entry
+  // that happens to share it — otherwise picking System next to a "Tsu"
+  // (Asia/Tokyo) entry still read "Tsu", and the choice looked ignored. An
+  // entry's label only when an entry was picked.
+  const chipEntry =
+    settings.referenceTimezone === null
+      ? undefined
+      : entries.find((entry) => entry.timezone === settings.referenceTimezone);
   const chipCityLabel = chipEntry?.label ?? friendlyZoneName(effectiveTimezone);
   const chipTime = localHHMM(effectiveTimezone, chipNow);
 
@@ -328,6 +335,7 @@ const Header: React.FC<HeaderProps> = ({
                   className={`header-tz-chip__option ${
                     settings.referenceTimezone === null ? 'active' : ''
                   }`}
+                  aria-pressed={settings.referenceTimezone === null}
                   onClick={() => selectReferenceTimezone(null)}>
                   System timezone
                   <span className="header-tz-chip__option-sub">
@@ -344,6 +352,7 @@ const Header: React.FC<HeaderProps> = ({
                     className={`header-tz-chip__option ${
                       settings.referenceTimezone === option.timezone ? 'active' : ''
                     }`}
+                    aria-pressed={settings.referenceTimezone === option.timezone}
                     onClick={() => selectReferenceTimezone(option.timezone)}>
                     {option.label}
                   </button>

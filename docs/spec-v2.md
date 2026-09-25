@@ -464,14 +464,26 @@ export async function isPro() { ... }
 
 ### 9.1 头部
 
-头部左侧是一个基准时区 chip:`[logo 22px][城市名][HH:MM][⌄]`。城市名与时刻取自
-`settings.referenceTimezone`(为 `null` 时取系统时区);若该时区恰好匹配某个已添加
-条目,取该条目的 `label`,否则从 IANA id 派生一个可读名(取 `/` 后半段,`_` 替换为空格)。
-点击展开一个下拉列表,可选「System timezone」或任一已添加条目的时区(按 timezone 去重)
-作为新的基准;下方城市列表与 Core Time 轴据此立即重算(两者本来就读
-`settings.referenceTimezone`,切换后自动生效,无需额外联动代码)。chip 背景色随该
-基准城市当前的昼夜状态变化,复用卡片已有的天空渐变色板(`--tz-c0/-c1/-c2`,
-`night / dawn / day / twilight` 四态),不引入新配色。
+头部左侧是一个基准时区 chip:`[logo 22px][城市名][HH:MM][⌄]`。时刻取自
+`settings.referenceTimezone`(为 `null` 时取系统时区)。
+
+**城市名的优先级**:
+
+- **选了 System(`referenceTimezone` 为 `null`)时,一律用系统时区 IANA id 派生的名称**
+  (取 `/` 后半段,`_` 替换为空格:`Asia/Tokyo` → `Tokyo`),**不匹配任何条目的 label** ——
+  即使列表里有同一时区的条目。否则列表里有 Tsu(`Asia/Tokyo`)时,选 System 后 chip 仍显示
+  `Tsu`,和选 Tsu 看起来完全一样,用户得不到选择已生效的反馈。
+- **只有用户选了某个条目时,才显示该条目的 `label`**。
+- 选了某个时区、但列表里已没有该时区的条目(例如该城市已被删除)时,同样用 IANA id 派生的名称。
+
+System 与同时区条目并不等价:System 跟随电脑的时区(出差时会变),选条目则固定在该时区。
+
+点击展开一个下拉列表,可选「System timezone」(副标题为系统时区的派生名)或任一已添加条目的
+时区作为新的基准。条目按 timezone 去重:同一时区只列出列表中第一个条目。当前选中项蓝底高亮,
+并以 `aria-pressed` 标记。选定后,下方城市列表与 Core Time 轴据此立即重算(两者本来就读
+`settings.referenceTimezone`,切换后自动生效,无需额外联动代码)。chip 背景与头部其它
+按钮相同(`--color-primary`,悬停 `--color-hover`),不随基准城市的昼夜变色 —— 曾经复用
+卡片的天空渐变,但一个整天变色的胶囊在按钮行里显得突兀。
 
 右侧精简为三个动作:`+ 添加` / `⏱ 时间转换` / `⚙ 设置`。
 `12/24` 移入设置页,原胶囊整体删除(排序已整体移除,见 §3.4)。
