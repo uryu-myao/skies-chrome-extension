@@ -87,12 +87,74 @@
   }
 
   &__band {
+    // Containing block for the closest marker, which is placed on the grid.
+    position: relative;
     padding: 4px 14px 12px;
     display: grid;
     grid-template-columns: minmax(46px, max-content) 1fr;
     align-items: center;
     column-gap: 10px;
     row-gap: 4px;
+
+    // NO_OVERLAP_TODAY adds each city's local time at the closest slot.
+    &--closest {
+      grid-template-columns: minmax(46px, max-content) 1fr max-content;
+    }
+  }
+
+  // Sized to the widest time, bold included, so it never clips.
+  &__row-time {
+    font-family: 'Lato', sans-serif;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    opacity: 0.5;
+
+    &--bottleneck {
+      font-weight: 700;
+      opacity: 1;
+    }
+  }
+
+  // Positioned against the track column across every track row (an
+  // absolutely positioned grid child uses its grid area as containing block).
+  &__marker-layer {
+    position: absolute;
+    // Both lines explicit: for an absolutely positioned item an `auto` end
+    // line is the container's padding edge, which would take in the time
+    // column too.
+    grid-column: 2 / 3;
+    top: -4px;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+  }
+
+  // A point, not a region: one continuous neutral line with a cap, where the
+  // overlap outline is an orange box per row. Orange stays "these hours work
+  // for everyone"; the closest slot is by definition not that.
+  &__marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1.5px;
+    transform: translateX(-50%);
+    border-radius: 1px;
+    background: var(--color-font-timezone);
+    opacity: 0.85;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: 50%;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: inherit;
+      transform: translateX(-50%);
+    }
   }
 
   &__row {

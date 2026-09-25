@@ -167,12 +167,9 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
         return (
           <div className="core-time-panel__conclusion">
             <span className="core-time-panel__headline">No overlap today</span>
-            <span className="core-time-panel__detail">
-              Closest — {closest.refTime} yours
-              {closest.perEntry.map((p) => (
-                <span key={p.entryId}> / {p.localTime} {labelOf(p.entryId)}'s</span>
-              ))}
-            </span>
+            {/* Only the reference time here; each city's own local time is on
+                its band row when expanded, beside the marker. */}
+            <span className="core-time-panel__detail">Closest — {closest.refTime} yours</span>
             {directionText && <span className="core-time-panel__muted-line">{directionText}</span>}
           </div>
         );
@@ -254,6 +251,13 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
     return conclusion.includedIds.includes(entryId) ? conclusion.overlap : [];
   };
 
+  // NO_OVERLAP_TODAY: a marker at the closest slot runs through every row,
+  // so who's inside their day and who isn't reads straight off the band;
+  // a third column gives each city's local time there, the bottleneck's
+  // emphasised. Same `closest` the collapsed line reads.
+  const closest = result.conclusion.status === 'NO_OVERLAP_TODAY' ? result.conclusion.closest : null;
+  const closestTimeOf = (entryId: string) => closest?.perEntry.find((p) => p.entryId === entryId);
+
   const rows = result.rows.map((row) => ({
     key: row.entryId,
     label: labelOf(row.entryId),
@@ -262,6 +266,8 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
     included: row.included,
     isBaseline: entryOf(row.entryId)?.timezone === referenceTimezone,
     isOff: row.blocks.every((block) => !block),
+    closestTime: closestTimeOf(row.entryId)?.localTime ?? null,
+    isBottleneck: closest?.bottleneckEntryIds.includes(row.entryId) ?? false,
   }));
 
   return (
@@ -290,7 +296,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
       </button>
 
       {showExpanded && canExpand && (
-        <div className="core-time-panel__band">
+        <div className={`core-time-panel__band ${closest ? 'core-time-panel__band--closest' : ''}`}>
           {rows.map((row) => (
             <div
               className={`core-time-panel__row ${row.isOff ? 'core-time-panel__row--off' : ''} ${
@@ -344,6 +350,17 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
                   />
                 ))}
               </div>
+              {/* Always rendered in closest mode, empty for an excluded row:
+                  rows are display:contents, so a missing cell would shift the
+                  next row's label into this column. */}
+              {closest && (
+                <span
+                  className={`core-time-panel__row-time ${
+                    row.isBottleneck ? 'core-time-panel__row-time--bottleneck' : ''
+                  }`}>
+                  {row.closestTime}
+                </span>
+              )}
             </div>
           ))}
           <div className="core-time-panel__scale-row">
@@ -353,7 +370,24 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
                 <span key={hour}>{hour}</span>
               ))}
             </div>
+            {closest && <span aria-hidden="true" />}
           </div>
+          {closest && (
+            // One element spanning every track row, so the line is continuous
+            // through the row gaps rather than a tick per row — a tick per row
+            // would look like the overlap outline's edges. Centred in the slot:
+            // at its start it would sit exactly on a block edge whenever a
+            // city starts or stops there, and read as neither in nor out.
+            <span
+              className="core-time-panel__marker-layer"
+              style={{ gridRow: `1 / span ${rows.length}` }}
+              aria-hidden="true">
+              <span
+                className="core-time-panel__marker"
+                style={{ left: `${((closest.slot + 0.5) / SLOTS_PER_DAY) * 100}%` }}
+              />
+            </span>
+          )}
         </div>
       )}
 

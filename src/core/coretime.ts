@@ -46,6 +46,7 @@ export interface CoreTimeClosestPerEntry {
 }
 
 export interface CoreTimeClosest {
+  slot: number;
   refTime: string;
   perEntry: CoreTimeClosestPerEntry[];
   // The largest single deviation at refTime — the bottleneck entry's. Always
@@ -225,6 +226,7 @@ function computeClosest(
   const gapMinutes = Math.max(...best.perEntry.map((p) => p.deviationMinutes));
 
   return {
+    slot: best.slot,
     refTime: formatHHMM(best.slot * MINUTES_PER_SLOT),
     perEntry: best.perEntry,
     gapMinutes,

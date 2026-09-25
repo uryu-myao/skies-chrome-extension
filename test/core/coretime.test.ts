@@ -158,7 +158,8 @@ describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
     const { conclusion } = result;
     expect(conclusion.status).toBe('NO_OVERLAP_TODAY');
     if (conclusion.status !== 'NO_OVERLAP_TODAY') return;
-    const slot = slotOf(conclusion.closest.refTime);
+    const { slot } = conclusion.closest;
+    expect(slot).toBe(slotOf(conclusion.closest.refTime));
 
     // This pair used to land on 07:00 JST with Boston at exactly 18:00 —
     // deviation 0 but not a working block.
