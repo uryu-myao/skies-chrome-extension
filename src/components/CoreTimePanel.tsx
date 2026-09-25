@@ -144,19 +144,24 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
 
       case 'NO_OVERLAP_TODAY': {
         const { closest } = conclusion;
+        const gap = formatHoursDiff(closest.gapMinutes);
         // The hint names the bottleneck — the entry furthest outside its own
-        // day at the suggested time — not the reference zone.
-        const bottleneck = closest.perEntry.find((p) => p.entryId === closest.bottleneckEntryId);
-        const whose =
-          entryOf(closest.bottleneckEntryId)?.timezone === referenceTimezone
-            ? 'your'
-            : `${labelOf(closest.bottleneckEntryId)}'s`;
-
+        // day at the suggested time — not the reference zone. On a tie it
+        // gives a count instead: naming one would suggest excluding it fixes
+        // things, and it wouldn't.
         let directionText: string | null = null;
-        if (bottleneck?.direction === 'BEFORE_START') {
-          directionText = `${formatHoursDiff(closest.gapMinutes)} before ${whose} day starts`;
-        } else if (bottleneck?.direction === 'AFTER_END') {
-          directionText = `${formatHoursDiff(closest.gapMinutes)} after ${whose} day ends`;
+        if (closest.bottleneckEntryIds.length > 1) {
+          directionText = `${closest.bottleneckEntryIds.length} cities are ${gap} outside their work hours`;
+        } else {
+          const [bottleneckId] = closest.bottleneckEntryIds;
+          const bottleneck = closest.perEntry.find((p) => p.entryId === bottleneckId);
+          const whose =
+            entryOf(bottleneckId)?.timezone === referenceTimezone ? 'your' : `${labelOf(bottleneckId)}'s`;
+          if (bottleneck?.direction === 'BEFORE_START') {
+            directionText = `${gap} before ${whose} day starts`;
+          } else if (bottleneck?.direction === 'AFTER_END') {
+            directionText = `${gap} after ${whose} day ends`;
+          }
         }
 
         return (

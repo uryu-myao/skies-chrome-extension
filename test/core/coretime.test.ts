@@ -108,7 +108,7 @@ function asiaAndBoston() {
 }
 
 describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
-  it('closest avoids the end boundary; tied bottlenecks name the first in list order', () => {
+  it('closest avoids the end boundary; a tie returns every bottleneck, in list order', () => {
     // Two cities on US Eastern, so dropping either one alone still leaves
     // no overlap — no single outlier, this stays NO_OVERLAP_TODAY.
     const { shanghai, boston, tokyo, kathmandu, bangkok } = asiaAndBoston();
@@ -128,9 +128,10 @@ describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
     // here ends at 18:00, and none sits on it — 18:00 used to score 0.
     expect(closest.refTime).toBe('18:30');
     expect(closest.perEntry.map((p) => p.localTime)).not.toContain('18:00');
-    // Boston and New York are both 210 min out; Boston is listed first.
+    // Boston and New York are both 210 min out: neither alone is the
+    // bottleneck. Tokyo is out too (60 min) but not at the max.
     expect(closest.gapMinutes).toBe(210);
-    expect(closest.bottleneckEntryId).toBe(boston.id);
+    expect(closest.bottleneckEntryIds).toEqual([boston.id, newYork.id]);
     expect(closest.perEntry.find((p) => p.entryId === boston.id)).toMatchObject({
       localTime: '05:30',
       deviationMinutes: 210,
@@ -146,10 +147,8 @@ describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
   });
 
   it('a deviation of 0 means exactly a working block — rows and closest share one definition', () => {
-    const entries = [
-      createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' }),
-      createEntry({ timezone: 'America/New_York', label: 'Boston' }),
-    ];
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const entries = [tokyo, createEntry({ timezone: 'America/New_York', label: 'Boston' })];
     const result = coreTime({
       entries,
       settings: settingsWithReference('Asia/Tokyo'),
@@ -169,6 +168,8 @@ describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
       expect(p.deviationMinutes === 0).toBe(row.blocks[slot]);
     }
     expect(conclusion.closest.gapMinutes).toBeGreaterThan(0);
+    // A single bottleneck: Tokyo, 150 min before its day starts.
+    expect(conclusion.closest.bottleneckEntryIds).toEqual([tokyo.id]);
   });
 
   it('bottleneck after its day ends: the outnumbered side stays late', () => {
@@ -192,7 +193,7 @@ describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
     // 09:00 JST = 20:00 EDT the evening before. A meeting there runs
     // 20:00–20:30, 150 min past New York's 18:00 end.
     expect(conclusion.closest.refTime).toBe('09:00');
-    expect(conclusion.closest.bottleneckEntryId).toBe(newYork.id);
+    expect(conclusion.closest.bottleneckEntryIds).toEqual([newYork.id, toronto.id]);
     expect(conclusion.closest.gapMinutes).toBe(150);
     expect(conclusion.closest.perEntry.find((p) => p.entryId === newYork.id)).toMatchObject({
       localTime: '20:00',

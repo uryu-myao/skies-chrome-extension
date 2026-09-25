@@ -52,7 +52,10 @@ export interface CoreTimeClosest {
   // > 0: a slot where every deviation is 0 is an overlap slot, and then the
   // conclusion is OVERLAP, not NO_OVERLAP_TODAY.
   gapMinutes: number;
-  bottleneckEntryId: string;
+  // Every entry at gapMinutes, in list order. More than one on a tie — and
+  // then none of them alone is "the" bottleneck: excluding one wouldn't
+  // close the gap, so the UI must not name just one.
+  bottleneckEntryIds: string[];
 }
 
 export interface CoreTimeNextOverlap {
@@ -182,7 +185,7 @@ function computeOverlapRanges(rows: CoreTimeRow[]): CoreTimeOverlapRange[] {
 // own working window. Ties broken by earliest slot. Null when no slot has a
 // finite total (e.g. an entry with no valid work day anywhere on this axis).
 // The bottleneck is the entry with the largest deviation at that slot; on a
-// tie, the first in list order.
+// tie, all of them.
 function computeClosest(
   entries: Entry[],
   settings: AppSettings,
@@ -219,15 +222,15 @@ function computeClosest(
 
   if (best === null) return null;
 
-  const bottleneck = best.perEntry.reduce((max, p) =>
-    p.deviationMinutes > max.deviationMinutes ? p : max
-  );
+  const gapMinutes = Math.max(...best.perEntry.map((p) => p.deviationMinutes));
 
   return {
     refTime: formatHHMM(best.slot * MINUTES_PER_SLOT),
     perEntry: best.perEntry,
-    gapMinutes: bottleneck.deviationMinutes,
-    bottleneckEntryId: bottleneck.entryId,
+    gapMinutes,
+    bottleneckEntryIds: best.perEntry
+      .filter((p) => p.deviationMinutes === gapMinutes)
+      .map((p) => p.entryId),
   };
 }
 
