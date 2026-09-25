@@ -108,10 +108,27 @@
       }
     }
 
-    // Excluded from Core Time by the user: kept in place, dimmer than an
-    // off day so the two read differently.
+    // Excluded from Core Time by the user: kept in place so it can be tapped
+    // back in, which means the name must stay readable. On #202025 white
+    // text measures 2.3:1 at 25% and 3.2:1 at 35%; 50% is 5.1:1, past AA
+    // for 12px. The baseline blue would drop to 3.1:1 at 50%, so an
+    // excluded row goes neutral (its YOU tag still says whose it is).
+    // Told apart from an off day by the strike-through, not by being darker.
     &--excluded {
-      .core-time-panel__row-label,
+      .core-time-panel__row-label {
+        color: var(--color-font-timezone);
+        opacity: 0.5;
+
+        &:hover {
+          opacity: 0.8;
+        }
+      }
+
+      .core-time-panel__row-name,
+      .core-time-panel__row-label:hover .core-time-panel__row-name {
+        text-decoration: line-through;
+      }
+
       .core-time-panel__track {
         opacity: 0.25;
       }
