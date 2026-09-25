@@ -48,7 +48,7 @@ Everything is in the popup page's `localStorage` — no `chrome.storage`. `local
 | ------------------------- | -------------------------------------- |
 | `timemate.data.v2`        | `AppData` — `{version, entries, groups, settings}` (see `src/core/types.ts`). Each entry's `order` is its list position (written by `saveAppData`, sorted on by `loadAppData`). `entry.pinned` and `settings.sortOrder` are deprecated — read only once, by `freezeDisplayOrder()`, to carry the old pinned-first/sorted order into `order` |
 | `timemate.backup_v1`      | One-time pre-migration snapshot of the v1 data, written before v2 and never overwritten (`src/core/migrate.ts`) |
-| `timemate.timezones.v1`, `.pinned.v1`, `.sort-mode.v1`, `.hour-format.v1` | v1 data — read by `migrate()` when there is no v2 data; never modified or deleted |
+| `timemate.timezones.v1`, `.pinned.v1`, `.sort-mode.v1`, `.hour-format.v1` | v1 data — read by `migrate()` when there is no v2 data, **or when the v2 data is what 2.1.0 left behind** (entries without `order`: 2.1.0 wrote v2 once on first open, then kept using these keys — so they are newer). Sort mode and 12/24 are plain strings, not JSON. Never modified or deleted. Any migration change must be checked against all four starting states in spec §3.5 (fresh install / pure v1 / 2.1.0 v2 / 3.0.0 v2), not only a cleared profile |
 | `timemate.sun.<zone>.<date>` | Sunrise/sunset cache for the card's sky colours, one per zone per day (`Timezone.tsx`; yesterday's is evicted) |
 | `timemate.swipe-hint-shown.v1` | Legacy — set by the removed swipe-hint animation; no longer read or written, left in place |
 
