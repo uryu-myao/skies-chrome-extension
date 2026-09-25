@@ -1,3 +1,4 @@
+import { friendlyZoneName } from './tz';
 import type { AppData, AppSettings, Entry, WorkDays, WorkHours } from './types';
 
 // The `timemate.` prefix predates the rename to Skies and must stay —
@@ -10,6 +11,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showSeconds: false,
   sortOrder: 'manual',
   referenceTimezone: null,
+  referenceEntryId: null,
   defaultWorkHours: { start: 9, end: 18 },
   defaultWorkDays: [1, 2, 3, 4, 5],
   coreTimePanel: 'always',
@@ -63,6 +65,48 @@ export function resetEntryLabel(entry: Entry): Entry {
 
 export function toggleIncludeInCoreTime(entry: Entry): Entry {
   return { ...entry, includeInCoreTime: !entry.includeInCoreTime };
+}
+
+export type ReferenceSelection =
+  | { kind: 'system' }
+  | { kind: 'entry'; entryId: string }
+  // A zone is set but no entry in the list carries it any more.
+  | { kind: 'none' };
+
+export interface ReferenceChip {
+  label: string;
+  selection: ReferenceSelection;
+}
+
+// The reference chip's name and the menu's selected option — identity: "which
+// did I pick". Deliberately not what Base / YOU follow: those mark every entry
+// in the reference zone, because they say how far a row is from the
+// reference, and Boston and New York are 0h apart (spec §9.1, §9.2).
+//
+// - System (referenceTimezone null): the system zone's own name, never a
+//   list entry's label, even one in the same zone — or picking System next to
+//   a same-zone "Tsu" would still read "Tsu" and look ignored.
+// - A picked entry: its label, found by referenceEntryId.
+// - That entry gone (removed), or data from before referenceEntryId: the
+//   first entry left in the zone, then the zone's own name.
+export function resolveReferenceChip(
+  entries: Entry[],
+  settings: AppSettings,
+  systemTimezone: string
+): ReferenceChip {
+  const zone = settings.referenceTimezone;
+  if (zone === null) {
+    return { label: friendlyZoneName(systemTimezone), selection: { kind: 'system' } };
+  }
+
+  const picked = entries.find(
+    (entry) => entry.id === settings.referenceEntryId && entry.timezone === zone
+  );
+  const entry = picked ?? entries.find((candidate) => candidate.timezone === zone);
+  if (!entry) {
+    return { label: friendlyZoneName(zone), selection: { kind: 'none' } };
+  }
+  return { label: entry.label, selection: { kind: 'entry', entryId: entry.id } };
 }
 
 export interface ResolvedWorkHours extends WorkHours {

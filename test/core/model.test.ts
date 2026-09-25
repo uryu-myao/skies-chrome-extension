@@ -8,6 +8,7 @@ import {
   resetEntryLabel,
   resolveWorkDays,
   resolveWorkHours,
+  resolveReferenceChip,
   saveAppData,
   toggleIncludeInCoreTime,
 } from '../../src/core/model';
@@ -87,6 +88,79 @@ describe('renameEntry / resetEntryLabel', () => {
   it('reset on a never-renamed entry is a no-op on the label', () => {
     const entry = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
     expect(resetEntryLabel(entry)).toEqual(entry);
+  });
+});
+
+describe('resolveReferenceChip — the chip name and selected option (§9.1)', () => {
+  const tsu = createEntry({ id: 'tsu', timezone: 'Asia/Tokyo', label: 'Tsu' });
+  const boston = createEntry({ id: 'boston', timezone: 'America/New_York', label: 'Boston' });
+  const newYork = createEntry({ id: 'ny', timezone: 'America/New_York', label: 'New York' });
+  const entries = [tsu, boston, newYork];
+  const SYSTEM = 'Asia/Tokyo';
+
+  const pick = (entry: Entry | null): AppSettings => ({
+    ...DEFAULT_SETTINGS,
+    referenceTimezone: entry?.timezone ?? null,
+    referenceEntryId: entry?.id ?? null,
+  });
+
+  it("System is named after the system zone, not a same-zone entry's label", () => {
+    expect(resolveReferenceChip(entries, pick(null), SYSTEM)).toEqual({
+      label: 'Tokyo',
+      selection: { kind: 'system' },
+    });
+  });
+
+  it('a picked entry shows its own label, even when an earlier entry shares its zone', () => {
+    expect(resolveReferenceChip(entries, pick(newYork), SYSTEM)).toEqual({
+      label: 'New York',
+      selection: { kind: 'entry', entryId: newYork.id },
+    });
+    expect(resolveReferenceChip(entries, pick(boston), SYSTEM)).toEqual({
+      label: 'Boston',
+      selection: { kind: 'entry', entryId: boston.id },
+    });
+  });
+
+  it('picking the same-zone entry is distinct from System', () => {
+    expect(resolveReferenceChip(entries, pick(tsu), SYSTEM)).toEqual({
+      label: 'Tsu',
+      selection: { kind: 'entry', entryId: tsu.id },
+    });
+  });
+
+  it('the picked entry removed: falls back to the next entry left in the zone', () => {
+    expect(resolveReferenceChip([tsu, boston], pick(newYork), SYSTEM)).toEqual({
+      label: 'Boston',
+      selection: { kind: 'entry', entryId: boston.id },
+    });
+  });
+
+  it('no entry left in the zone: the zone’s own name, nothing selected', () => {
+    expect(resolveReferenceChip([tsu], pick(newYork), SYSTEM)).toEqual({
+      label: 'New York',
+      selection: { kind: 'none' },
+    });
+    // Tsu picked, then removed: the chip says "Tokyo", not the gone label.
+    expect(resolveReferenceChip([], pick(tsu), SYSTEM).label).toBe('Tokyo');
+  });
+
+  it('data saved before referenceEntryId: the first entry in the zone, as before', () => {
+    const legacy: AppSettings = { ...DEFAULT_SETTINGS, referenceTimezone: 'America/New_York' };
+    delete legacy.referenceEntryId;
+    expect(resolveReferenceChip(entries, legacy, SYSTEM)).toEqual({
+      label: 'Boston',
+      selection: { kind: 'entry', entryId: boston.id },
+    });
+  });
+
+  it('an id that no longer matches the zone is ignored', () => {
+    const stale: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      referenceTimezone: 'America/New_York',
+      referenceEntryId: tsu.id,
+    };
+    expect(resolveReferenceChip(entries, stale, SYSTEM).label).toBe('Boston');
   });
 });
 

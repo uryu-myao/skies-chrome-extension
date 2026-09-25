@@ -116,6 +116,14 @@ export function getSystemTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
+// A readable name from an IANA id — the last segment, underscores as
+// spaces: "Asia/Tokyo" → "Tokyo", "America/Argentina/Buenos_Aires" →
+// "Buenos Aires". Same convention as an entry's default label.
+export function friendlyZoneName(zone: string): string {
+  const last = zone.split('/').pop() ?? zone;
+  return last.replace(/_/g, ' ');
+}
+
 // UTC instant of a given local wall-clock time for Y-M-D in `timezone`.
 // Two-step guess-and-correct: offsetMinutes is evaluated at a nearby guess
 // instant, which is exact except in the rare case a DST transition falls

@@ -49,7 +49,9 @@
     showSeconds: false,
     sortOrder: "manual",       // 【废弃】manual | offset | name(由 v1 的 newest | time | alphabet
                                // 映射而来,见 §3.2);仅迁移时读取一次,见 §3.4
-    referenceTimezone: null,   // null = 使用系统时区
+    referenceTimezone: null,   // null = 使用系统时区;所有时间计算只读它
+    referenceEntryId: null,    // 可选。用户在基准 chip 中选了哪个条目,只用于 chip 的名称与选中态
+                               // (§9.1);旧数据没有该字段,按时区回退
     defaultWorkHours: { start: 9, end: 18 },
     defaultWorkDays: [1, 2, 3, 4, 5],
     coreTimePanel: "always",   // always | collapsed | hidden
@@ -473,14 +475,33 @@ export async function isPro() { ... }
   (取 `/` 后半段,`_` 替换为空格:`Asia/Tokyo` → `Tokyo`),**不匹配任何条目的 label** ——
   即使列表里有同一时区的条目。否则列表里有 Tsu(`Asia/Tokyo`)时,选 System 后 chip 仍显示
   `Tsu`,和选 Tsu 看起来完全一样,用户得不到选择已生效的反馈。
-- **只有用户选了某个条目时,才显示该条目的 `label`**。
-- 选了某个时区、但列表里已没有该时区的条目(例如该城市已被删除)时,同样用 IANA id 派生的名称。
+- **只有用户选了某个条目时,才显示该条目的 `label`**:按 `settings.referenceEntryId` 找到用户选的
+  那一个,而不是「该时区的第一个条目」—— Boston 与 New York 同为 `America/New_York`,只存时区
+  就分不出选的是谁。
+- 选中的条目被删除后:回退到列表中同一时区剩下的第一个条目,再回退到 IANA id 派生的名称。
+  `referenceEntryId` 不随删除清空,Undo 放回后名称随之恢复。没有 `referenceEntryId` 的旧数据
+  同样按时区取第一个条目,与改动前一致。
+
+判定写在 `core/model.ts` 的 `resolveReferenceChip()`(纯函数,有单测),返回名称与选中项。
 
 System 与同时区条目并不等价:System 跟随电脑的时区(出差时会变),选条目则固定在该时区。
 
-点击展开一个下拉列表,可选「System timezone」(副标题为系统时区的派生名)或任一已添加条目的
-时区作为新的基准。条目按 timezone 去重:同一时区只列出列表中第一个条目。当前选中项蓝底高亮,
-并以 `aria-pressed` 标记。选定后,下方城市列表与 Core Time 轴据此立即重算(两者本来就读
+点击展开一个下拉列表:「System timezone」(副标题为系统时区的派生名),分隔线下**列出全部条目,
+不按时区去重** —— 用户按城市名认条目,自己添加的城市在下拉里消失会被当成 bug。列表最多 10 个
+条目(§8),下拉最高 240px、超出滚动,不需要分组。选条目时同时保存其时区
+(`referenceTimezone`)与 id(`referenceEntryId`);选 System 时两者都清为 `null`。当前选中项蓝底
+高亮,并以 `aria-pressed` 标记。
+
+**chip 名称与 Base / YOU 跟随不同的值,这是有意设计,不是不一致**:
+
+- **chip 的名称回答「我选了哪个城市」**(身份)—— 跟随 `referenceEntryId`。
+- **卡片的 `Base`(§9.2)与 Core Time 的 `YOU` / `your` / `yours`(§5.3、§9.3)回答「这一行与基准
+  差多少」**(关系)—— 跟随 `referenceTimezone`。基准为 New York 时,Boston 同样是 `Base` / `YOU`:
+  两者零时差,只标其中一个会让用户以为它们之间有区别。
+
+不要把 Base / YOU 改成跟随选中的条目,也不要把 chip 名称改成跟随时区。
+
+选定后,下方城市列表与 Core Time 轴据此立即重算(两者本来就读
 `settings.referenceTimezone`,切换后自动生效,无需额外联动代码)。chip 背景与头部其它
 按钮相同(`--color-primary`,悬停 `--color-hover`),不随基准城市的昼夜变色 —— 曾经复用
 卡片的天空渐变,但一个整天变色的胶囊在按钮行里显得突兀。
@@ -524,6 +545,9 @@ Base   UTC+09                            TUE | 22 SEP    ← 基准时区对应�
 - **格式**:整点 `+2h` / `−13h`;非整点写成 `+3:30h` / `+5:45h`,不用小数。
 - 与基准时区 **IANA id 相同**的条目显示 `Base`,不显示 `+0h`。id 不同但此刻偏移恰好相同的条目
   (如首尔 vs 东京)显示 `0h` —— 两者在 DST 期间可能分开,不能冒充基准。
+- **`Base` 跟随基准时区,不跟随 chip 中选中的条目。** 同一时区的条目都显示 `Base`:基准为 New York
+  时 Boston 也是 `Base`。`Base` 表达的是这一行与基准的时差(关系),两者零时差;chip 的名称表达的
+  是选了哪个城市(身份)。两者跟随不同的值是有意设计,见 §9.1。
 - **UTC 偏移保留,降为次级**(更小、更暗):`UTC+09` / `UTC−04` / `UTC+05:45`,零偏移为 `UTC`。
   它是无歧义的可信度锚点,不删除。不显示时区缩写(§4.2)。
 - **右侧星期 + 日期对所有条目照常显示**,不做「仅在与基准不同日时显示」的条件隐藏,**颜色也始终不变**。

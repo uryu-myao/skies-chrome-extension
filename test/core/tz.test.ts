@@ -3,6 +3,7 @@ import {
   formatHHMM,
   formatRelativeOffset,
   formatUtcOffset,
+  friendlyZoneName,
   localDateKey,
   localDayDelta,
   localMidnightUtcMillis,
@@ -194,5 +195,13 @@ describe('localDayDelta', () => {
     const at = new Date('2026-06-15T10:30:00Z');
     expect(localDayDelta('Pacific/Kiritimati', 'Pacific/Niue', at)).toBe(2);
     expect(localDayDelta('Pacific/Niue', 'Pacific/Kiritimati', at)).toBe(-2);
+  });
+});
+
+describe('friendlyZoneName', () => {
+  it('takes the last segment of the IANA id, underscores as spaces', () => {
+    expect(friendlyZoneName('Asia/Tokyo')).toBe('Tokyo');
+    expect(friendlyZoneName('America/Argentina/Buenos_Aires')).toBe('Buenos Aires');
+    expect(friendlyZoneName('UTC')).toBe('UTC');
   });
 });
