@@ -348,20 +348,23 @@
     gap: 3px;
   }
 
+  // Wraps rather than truncating: with every range listed ("00:00–07:00,
+  // 22:00–24:00") and labels up to 32 characters, an ellipsis would cut off
+  // exactly the range the line is there to give.
   &__headline {
     font-family: 'Poppins', serif;
     font-size: 12px;
     font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
   // App's primary accent blue (same token Settings uses for its active
   // segmented-control/day-toggle states) — orange read as too jarring here.
+  // The ranges stay together, so a wrap falls before them, not mid-range.
   &__headline-range {
     color: #9cb2e7;
     padding-left: 4px;
+    white-space: nowrap;
   }
 
   &__detail {
@@ -376,11 +379,6 @@
     font-size: 11px;
     font-weight: 400;
     opacity: 0.5;
-  }
-
-  &__muted {
-    opacity: 0.6;
-    padding-left: 6px;
   }
 
   // The PARTIAL_OVERLAP hint doubles as the exclude control.

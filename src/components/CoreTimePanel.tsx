@@ -39,6 +39,19 @@ function formatSlotTime(axis: { slot: number; refTime: string }[], slot: number)
   return slot >= axis.length ? '24:00' : axis[slot].refTime;
 }
 
+// Every range, in axis order (left to right on the band). A day that
+// crosses the reference midnight is two ranges — Boston on a Tokyo axis is
+// 00:00–07:00 (the tail of Boston's previous day) and 22:00–24:00 (the start
+// of today's) — so there's nothing to elide: "+1 more" hid which half.
+function formatRanges(
+  axis: { slot: number; refTime: string }[],
+  ranges: CoreTimeOverlapRange[]
+): string {
+  return ranges
+    .map((range) => `${formatSlotTime(axis, range.startSlot)}–${formatSlotTime(axis, range.endSlot)}`)
+    .join(', ');
+}
+
 // "4h" / "4.5h" for whole and half hours; quarter-hour zones (Kathmandu,
 // Chatham) get exact minutes rather than a rounded "0.8h".
 function formatHoursDiff(minutes: number): string {
@@ -130,14 +143,14 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
         return <span className="core-time-panel__headline">Add a city to compare</span>;
 
       case 'OVERLAP': {
-        const [first, ...rest] = result.overlap;
-        const range = `${formatSlotTime(result.axis, first.startSlot)}–${formatSlotTime(result.axis, first.endSlot)}`;
         const onlyIncluded = includedCount === 1 ? result.rows.find((row) => row.included) : undefined;
         const prefix = onlyIncluded ? labelOf(onlyIncluded.entryId) : 'Overlap';
         return (
           <span className="core-time-panel__headline">
-            {prefix} <span className="core-time-panel__headline-range">{range}</span>
-            {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
+            {prefix}{' '}
+            <span className="core-time-panel__headline-range">
+              {formatRanges(result.axis, result.overlap)}
+            </span>
           </span>
         );
       }
@@ -176,8 +189,6 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
       }
 
       case 'PARTIAL_OVERLAP': {
-        const [first, ...rest] = conclusion.overlap;
-        const range = `${formatSlotTime(result.axis, first.startSlot)}–${formatSlotTime(result.axis, first.endSlot)}`;
         // "you" when the outlier is the reference city, as in closest's
         // "yours" / "your day" — the user shouldn't have to remember which
         // city is them.
@@ -187,8 +198,9 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
           <div className="core-time-panel__conclusion">
             <span className="core-time-panel__headline">
               All but {isYou ? 'you' : excludedLabel} overlap{' '}
-              <span className="core-time-panel__headline-range">{range}</span>
-              {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
+              <span className="core-time-panel__headline-range">
+                {formatRanges(result.axis, conclusion.overlap)}
+              </span>
             </span>
             {/* The hint is itself the control — it has to work collapsed too,
                 where there are no city names to tap. */}
@@ -218,17 +230,15 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
         const verb = workingCount === 1 ? 'is' : 'are';
         // Names read fine up to two; past that a count keeps it one line.
         const who = workingCount >= 3 ? `${workingCount} cities` : joinLabels(workingLabels);
-        const [first, ...rest] = conclusion.workingOverlap;
         return (
           <div className="core-time-panel__conclusion">
             <span className="core-time-panel__headline">
               Only {who} {verb} working today
             </span>
-            {first && (
+            {conclusion.workingOverlap.length > 0 && (
               <span className="core-time-panel__detail">
                 {workingCount >= 3 ? `Those ${workingCount}` : 'They'} overlap{' '}
-                {formatSlotTime(result.axis, first.startSlot)}–{formatSlotTime(result.axis, first.endSlot)}
-                {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
+                {formatRanges(result.axis, conclusion.workingOverlap)}
               </span>
             )}
             {renderNextOverlap('Next full overlap', conclusion.nextOverlap)}
