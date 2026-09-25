@@ -88,6 +88,98 @@ describe('coreTime — §10.4 business cases', () => {
   });
 });
 
+// Friday 2026-09-25 15:00 JST — a work day in every city below, Boston
+// included (02:00 Friday EDT; Tokyo–Boston is 13h while the US is on DST).
+const FRIDAY_AFTERNOON_JST = new Date('2026-09-25T06:00:00Z');
+
+function slotOf(refTime: string): number {
+  const [hours, minutes] = refTime.split(':').map(Number);
+  return (hours * 60 + minutes) / 30;
+}
+
+describe('coreTime — closest (§5.3 NO_OVERLAP_TODAY)', () => {
+  it('five cities, one outlier: closest avoids the end boundary and names Boston as the bottleneck', () => {
+    const shanghai = createEntry({ timezone: 'Asia/Shanghai', label: 'Shanghai' });
+    const boston = createEntry({ timezone: 'America/New_York', label: 'Boston' });
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const kathmandu = createEntry({ timezone: 'Asia/Kathmandu', label: 'Kathmandu' });
+    const bangkok = createEntry({ timezone: 'Asia/Bangkok', label: 'Bangkok' });
+    const result = coreTime({
+      entries: [shanghai, boston, tokyo, kathmandu, bangkok],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: FRIDAY_AFTERNOON_JST,
+    });
+
+    const { conclusion } = result;
+    expect(conclusion.status).toBe('NO_OVERLAP_TODAY');
+    if (conclusion.status !== 'NO_OVERLAP_TODAY') return;
+    const { closest } = conclusion;
+
+    // Not 18:00: that is Tokyo's end, outside [09:00, 18:00), and used to
+    // score 0. 17:30, 18:00 and 18:30 now all total 270 min; earliest wins.
+    expect(closest.refTime).toBe('17:30');
+    // Every entry here ends at 18:00, so no local time may sit on it.
+    expect(closest.perEntry.map((p) => p.localTime)).not.toContain('18:00');
+    expect(closest.gapMinutes).toBe(270);
+    expect(closest.bottleneckEntryId).toBe(boston.id);
+    expect(closest.perEntry.find((p) => p.entryId === boston.id)).toMatchObject({
+      localTime: '04:30',
+      deviationMinutes: 270,
+      direction: 'BEFORE_START',
+    });
+  });
+
+  it('a deviation of 0 means exactly a working block — rows and closest share one definition', () => {
+    const entries = [
+      createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' }),
+      createEntry({ timezone: 'America/New_York', label: 'Boston' }),
+    ];
+    const result = coreTime({
+      entries,
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: REFERENCE_DATE,
+    });
+
+    const { conclusion } = result;
+    expect(conclusion.status).toBe('NO_OVERLAP_TODAY');
+    if (conclusion.status !== 'NO_OVERLAP_TODAY') return;
+    const slot = slotOf(conclusion.closest.refTime);
+
+    // This pair used to land on 07:00 JST with Boston at exactly 18:00 —
+    // deviation 0 but not a working block.
+    expect(conclusion.closest.refTime).toBe('06:30');
+    for (const p of conclusion.closest.perEntry) {
+      const row = result.rows.find((r) => r.entryId === p.entryId)!;
+      expect(p.deviationMinutes === 0).toBe(row.blocks[slot]);
+    }
+    expect(conclusion.closest.gapMinutes).toBeGreaterThan(0);
+  });
+
+  it('bottleneck after its day ends: the reference city, when the others are ahead of it', () => {
+    const newYork = createEntry({ timezone: 'America/New_York', label: 'New York' });
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const seoul = createEntry({ timezone: 'Asia/Seoul', label: 'Seoul' });
+    const result = coreTime({
+      entries: [newYork, tokyo, seoul],
+      settings: settingsWithReference('America/New_York'),
+      referenceDate: REFERENCE_DATE,
+    });
+
+    const { conclusion } = result;
+    expect(conclusion.status).toBe('NO_OVERLAP_TODAY');
+    if (conclusion.status !== 'NO_OVERLAP_TODAY') return;
+
+    // 20:00 EDT = 09:00 JST/KST the next morning. New York's meeting runs
+    // 20:00–20:30, 150 min past its 18:00 end.
+    expect(conclusion.closest.refTime).toBe('20:00');
+    expect(conclusion.closest.bottleneckEntryId).toBe(newYork.id);
+    expect(conclusion.closest.gapMinutes).toBe(150);
+    expect(conclusion.closest.perEntry.find((p) => p.entryId === newYork.id)?.direction).toBe(
+      'AFTER_END'
+    );
+  });
+});
+
 describe('coreTime — axis and rows', () => {
   it('produces 48 axis slots half an hour apart, starting at reference-local midnight', () => {
     const result = coreTime({

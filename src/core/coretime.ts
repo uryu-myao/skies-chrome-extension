@@ -31,16 +31,24 @@ export interface CoreTimeOverlapRange {
   endSlot: number;
 }
 
+// Which side of its own work window an entry is on; null while inside it.
+export type WorkWindowDirection = 'BEFORE_START' | 'AFTER_END';
+
 export interface CoreTimeClosestPerEntry {
   entryId: string;
   localTime: string;
   deviationMinutes: number;
+  direction: WorkWindowDirection | null;
 }
 
 export interface CoreTimeClosest {
   refTime: string;
   perEntry: CoreTimeClosestPerEntry[];
+  // The largest single deviation at refTime — the bottleneck entry's. Always
+  // > 0: a slot where every deviation is 0 is an overlap slot, and then the
+  // conclusion is OVERLAP, not NO_OVERLAP_TODAY.
   gapMinutes: number;
+  bottleneckEntryId: string;
 }
 
 export interface CoreTimeNextOverlap {
@@ -87,19 +95,46 @@ function buildSlotInstants(referenceTimezone: string, referenceDate: Date): Date
   );
 }
 
-function buildRow(entry: Entry, settings: AppSettings, slotInstants: Date[]): CoreTimeRow {
+interface WorkWindowPosition {
+  deviationMinutes: number;
+  direction: WorkWindowDirection | null;
+}
+
+// The one definition of "is this entry working at `instant`" (§5.2 rule 3:
+// local weekday ∈ workDays and local time ∈ [start, end)). Rows, the overlap
+// and closest all derive from it, so a slot is a working slot exactly when
+// its deviation is 0. Null when the local weekday isn't a work day at all
+// (including an empty workDays list): no finite deviation exists.
+//
+// Outside the window, the deviation is how far a meeting starting at this
+// slot sits outside the entry's day: how early it starts before `start`, or
+// how far its one-slot length runs past `end`. That's what keeps a slot
+// starting exactly at `end` — outside [start, end) — from counting as 0.
+function workWindowPosition(
+  entry: Entry,
+  settings: AppSettings,
+  instant: Date
+): WorkWindowPosition | null {
   const { start, end } = resolveWorkHours(entry, settings);
   const { days } = resolveWorkDays(entry, settings);
-  const daySet = new Set(days);
+  if (!days.includes(localWeekday(entry.timezone, instant))) return null;
+
+  const minutes = localMinutesOfDay(entry.timezone, instant);
   const startMinutes = start * 60;
   const endMinutes = end * 60;
+  if (minutes < startMinutes) {
+    return { deviationMinutes: startMinutes - minutes, direction: 'BEFORE_START' };
+  }
+  if (minutes >= endMinutes) {
+    return { deviationMinutes: minutes + MINUTES_PER_SLOT - endMinutes, direction: 'AFTER_END' };
+  }
+  return { deviationMinutes: 0, direction: null };
+}
 
-  const blocks = slotInstants.map((instant) => {
-    const weekday = localWeekday(entry.timezone, instant);
-    if (!daySet.has(weekday)) return false;
-    const minutes = localMinutesOfDay(entry.timezone, instant);
-    return minutes >= startMinutes && minutes < endMinutes;
-  });
+function buildRow(entry: Entry, settings: AppSettings, slotInstants: Date[]): CoreTimeRow {
+  const blocks = slotInstants.map(
+    (instant) => workWindowPosition(entry, settings, instant)?.deviationMinutes === 0
+  );
 
   const localDate = localDateKey(entry.timezone, slotInstants[0]);
   const crossesDay = slotInstants.some(
@@ -127,25 +162,11 @@ function computeOverlapRanges(rows: CoreTimeRow[]): CoreTimeOverlapRange[] {
   return ranges;
 }
 
-// Minutes an entry's local time is outside its own working window at `instant`.
-// Infinity when the entry's local weekday isn't a work day at all (including
-// an entry with an empty workDays list, which never has a valid window).
-function deviationMinutes(entry: Entry, settings: AppSettings, instant: Date): number {
-  const { start, end } = resolveWorkHours(entry, settings);
-  const { days } = resolveWorkDays(entry, settings);
-  const weekday = localWeekday(entry.timezone, instant);
-  if (!days.includes(weekday)) return Infinity;
-
-  const minutes = localMinutesOfDay(entry.timezone, instant);
-  const startMinutes = start * 60;
-  const endMinutes = end * 60;
-  if (minutes >= startMinutes && minutes < endMinutes) return 0;
-  return minutes < startMinutes ? startMinutes - minutes : minutes - endMinutes;
-}
-
 // Reference-axis slot minimizing the sum of every entry's deviation from its
 // own working window. Ties broken by earliest slot. Null when no slot has a
 // finite total (e.g. an entry with no valid work day anywhere on this axis).
+// The bottleneck is the entry with the largest deviation at that slot; on a
+// tie, the first in list order.
 function computeClosest(
   entries: Entry[],
   settings: AppSettings,
@@ -160,16 +181,17 @@ function computeClosest(
     let valid = true;
 
     for (const entry of entries) {
-      const deviation = deviationMinutes(entry, settings, instant);
-      if (!Number.isFinite(deviation)) {
+      const position = workWindowPosition(entry, settings, instant);
+      if (position === null) {
         valid = false;
         break;
       }
-      total += deviation;
+      total += position.deviationMinutes;
       perEntry.push({
         entryId: entry.id,
         localTime: localHHMM(entry.timezone, instant),
-        deviationMinutes: deviation,
+        deviationMinutes: position.deviationMinutes,
+        direction: position.direction,
       });
     }
 
@@ -181,10 +203,15 @@ function computeClosest(
 
   if (best === null) return null;
 
+  const bottleneck = best.perEntry.reduce((max, p) =>
+    p.deviationMinutes > max.deviationMinutes ? p : max
+  );
+
   return {
     refTime: formatHHMM(best.slot * MINUTES_PER_SLOT),
     perEntry: best.perEntry,
-    gapMinutes: Math.max(...best.perEntry.map((p) => p.deviationMinutes)),
+    gapMinutes: bottleneck.deviationMinutes,
+    bottleneckEntryId: bottleneck.entryId,
   };
 }
 

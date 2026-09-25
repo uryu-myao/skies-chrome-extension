@@ -37,9 +37,15 @@ function formatSlotTime(axis: { slot: number; refTime: string }[], slot: number)
   return slot >= axis.length ? '24:00' : axis[slot].refTime;
 }
 
+// "4h" / "4.5h" for whole and half hours; quarter-hour zones (Kathmandu,
+// Chatham) get exact minutes rather than a rounded "0.8h".
 function formatHoursDiff(minutes: number): string {
-  const hours = minutes / 60;
-  return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+  if (minutes % 30 === 0) {
+    const hours = minutes / 60;
+    return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
 }
 
 function joinLabels(labels: string[]): string {
@@ -119,16 +125,19 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
 
       case 'NO_OVERLAP_TODAY': {
         const { closest } = conclusion;
-        const [rh, rm] = closest.refTime.split(':').map(Number);
-        const refMinutes = rh * 60 + rm;
-        const startMinutes = settings.defaultWorkHours.start * 60;
-        const endMinutes = settings.defaultWorkHours.end * 60;
+        // The hint names the bottleneck — the entry furthest outside its own
+        // day at the suggested time — not the reference zone.
+        const bottleneck = closest.perEntry.find((p) => p.entryId === closest.bottleneckEntryId);
+        const whose =
+          entryOf(closest.bottleneckEntryId)?.timezone === referenceTimezone
+            ? 'your'
+            : `${labelOf(closest.bottleneckEntryId)}'s`;
 
         let directionText: string | null = null;
-        if (refMinutes < startMinutes) {
-          directionText = `${formatHoursDiff(startMinutes - refMinutes)} before your day starts`;
-        } else if (refMinutes >= endMinutes) {
-          directionText = `${formatHoursDiff(refMinutes - endMinutes)} after your day ends`;
+        if (bottleneck?.direction === 'BEFORE_START') {
+          directionText = `${formatHoursDiff(closest.gapMinutes)} before ${whose} day starts`;
+        } else if (bottleneck?.direction === 'AFTER_END') {
+          directionText = `${formatHoursDiff(closest.gapMinutes)} after ${whose} day ends`;
         }
 
         return (
