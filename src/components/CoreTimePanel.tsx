@@ -181,11 +181,15 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
       case 'PARTIAL_OVERLAP': {
         const [first, ...rest] = conclusion.overlap;
         const range = `${formatSlotTime(result.axis, first.startSlot)}–${formatSlotTime(result.axis, first.endSlot)}`;
+        // "you" when the outlier is the reference city, as in closest's
+        // "yours" / "your day" — the user shouldn't have to remember which
+        // city is them.
+        const isYou = entryOf(conclusion.excludedId)?.timezone === referenceTimezone;
         const excludedLabel = labelOf(conclusion.excludedId);
         return (
           <div className="core-time-panel__conclusion">
             <span className="core-time-panel__headline">
-              All but {excludedLabel} overlap{' '}
+              All but {isYou ? 'you' : excludedLabel} overlap{' '}
               <span className="core-time-panel__headline-range">{range}</span>
               {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
             </span>
@@ -195,7 +199,9 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
               type="button"
               className="core-time-panel__muted-line core-time-panel__hint-action"
               onClick={() => onToggleCoreTime(conclusion.excludedId)}>
-              {excludedLabel} is outside its work hours — tap to exclude it
+              {isYou
+                ? "You're outside your work hours — tap to exclude yourself"
+                : `${excludedLabel} is outside its work hours — tap to exclude it`}
             </button>
           </div>
         );
