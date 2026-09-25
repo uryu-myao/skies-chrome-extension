@@ -9,7 +9,7 @@ npm run dev       # Vite dev server (popup UI development)
 npm run build     # tsc -b && vite build → outputs to dist/
 npm run lint      # ESLint
 npm run preview   # Preview production build
-npm test          # Vitest, runs test/**/*.test.ts (core/ modules only)
+npm test          # Vitest, runs test/**/*.test.ts (core/ modules, plus pure UI helpers such as dayDeltaLabel)
 npm run test:watch  # Vitest in watch mode
 ```
 
@@ -35,7 +35,7 @@ App.tsx              ← global state: entries (v2 Entry[] — array order IS th
 ├── CitySettingsPanel.tsx ← per-city panel: rename (entry.label) and reset to the name it was added with, read-only work hours/days ("coming in the next update" — there is no Pro gating or isPro() yet), a link to Settings' Core time section, Remove
 └── UndoToast.tsx    ← "Removed X · Undo" after any removal (city panel or edit mode)
 
-Shared: SegmentedControl.tsx (Settings' toggles), ResetButton.tsx (converter reset, city-name reset)
+Shared: SegmentedControl.tsx (Settings' toggles), ResetButton.tsx (converter reset, city-name reset), dayDeltaLabel.ts (the card footer's yesterday / tomorrow / 2 days back note)
 ```
 
 State flows down as props; children communicate upward via callbacks. There is no global store.
