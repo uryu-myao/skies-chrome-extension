@@ -11,6 +11,7 @@ import {
   type TimeOfDay,
 } from '../core/tz';
 import type { ConvertPosition, HourFormat } from '../App';
+import { dayDeltaLabel } from './dayDeltaLabel';
 
 export interface TimezoneInfo {
   id: string;
@@ -46,14 +47,6 @@ function hashStr(s: string): number {
     h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
   }
   return h >>> 0;
-}
-
-// −1/+1 read naturally; ±2 only happens across the date line (Kiritimati vs
-// Niue) and has to be spelled out.
-function dayDeltaLabel(delta: number): string {
-  if (delta === -1) return 'yesterday';
-  if (delta === 1) return 'tomorrow';
-  return `${Math.abs(delta)} days ${delta < 0 ? 'back' : 'ahead'}`;
 }
 
 function makeStars(id: string, count: number) {

@@ -6,7 +6,7 @@ import SettingsPanel from './components/SettingsPanel';
 import CitySettingsPanel from './components/CitySettingsPanel';
 import UndoToast from './components/UndoToast';
 import { TimezoneInfo } from './components/Timezone';
-import { renameEntry, resetEntryLabel, saveAppData } from './core/model';
+import { renameEntry, resetEntryLabel, saveAppData, toggleIncludeInCoreTime } from './core/model';
 import { getSystemTimezone } from './core/tz';
 import type { AppData, AppSettings, Entry } from './core/types';
 import '@styles/_reset.css';
@@ -175,7 +175,12 @@ function App({ initialData }: AppProps) {
           onRemoveCity={removeEntry}
         />
       </div>
-      <CoreTimePanel entries={entries} settings={settings} isEditMode={isEditMode} />
+      <CoreTimePanel
+        entries={entries}
+        settings={settings}
+        isEditMode={isEditMode}
+        onToggleCoreTime={(id) => updateEntry(id, toggleIncludeInCoreTime)}
+      />
       <SettingsPanel
         isOpen={isSettingsOpen}
         focusSection={settingsFocus}

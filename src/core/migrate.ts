@@ -32,6 +32,20 @@ const SORT_MODE_TO_ORDER: Record<V1SortMode, SortOrder> = {
   alphabet: 'name',
 };
 
+// What v1 itself showed when its key was missing or held anything else. A v1
+// user falls back to these, not to v2's defaults (24-hour), so nobody's view
+// changes in the move.
+const V1_DEFAULT_SORT_MODE: V1SortMode = 'newest';
+const V1_DEFAULT_HOUR_FORMAT: V1HourFormat = '12';
+
+// Not silent: an unrecognised value means a user's setting is being replaced,
+// and there'd be no other trace of it.
+function warnUnrecognised(key: string, raw: string, fallback: string): void {
+  console.warn(
+    `[Skies] ${key} holds an unrecognised value ${JSON.stringify(raw)}; migrating it as ${fallback}, which is what v1 showed for it`
+  );
+}
+
 function safeParseArray<T>(raw: string | null): T[] {
   if (!raw) return [];
   try {
@@ -57,15 +71,25 @@ export function readV1Snapshot(): V1Snapshot {
     localStorage.getItem(V1_PINNED_KEY)
   ).filter((id) => typeof id === 'string');
 
+  // Every published v1 (1.0.2–2.1.0) wrote these two as plain strings —
+  // localStorage.setItem(key, 'alphabet'), not JSON — and read them back the
+  // same way, so they're compared as stored. A JSON-encoded '"alphabet"' was
+  // never a v1 value. A missing key is normal (null); anything else warns.
   const sortModeRaw = localStorage.getItem(V1_SORT_MODE_KEY);
   const sortMode: V1SortMode | null =
     sortModeRaw === 'newest' || sortModeRaw === 'time' || sortModeRaw === 'alphabet'
       ? sortModeRaw
       : null;
+  if (sortModeRaw !== null && sortMode === null) {
+    warnUnrecognised(V1_SORT_MODE_KEY, sortModeRaw, `"${V1_DEFAULT_SORT_MODE}"`);
+  }
 
   const hourFormatRaw = localStorage.getItem(V1_HOUR_FORMAT_KEY);
   const hourFormat: V1HourFormat | null =
     hourFormatRaw === '12' || hourFormatRaw === '24' ? hourFormatRaw : null;
+  if (hourFormatRaw !== null && hourFormat === null) {
+    warnUnrecognised(V1_HOUR_FORMAT_KEY, hourFormatRaw, `"${V1_DEFAULT_HOUR_FORMAT}"`);
+  }
 
   return { timezones, pinnedIds, sortMode, hourFormat };
 }
@@ -88,10 +112,8 @@ export function mapV1ToV2(snapshot: V1Snapshot): AppData {
 
   const settings: AppSettings = {
     ...DEFAULT_SETTINGS,
-    hour24: snapshot.hourFormat ? snapshot.hourFormat === '24' : DEFAULT_SETTINGS.hour24,
-    sortOrder: snapshot.sortMode
-      ? SORT_MODE_TO_ORDER[snapshot.sortMode]
-      : DEFAULT_SETTINGS.sortOrder,
+    hour24: (snapshot.hourFormat ?? V1_DEFAULT_HOUR_FORMAT) === '24',
+    sortOrder: SORT_MODE_TO_ORDER[snapshot.sortMode ?? V1_DEFAULT_SORT_MODE],
   };
 
   return { version: 2, entries, groups: [], settings };
@@ -148,14 +170,49 @@ function backupV1Once(snapshot: V1Snapshot): void {
   );
 }
 
-// Entry point: run once at startup, before any rendering; the caller renders
-// from the returned data. Idempotent — if v2 data already exists this is a
-// read, plus a one-time freezeDisplayOrder() for data saved before manual
-// ordering. On failure, v1 data is left untouched and nothing is written, so
-// the caller never renders an empty list.
+// Every v1 build wrote the city list on first mount, so its key — even as
+// "[]" — means this browser ran v1. A fresh install has none of the v1 keys.
+function hasV1Data(): boolean {
+  return localStorage.getItem(V1_TIMEZONES_KEY) !== null;
+}
+
+// v2 data 2.1.0 left behind. 2.1.0 ran this migration silently on its first
+// popup open and never again (v2 existed from then on), while its UI kept
+// reading and writing only the v1 keys — so anything the user did in 2.1.0
+// after that first open is in the v1 keys and not here. Its entries have no
+// `order` (added after 2.1.0 shipped), and the v1 keys are still there. It
+// was never shown or edited by a v2 UI, so rebuilding it from the v1 keys
+// loses nothing.
+function isLeftBy210(data: AppData): boolean {
+  return needsOrderFreeze(data) && hasV1Data();
+}
+
+// Entry point: run at startup, before any rendering; the caller renders from
+// the returned data. Four starting states (spec §3.5) — check every change
+// against all of them, not just a fresh profile:
+//
+//   nothing stored          fresh install → v2 defaults
+//   v1 keys only            never opened 2.1.0 → migrate from v1
+//   v2 without order + v1   left by 2.1.0 → rebuild from the (newer) v1 keys
+//   v2 with order           written by 3.0.0+ → read as is
+//
+// Idempotent: once v2 has `order` it's only read. The v1 keys are never
+// modified, and timemate.backup_v1 is written once — a rebuild doesn't
+// replace the snapshot 2.1.0 took on its first open. On failure nothing is
+// written and the caller still never renders an empty list.
 export function migrate(now: Date = new Date()): AppData {
   const existing = loadAppData();
-  if (existing) return freezeOrderOnce(existing, now);
+  if (existing && !isLeftBy210(existing)) return freezeOrderOnce(existing, now);
+
+  if (!existing && !hasV1Data()) {
+    const fresh = createDefaultAppData();
+    try {
+      saveAppData(fresh);
+    } catch (err) {
+      console.error('[Skies] failed to save the initial data:', err);
+    }
+    return fresh;
+  }
 
   let mapped: AppData | null = null;
   try {
@@ -167,7 +224,9 @@ export function migrate(now: Date = new Date()): AppData {
   } catch (err) {
     console.error('[Skies] v1→v2 migration failed, v1 data left untouched:', err);
     // Return the best-effort in-memory mapping even if persisting it failed,
-    // so a caller never renders an empty list off the back of a write error.
-    return mapped ?? createDefaultAppData();
+    // so a caller never renders an empty list off the back of a write error;
+    // failing that, 2.1.0's older v2 data beats nothing.
+    if (mapped) return mapped;
+    return existing ? freezeDisplayOrder(existing, now) : createDefaultAppData();
   }
 }

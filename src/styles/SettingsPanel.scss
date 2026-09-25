@@ -186,6 +186,14 @@
     }
   }
 
+  // Keeps a value and its row-end icon together on the right; as two
+  // separate children of the space-between row the value would sit mid-row.
+  &__row-end {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   &__value {
     font-family: 'Poppins', serif;
     font-size: 12px;

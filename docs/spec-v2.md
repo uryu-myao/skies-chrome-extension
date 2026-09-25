@@ -47,8 +47,11 @@
   settings: {
     hour24: true,
     showSeconds: false,
-    sortOrder: "manual",       // 【废弃】manual | offset | name;仅迁移时读取一次,见 §3.4
-    referenceTimezone: null,   // null = 使用系统时区
+    sortOrder: "manual",       // 【废弃】manual | offset | name(由 v1 的 newest | time | alphabet
+                               // 映射而来,见 §3.2);仅迁移时读取一次,见 §3.4
+    referenceTimezone: null,   // null = 使用系统时区;所有时间计算只读它
+    referenceEntryId: null,    // 可选。用户在基准 chip 中选了哪个条目,只用于 chip 的名称与选中态
+                               // (§9.1);旧数据没有该字段,按时区回退
     defaultWorkHours: { start: 9, end: 18 },
     defaultWorkDays: [1, 2, 3, 4, 5],
     coreTimePanel: "always",   // always | collapsed | hidden
@@ -73,23 +76,67 @@
 
 ## 3. 迁移 v1 → v2
 
+**所有 storage key 保留 `timemate.` 前缀,改名后不得变更**(产品已从 TimeMate 两次改名,现为 Skies)。
+key 是老用户数据所在的位置,改一个字就等于让所有老用户的城市消失。扩展 ID 同理:`localStorage`
+按扩展的 origin(`chrome-extension://<ID>/`)隔离,ID 变了,旧数据同样读不到。
+
+存储全部在 popup 页的 `localStorage`,不使用 `chrome.storage`:
+
+| key                         | 内容                                             |
+| --------------------------- | ------------------------------------------------ |
+| `timemate.data.v2`          | v2 数据(§2.1)                                   |
+| `timemate.backup_v1`        | 迁移前的 v1 快照,只写一次                        |
+| `timemate.timezones.v1`     | v1 城市列表(只读,迁移后保留不删)               |
+| `timemate.pinned.v1`        | v1 置顶 id 列表(同上)                          |
+| `timemate.sort-mode.v1`     | v1 排序模式(同上)                              |
+| `timemate.hour-format.v1`   | v1 12/24 小时制(同上)                          |
+| `timemate.sun.<zone>.<日期>` | 卡片天色用的日出日落缓存,每个时区每天一条        |
+
 ### 3.1 要求
 
-- 入口:扩展启动时,读取 storage 后立即执行,早于任何渲染
-- 判定:`data.version` 缺失或 < 2 即执行迁移
-- 迁移前**必须**把原始 v1 数据完整备份到 `storage.local` 的 `backup_v1` 键
+- 入口:`src/main.tsx` 在 `createRoot().render()` 之前同步调用 `migrate()`,每次打开 popup 都执行;
+  应用以 `migrate()` 的返回值作为初始数据渲染
+- 判定按起始状态区分,见 §3.5:v1 数据从 v1 的 key 迁移;**2.1.0 留下的 v2 数据(条目无 `order`、
+  v1 的 key 仍在)从 v1 的 key 重建**;3.0.0 起写入的 v2 数据(有 `order`)只读取
+- 写入 v2 之前**必须**把读到的 v1 数据完整备份到 `localStorage` 的 `timemate.backup_v1` 键
+  (附 `migratedAt` 时间戳);**该键已存在时不覆盖** —— 包括从 2.1.0 重建时:备份必须保持第一次
+  迁移时的 v1 快照
+- v1 的 key 只读不删、不改
 - 迁移必须幂等:重复执行不产生副作用
-- 迁移失败时,保留 v1 数据、不写入、上报错误,不能让用户看到空列表
+- 迁移失败时,保留 v1 数据、不写入、`console.error` 记录,不能让用户看到空列表:返回已映射的
+  内存数据(若已算出),否则返回默认数据
 
 ### 3.2 映射
 
+v1 的数据分散在四个 key 里,城市条目结构为 `{ id, city, zone, lat?, lon? }`,置顶状态不在条目上,
+而是单独存在 `timemate.pinned.v1`(v1 条目 id 的 `string[]`):
+
 ```
-v1 city.timezone  →  entry.timezone
-v1 city.name      →  entry.label
-v1 city.pinned    →  entry.pinned
+v1 zone                          →  entry.timezone
+v1 city                          →  entry.label(同时记为 entry.defaultLabel)
+v1 lat / lon                     →  entry.lat / entry.lon
+v1 id ∈ timemate.pinned.v1       →  entry.pinned
+timemate.sort-mode.v1            →  settings.sortOrder
+    newest → manual,time → offset,alphabet → name
+timemate.hour-format.v1          →  settings.hour24('24' → true,'12' → false)
 (其余字段填 null / 默认值)
-entry.id 新生成
+entry.id 新生成(v1 的 id 只用于匹配置顶列表)
 ```
+
+条目顺序与 v1 存储数组一一对应,随后经过 §3.4 固化为用户当时看到的显示顺序。
+
+**存储格式**:城市列表与置顶列表是 JSON 数组;**排序模式与 12/24 是纯字符串**(`alphabet`、`24`,
+不带引号)。所有发布过的 v1(1.0.2–2.1.0)都用 `localStorage.setItem(key, value)` 直接写入、按原样
+读回,迁移同样按原样比较,不做 `JSON.parse`。手工构造测试数据时注意:`JSON.stringify('alphabet')`
+存进去的是 `"alphabet"`(带引号),那不是 v1 会写出的值。
+
+**缺失与无法识别的值**,回退到 **v1 自己在这种情况下显示的样子**,而不是 v2 的默认值,这样没有人
+的界面会在迁移中变样:排序模式回退 `newest`,12/24 回退 12 小时制(v2 新用户的默认是 24 小时制;
+全新安装没有任何 v1 的 key,拿到的是 v2 默认值)。
+
+- key **缺失**是正常情况,静默回退
+- key **存在但值无法识别**时,必须 `console.warn`(带上原始值)再回退,**不得静默降级** —— 否则
+  老用户的设置被无声替换,事后没有任何迹象。与 §3.4「不得回退到原始添加顺序」是同一类保护
 
 ### 3.3 验收
 
@@ -102,6 +149,8 @@ entry.id 新生成
 打开后看到列表乱掉,首次读到**没有 `order` 字段**的数据时,`freezeDisplayOrder()` 按旧规则
 算出用户当时看到的顺序 —— 置顶项在前,组内按旧 `sortOrder`(manual = 最新在上,即存储数组
 倒序;offset = 相对基准时区最落后的在前;name = 字母序)—— 并把该顺序写入 `order`。
+这里的 `sortOrder` 是 v2 的取值;v1 用户的 `newest` / `time` / `alphabet` 已在 §3.2 映射成
+`manual` / `offset` / `name`,所以 `freezeDisplayOrder()` 只需认 v2 的三个值。
 
 - **不得回退到原始添加顺序**
 - 只重排,不删除任何条目
@@ -111,6 +160,32 @@ entry.id 新生成
 
 运行时以 entries 数组顺序为准:保存时把数组下标写入 `order`,读取时按 `order` 排序;
 新添加的城市放在最上方。
+
+### 3.5 升级路径
+
+`migrate()` 面对的不是「从零开始」一种情况。**每次改迁移逻辑,都要对照下表逐一测试**(`test/core/migrate.test.ts`
+按状态分组),不能只测清空 localStorage 后的全新迁移 —— 清空本身就抹掉了真实用户会有的状态,
+2.1.0 的问题正是这样漏掉的。
+
+| 起始状态 | 怎么认出来 | 处理 |
+| -------- | ---------- | ---- |
+| **全新安装** | 没有 `timemate.data.v2`,也没有任何 v1 的 key | v2 默认数据(24 小时制等),不写 `backup_v1` |
+| **纯 v1**(从未打开过 2.1.0) | 没有 `timemate.data.v2`,有 v1 的 key | 从 v1 的 key 迁移(§3.2),写 `backup_v1`,固化顺序(§3.4) |
+| **2.1.0 产生的 v2** | 有 `timemate.data.v2` 但条目**没有 `order`**,且 v1 的 key 仍在 | **从 v1 的 key 重建**,覆盖这份 v2;`backup_v1` 已存在,不覆盖 |
+| **3.0.0 起产生的 v2** | 有 `timemate.data.v2`,条目有 `order` | 只读取,不再碰 v1 的 key |
+
+**为什么 2.1.0 的 v2 必须重建,不能直接用。** 2.1.0 在用户**第一次**打开 popup 时静默跑了一遍迁移,
+写下 `timemate.data.v2`;此后 v2 已存在,迁移每次直接返回,v2 再也没有更新过。而 2.1.0 的界面仍是
+v1,只读写 v1 的 key。所以用户在 2.1.0 里第一次打开之后做的一切 —— 加城市、删城市、置顶、改排序、
+改 12/24、清空列表 —— 都只在 v1 的 key 里。直接用这份 v2,等于把用户退回到第一次打开 2.1.0 的那天。
+
+重建不会丢任何东西:2.1.0 没有 v2 界面,这份 v2 纯粹是从 v1 派生的,用户从没见过、也没改过它。
+认法依赖一个事实:`order` 字段在 2.1.0 发布之后才加入,所以任何发布版都不会写出「有 v1 的 key、
+v2 却没有 `order`」以外的无 `order` 数据。重建后的 v2 带 `order`,之后就按第 4 种状态只读取 ——
+重建只发生一次,用户在 3.0.0 里的改动不会被 v1 的 key 覆盖。
+
+测试用的 2.1.0 数据(`test/fixtures/v2-written-by-2.1.0.json`)是用 2.1.0 那个提交(`92aafc3`)自己的
+迁移代码生成的,不是手写的;需要新的历史状态时也照此办理。
 
 ---
 
@@ -165,19 +240,34 @@ function offsetMinutes(timezone, date) {
 
 ```js
 coreTime({
-  entries,        // 仅 includeInCoreTime === true 的条目
+  entries,        // 完整列表,按列表顺序。只有 includeInCoreTime === true 的条目参与
+                  // overlap 与结论;被排除的条目仍各有一行,供面板变暗显示
   settings,
   referenceDate   // 参考时区的某一天
 }) → {
   axis: [{ slot, refTime }],        // 48 格
-  rows: [{ entryId, blocks, localDate, crossesDay }],
-  overlap: [{ startSlot, endSlot }] | [],
+  rows: [{
+    entryId,
+    included,     // = includeInCoreTime
+    offToday,     // 该条目在 referenceDate 这一刻不在自己的 workDays 内(见 5.3)
+    blocks,       // 48 个布尔:该槽位是否为工作槽
+    localDate,
+    crossesDay
+  }],
+  overlap: [{ startSlot, endSlot }] | [],   // 参与条目的交集
   conclusion:                        // 状态枚举 + 数据,不含文案,见 5.3
     | { status: 'NO_ENTRIES' }
     | { status: 'OVERLAP' }
-    | { status: 'NO_OVERLAP_TODAY', closest: { refTime, perEntry: [...], gapMinutes } }
+    | { status: 'PARTIAL_OVERLAP', overlap, includedIds, excludedId }
+    | { status: 'NO_OVERLAP_TODAY', closest: {
+          slot, refTime,
+          perEntry: [{ entryId, localTime, deviationMinutes, direction }],
+                    // direction: 'BEFORE_START' | 'AFTER_END' | null(在工作时段内)
+          gapMinutes,             // 该槽位上最大的单个偏离量,恒 > 0
+          bottleneckEntryIds      // 偏离量等于 gapMinutes 的全部条目,列表顺序
+      } }
     | { status: 'ALL_OFF', offEntryIds, nextOverlap: { daysFromToday, weekday, startSlot, endSlot } | null }
-    | { status: 'PARTIAL_OFF', workingEntryIds, offEntryIds, nextOverlap: {...} | null }
+    | { status: 'PARTIAL_OFF', workingEntryIds, offEntryIds, workingOverlap: [...] | [], nextOverlap: {...} | null }
 }
 ```
 
@@ -185,27 +275,73 @@ coreTime({
 
 1. 以参考时区的当日 00:00 为起点,生成 48 个 30 分钟槽位
 2. 对每个条目、每个槽位:换算成该条目的本地时刻与本地星期
-3. 该槽位计入工作时段,当且仅当:本地星期 ∈ `workDays` 且本地时刻 ∈ `[start, end)`
-4. `overlap` = 所有条目工作槽位的交集
+3. 该槽位计入工作时段,当且仅当:本地星期 ∈ `workDays` 且本地时刻 ∈ `[start, end)`。
+   **这是系统内「工作时间」的唯一定义**:色带的工作块、`overlap`、`closest` 的偏离量都由同一个
+   函数(`workWindowPosition`)得出,槽位是工作槽 ⇔ 它的偏离量为 0。曾经两处各写一份边界判断,
+   `closest` 把恰好落在 `end` 上的槽位算作偏离 0,而 `overlap` 认为它不在工作时段内
+4. `overlap` = 所有参与条目工作槽位的交集
 5. `overlap` 为空时,进入 5.3 的状态判断——不再直接计算 `closest`,是否计算 `closest` 本身取决于该状态判断的结果
 
 ### 5.3 空状态是主状态,不是异常
 
-东京 + 波士顿在默认工时下**必然**零重叠。这是最常见的情况,必须给出可操作的结果,而不是一句「计算失败」类的兜底文案。零重叠之外,「今天恰好是休息日」同样是常态而非异常,需要单独识别,不能和「工时对不上」混成一种状态。
+东京 + 波士顿在默认工时下**必然**零重叠。这是最常见的情况,必须给出可操作的结果,而不是一句「计算失败」类的兜底文案。零重叠之外,「今天恰好是休息日」同样是常态而非异常,需要单独识别,不能和「工时对不上」混成一种状态。城市一多,全员交集为空更是常态 —— 所以还要识别「只差一个城市」。
 
-`overlap` 为空时,按下表判断状态。**展开态与收起态渲染必须共用同一个状态判断,不允许两套逻辑**;判断本身放在 `core/coretime.ts`,只返回状态枚举 + 该状态需要的数据,不含任何文案字符串,文案全部由 UI 层渲染:
+**任何展示 Core Time 状态的元素都必须读同一份判断结果,不得自行计算。** 判断只在
+`core/coretime.ts` 里做一次:`conclusion`,加上每行的 `included` / `offToday` / `blocks`。
+结论行、色带、行标签(Off 标签)、closest 标记线、时间列,以及展开态与收起态,全部只读这份
+结果;UI 缺什么数据,就在 core 的返回值里加字段,不在渲染层补算。判断只返回状态枚举 + 该状态
+需要的数据,不含任何文案字符串,文案全部由 UI 层渲染。
+
+> 这条约束最初只写了「展开态与收起态共用同一个状态判断」,但平行计算会换个位置出现:
+> 色带上的 Off 标签曾按「整条轴上没有工作槽」自行判断,结论行则按 `referenceDate` 这一刻的
+> 本地星期判断。轴擦到另一天的工时时两者就不一致 —— 周一上午的东京轴上,22:00–23:30 是
+> 波士顿周一 09:00–10:30,结论说「只有 4 个城市在上班」,展开的色带上波士顿却没有 Off 标签。
+> 现在两者都读 `rows[].offToday`,`offEntryIds` 也由它得出。
+
+按下表**自上而下**判断状态:
 
 | 状态               | 触发条件                                                    | 数据                                                |
 | ------------------ | ------------------------------------------------------------ | --------------------------------------------------- |
-| `NO_ENTRIES`       | 参与计算的条目数为 0;也是下方计算异常时的统一兜底             | —                                                    |
+| `NO_ENTRIES`       | 参与计算的条目数为 0(包括全部被用户排除);也是下方计算异常时的统一兜底 | —                                                    |
 | `OVERLAP`          | `overlap` 非空                                                | `overlap` 数组                                       |
-| `ALL_OFF`          | `overlap` 为空,且所有条目在 `referenceDate` 这一刻都不在各自 `workDays` 内 | 被排除条目 id 列表、`nextOverlap`                     |
-| `PARTIAL_OFF`      | `overlap` 为空,部分(非全部)条目在 `referenceDate` 这一刻不在各自 `workDays` 内 | 在岗条目 id 列表、被排除条目 id 列表、`nextOverlap`   |
-| `NO_OVERLAP_TODAY` | `overlap` 为空,且所有条目在 `referenceDate` 这一刻都在各自 `workDays` 内 | `closest`                                            |
+| `ALL_OFF`          | `overlap` 为空,且所有参与条目在 `referenceDate` 这一刻都不在各自 `workDays` 内 | 休息条目 id 列表、`nextOverlap`                       |
+| `PARTIAL_OFF`      | `overlap` 为空,部分(非全部)参与条目在 `referenceDate` 这一刻不在各自 `workDays` 内 | 在岗条目 id 列表、休息条目 id 列表、`workingOverlap`、`nextOverlap` |
+| `PARTIAL_OVERLAP`  | `overlap` 为空,所有参与条目今天都在工作日,且**恰好一个**条目被排除后其余条目的 `overlap` 非空;至少 3 个参与条目 | 子集的 `overlap`、`includedIds`、`excludedId`       |
+| `NO_OVERLAP_TODAY` | 以上都不满足:所有参与条目今天都在工作日,工时对不上,且没有唯一的离群条目 | `closest`                                            |
 
-**判断"今天是否在场"用的是 `referenceDate` 这一个具体瞬间的本地星期,不是扫描整条 48 槽轴。** 扫描整条轴会产生两种边界假象:(a) 一个与参考时区零偏移的条目,它在轴上的本地星期是恒定值,一旦当天不是它的工作日,会让轴上全部 48 个槽位都判定为不可行,`closest` 因此直接返回 `null`;(b) 一个有偏移的条目,轴的两端可能分别落在两个不同日历日,恰好把前一天工作日的一小段划进轴内,产出「周六 00:00」这类没有实际意义的建议。改成只看 `referenceDate` 这一个瞬间,这两种假象都不会出现。
+`PARTIAL_OFF` 先于 `PARTIAL_OVERLAP`:有人今天休息是 `workDays` 的问题,不是工时离群,两者不混用。
 
-**`NO_OVERLAP_TODAY` 的 `closest`**:在参考轴上找一个槽位,使得**所有条目距离各自工作时段的总偏离分钟数最小**。返回该时刻、各条目的本地时刻、以及最大偏离量(用于生成「4h after your day ends」这类提示)。若存在多个并列最优解,取最早的一个。这个分支的前提是当天所有条目都在工作日内,正常情况下必然有解;若仍返回 `null`(例如日期变更线两侧的极端偏移组合),视为 bug:`console.error` 并回退到 `NO_ENTRIES`,不再新增第二套「计算失败」文案。
+**判断"今天是否在场"用的是 `referenceDate` 这一个具体瞬间的本地星期,不是扫描整条 48 槽轴。** 扫描整条轴会产生两种边界假象:(a) 一个与参考时区零偏移的条目,它在轴上的本地星期是恒定值,一旦当天不是它的工作日,会让轴上全部 48 个槽位都判定为不可行,`closest` 因此直接返回 `null`;(b) 一个有偏移的条目,轴的两端可能分别落在两个不同日历日,恰好把前一天工作日的一小段划进轴内,产出「周六 00:00」这类没有实际意义的建议。改成只看 `referenceDate` 这一个瞬间,这两种假象都不会出现。这个结果按行暴露为 `rows[].offToday`。
+
+**`PARTIAL_OVERLAP`(去一法)**:依次排除一个参与条目,计算其余条目的 `overlap`。恰好一个排除能产生
+非空 `overlap` 时返回该状态;多个排除都能产生(没有唯一的离群者),或没有任何一个能产生(不是一个
+城市的问题)时,落到 `NO_OVERLAP_TODAY`。**不做「最大可行子集」搜索**:子集数量随城市数指数增长,
+规则也无法向用户一句话解释;去一法覆盖真实场景中最常见的「一个离群时区」。至少 3 个参与条目:
+两个城市时,「除了 X 都重叠」只是另一个城市自己的工时,没有信息量。
+
+**`PARTIAL_OFF` 的 `workingOverlap`**:在岗条目今天自己的交集,与 `nextOverlap`(下一次**全员**
+重叠)并列返回。周一上午的东京,波士顿还是周日 —— 亚洲几个城市今天就能凑上,只说「下次全员重叠」
+会把今天可用的窗口藏起来。少于 2 个在岗条目,或在岗条目之间也对不上时为空数组。
+
+**`NO_OVERLAP_TODAY` 的 `closest`**:
+
+- **偏离量**:条目在工作时段内为 0;早于 `start` 时为 `start − 本地时刻`(会议开始得有多早);
+  晚于或等于 `end` 时为 `本地时刻 + 30 − end`(一格长的会议超出 `end` 多少)。因此恰好从
+  `end` 开始的槽位偏离 30 分钟而非 0 —— `end` 本身不在 `[start, end)` 内。偏离量按条目的实际
+  本地时刻计算,不对齐到网格:加德满都(+5:45)的本地时刻落在 :15 / :45,在工作时段内时严格为 0。
+- **选槽位**:所有参与条目偏离量**之和**最小的槽位;并列取最早。**并列取最早是刻意保留的**:
+  并列区间内,最早的槽位通常把不便算在使用者自己头上(东京 + 波士顿:06:30 让你早起 2.5 小时,
+  而不是让波士顿晚睡)。工具替使用者承担,比替同事做决定更得体,用户随时可以自己还价。曾考虑
+  以「最大偏离量最小」作第二排序键(更平均),未采用。已知缺陷见 §13。
+- **返回**:槽位与时刻、每个条目的本地时刻 / 偏离量 / 方向、`gapMinutes`(该槽位上最大的单个
+  偏离量,即瓶颈的偏离;恒 > 0,若为 0 则所有条目都在工作,应为 `OVERLAP`)、
+  `bottleneckEntryIds`(偏离量等于 `gapMinutes` 的全部条目)。
+- **提示文案**用最大偏离量,指向瓶颈:单一瓶颈时点名并给方向(`4.5h before Boston's day starts` /
+  `2h after Boston's day ends`;瓶颈是基准城市时说 `your day`)。**并列时给数量和小时数,不点名**
+  (`2 cities are 3.5h outside their work hours`):只点名一个会让用户以为排除它就能解决,实际不会;
+  小时数说明指的是偏离最大的那几个,而不是所有不在工作时间的城市。
+- 这个分支的前提是当天所有条目都在工作日内,正常情况下必然有解;若仍返回 `null`(例如日期变更线
+  两侧的极端偏移组合),视为 bug:`console.error` 并回退到 `NO_ENTRIES`,不再新增第二套「计算失败」文案。
 
 **`ALL_OFF` / `PARTIAL_OFF` 的 `nextOverlap`**:从明天起,以参考时区的日历日为单位向后逐日搜索——每天各自生成一条完整的 48 槽轴并计算 `overlap`(与当天的算法完全一致),取第一个 `overlap` 非空的日期,返回该日期的星期与时段。上限 7 天;超出上限仍未找到则返回 `null`,UI 不渲染这一行,而不是再补一句兜底文案。
 
@@ -213,18 +349,38 @@ coreTime({
 
 ```
 OVERLAP            Overlap 11:00–18:00
+PARTIAL_OVERLAP    All but Boston overlap 12:30–18:00
+                   Boston is outside its work hours — tap to exclude it
+  (离群者是你)     All but you overlap 12:30–18:00
+                   Your hours don't overlap — tap to exclude yourself
 NO_OVERLAP_TODAY   No overlap today
-                   Closest — 22:00 yours / 09:00 Shanghai's
+                   Closest — 17:30 yours
+                   4.5h before Boston's day starts
+  (瓶颈并列)       2 cities are 3.5h outside their work hours
 ALL_OFF            Everyone's off today
                    Next overlap — Mon 11:00–18:00
-PARTIAL_OFF        Only Shanghai is working today
-                   Next full overlap — Mon 11:00–18:00
+PARTIAL_OFF        Only 4 cities are working today
+                   Those 4 overlap 12:30–18:00
+                   Next full overlap — Tue 11:00–18:00
+  (1–2 个在岗)     Only Shanghai and Tokyo are working today
+                   They overlap 10:00–18:00
 NO_ENTRIES         Add a city to compare
+  (全部被排除)     No cities in core time
+                   Tap a city to include it        (收起态:Expand to include a city)
 ```
+
+`PARTIAL_OVERLAP` 的第二行本身就是按钮,见 §9.3。3 个以上在岗城市用计数,1–2 个用名字 —— 少数时
+名字比数字清楚。
 
 ### 5.4 单条目
 
 只有一个条目时,`overlap` 就是该条目的工作时段本身,不算异常,正常渲染。
+
+该条目的工作时段跨过参考时区的午夜时,轴上是**两段**,两段都完整列出,按轴上从左到右的顺序:
+基准东京、只有波士顿时为 `Boston 00:00–07:00, 22:00–24:00` —— 前一段是波士顿**前一天**下午
+(11:00–18:00),后一段是波士顿当天上午(09:00–11:00)。不用 `+1 more`:它不说明省略了什么,
+而这里没有什么该省略。多段的情况不限于单条目,`OVERLAP` / `PARTIAL_OVERLAP` / `PARTIAL_OFF` 的
+时段一律全部列出;结论行允许换行,时段整体不拆开,不做截断。
 
 ---
 
@@ -259,6 +415,31 @@ Your 16:00 slot becomes 17:00 for Kenji.
 
 第 3 层第一版不做。
 
+**权限约束(第 3 层实现时必须遵守)**:
+
+- `notifications` 只能声明在 manifest 的 `optional_permissions` 中,在用户打开该设置开关时
+  通过 `chrome.permissions.request()` 运行时申请。
+- **不得**加入 `permissions` 字段。新增必需权限会让 Chrome 在更新时禁用扩展、要求全体用户
+  重新授权,而该功能默认关闭、多数用户不会使用,为它让所有人承担被禁用(进而卸载)的风险不划算。
+- 当前版本的 manifest 不声明任何权限(`permissions` / `optional_permissions` /
+  `host_permissions` 均无)。这是商店页面上的信任优势 —— 新增任何权限(包括可选权限)前,
+  都应先评估必要性。
+
+### 6.4 调度
+
+第 1、2 层在 popup 打开时随渲染计算,不需要任何调度。只有后台的周期性检测(第 3 层系统通知)
+需要定时:
+
+- **必须使用 `chrome.alarms`**。不得使用 `setTimeout` / `setInterval` —— service worker 空闲约
+  30 秒就会被挂起,计时器随之消失;也不得使用 `requestAnimationFrame` —— service worker 里没有它,
+  页面里它在后台标签页也不触发。
+- alarm 在浏览器重启后不保证保留:在 `runtime.onInstalled` 与 `runtime.onStartup` 中检查并按需
+  重建(与 `background.js` 现在设置卸载问卷链接的方式相同)。
+- `chrome.alarms` 需要 `alarms` 权限。它不产生用户可见的警告,不会触发更新时的重新授权,但会结束
+  「manifest 不声明任何权限」的现状 —— 按 §6.3 先评估。
+- service worker 读不到 `localStorage`,后台检测拿不到城市列表。前提是存储先迁到
+  `chrome.storage`,见 §13。
+
 ---
 
 ## 7. 人物模式(推迟)
@@ -288,10 +469,14 @@ off-hours 其余
 
 |                | 免费                  | Pro                 |
 | -------------- | --------------------- | ------------------- |
-| 城市时钟       | 无数量限制            | 同                  |
+| 城市时钟       | 最多 10 个            | 同                  |
 | Core Time 面板 | 可见可用,统一默认工时 | 自定义工时 + 周视图 |
 | DST 预警       | —                     | 全部                |
 | 设置页         | 全部可见可进入        | 同                  |
+
+城市上限是 `TimezoneList.tsx` 的 `MAX_CITIES = 10`,免费与 Pro 相同;第 11 个城市被拒绝,搜索框
+提示已达上限。基准 chip 的下拉(§9.1)与 Core Time 色带的布局都以这个上限为前提;要放开它,先
+回头看这两处。
 
 人物模式推迟后,Pro 的内容为:**按条目自定义工作时间 / 工作日、Core Time 周视图、DST 预警**。
 
@@ -325,14 +510,48 @@ export async function isPro() { ... }
 
 ### 9.1 头部
 
-头部左侧是一个基准时区 chip:`[logo 22px][城市名][HH:MM][⌄]`。城市名与时刻取自
-`settings.referenceTimezone`(为 `null` 时取系统时区);若该时区恰好匹配某个已添加
-条目,取该条目的 `label`,否则从 IANA id 派生一个可读名(取 `/` 后半段,`_` 替换为空格)。
-点击展开一个下拉列表,可选「System timezone」或任一已添加条目的时区(按 timezone 去重)
-作为新的基准;下方城市列表与 Core Time 轴据此立即重算(两者本来就读
-`settings.referenceTimezone`,切换后自动生效,无需额外联动代码)。chip 背景色随该
-基准城市当前的昼夜状态变化,复用卡片已有的天空渐变色板(`--tz-c0/-c1/-c2`,
-`night / dawn / day / twilight` 四态),不引入新配色。
+头部左侧是一个基准时区 chip:`[logo 22px][城市名][HH:MM][⌄]`。时刻取自
+`settings.referenceTimezone`(为 `null` 时取系统时区)。
+
+**城市名的优先级**:
+
+- **选了 System(`referenceTimezone` 为 `null`)时,一律用系统时区 IANA id 派生的名称**
+  (取 `/` 后半段,`_` 替换为空格:`Asia/Tokyo` → `Tokyo`),**不匹配任何条目的 label** ——
+  即使列表里有同一时区的条目。否则列表里有 Tsu(`Asia/Tokyo`)时,选 System 后 chip 仍显示
+  `Tsu`,和选 Tsu 看起来完全一样,用户得不到选择已生效的反馈。
+- **只有用户选了某个条目时,才显示该条目的 `label`**:按 `settings.referenceEntryId` 找到用户选的
+  那一个,而不是「该时区的第一个条目」—— Boston 与 New York 同为 `America/New_York`,只存时区
+  就分不出选的是谁。
+- 选中的条目被删除后:回退到列表中同一时区剩下的第一个条目,再回退到 IANA id 派生的名称。
+  `referenceEntryId` 不随删除清空,Undo 放回后名称随之恢复。没有 `referenceEntryId` 的旧数据
+  同样按时区取第一个条目,与改动前一致。
+
+判定写在 `core/model.ts` 的 `resolveReferenceChip()`(纯函数,有单测),返回名称与选中项。
+
+System 与同时区条目并不等价:System 跟随电脑的时区(出差时会变),选条目则固定在该时区。
+
+点击展开一个下拉列表:「System timezone」(副标题为系统时区的派生名),分隔线下**列出全部条目,
+不按时区去重** —— 用户按城市名认条目,自己添加的城市在下拉里消失会被当成 bug。列表最多 10 个
+条目(§8),下拉最高 240px、超出滚动,不需要分组。选条目时同时保存其时区
+(`referenceTimezone`)与 id(`referenceEntryId`);选 System 时两者都清为 `null`。当前选中项蓝底
+高亮,并以 `aria-pressed` 标记。
+
+**chip 名称与 Base / YOU 跟随不同的值,这是有意设计,不是不一致**:
+
+- **chip 的名称回答「我选了哪个城市」**(身份)—— 跟随 `referenceEntryId`。
+- **卡片的 `Base`(§9.2)与 Core Time 的 `YOU` / `your` / `yours`(§5.3、§9.3)回答「这一行与基准
+  差多少」**(关系)—— 跟随 `referenceTimezone`。基准为 New York 时,Boston 同样是 `Base` / `YOU`:
+  两者零时差,只标其中一个会让用户以为它们之间有区别。
+
+不要把 Base / YOU 改成跟随选中的条目,也不要把 chip 名称改成跟随时区。
+
+选定后,下方城市列表与 Core Time 轴据此立即重算(两者本来就读
+`settings.referenceTimezone`,切换后自动生效,无需额外联动代码)。chip 背景与头部其它
+按钮相同(`--color-primary`,悬停 `--color-hover`),**不随基准城市的昼夜变色**。它曾复用卡片的
+天空渐变,在 `245f1a1` 中有意移除,当时的理由是设计上的:与 `+` / 转换 / 设置按钮一致,而不是一个
+整天变色、在按钮行里格外显眼的胶囊。事后实测还有一条技术理由,**不要加回**:chip 上是白字,
+白字在白天与黎明的天色上只有 1.6–3.8:1(白天 `#3d83e5 / #74b6e6 / #b2d0f0` 为 3.8 / 2.2 / 1.6,
+黎明 3.5 / 2.6 / 1.6),全部低于 12–13px 文字需要的 4.5:1;现在的 `--color-primary` 上是 14.0:1。
 
 右侧精简为三个动作:`+ 添加` / `⏱ 时间转换` / `⚙ 设置`。
 `12/24` 移入设置页,原胶囊整体删除(排序已整体移除,见 §3.4)。
@@ -373,6 +592,9 @@ Base   UTC+09                            TUE | 22 SEP    ← 基准时区对应�
 - **格式**:整点 `+2h` / `−13h`;非整点写成 `+3:30h` / `+5:45h`,不用小数。
 - 与基准时区 **IANA id 相同**的条目显示 `Base`,不显示 `+0h`。id 不同但此刻偏移恰好相同的条目
   (如首尔 vs 东京)显示 `0h` —— 两者在 DST 期间可能分开,不能冒充基准。
+- **`Base` 跟随基准时区,不跟随 chip 中选中的条目。** 同一时区的条目都显示 `Base`:基准为 New York
+  时 Boston 也是 `Base`。`Base` 表达的是这一行与基准的时差(关系),两者零时差;chip 的名称表达的
+  是选了哪个城市(身份)。两者跟随不同的值是有意设计,见 §9.1。
 - **UTC 偏移保留,降为次级**(更小、更暗):`UTC+09` / `UTC−04` / `UTC+05:45`,零偏移为 `UTC`。
   它是无歧义的可信度锚点,不删除。不显示时区缩写(§4.2)。
 - **右侧星期 + 日期对所有条目照常显示**,不做「仅在与基准不同日时显示」的条件隐藏,**颜色也始终不变**。
@@ -387,11 +609,57 @@ Base   UTC+09                            TUE | 22 SEP    ← 基准时区对应�
 
 ### 9.3 Core Time 面板
 
-底部常驻,非 tab。收起时只显示结论行,展开显示色带。
+底部常驻,非 tab。收起时只显示结论行,展开显示色带。进入编辑模式时收起,退出时展开(行序
+跟随列表,刚排好的顺序直接可见)。面板上所有元素只读 `coreTime()` 的结果,见 §5.3。
 
-**橙色(`--color-secondary`)只保留给本面板的重叠框**,界面其它位置一律不用 —— 它曾同时表示
-置顶、分区标题、搜索匹配、日出、转换器角标等无关语义,已全部换掉。
-**色带配色复用卡片的天空渐变色板**,使两个视图共用同一套颜色语言。
+**头部**:`Core time` + `today · 5 cities`;有条目被排除时为 `today · 4 of 5 cities`。点击展开/
+收起。全部条目都被排除时仍可展开 —— 色带是把城市加回来的地方。
+
+**城市列表为空时面板照常显示**(除非设置为 Hide):结论为 `NO_ENTRIES` 的 `Add a city to compare`,
+头部为 `today · 0 cities`,没有色带可展开。这是新用户的第一屏,面板不能缺席。
+
+**色带**:每个条目一行,顺序同列表,**包括被排除的条目**。轴为参考时区当天 0–24 点,蓝色块是
+该条目的工作槽(`rows[].blocks`)。
+
+- 重叠区用橙色框标出,只画在参与该重叠的行上:`OVERLAP` 画全员 `overlap`,`PARTIAL_OVERLAP`
+  与 `PARTIAL_OFF` 画子集的 overlap。被排除的行不画
+- 今天休息的行(`rows[].offToday`):`Off` 标签,色带 45%
+- 被用户排除的行:名称加删除线,色带 25%。**不隐藏** —— 用户需要记得排除过谁,也要能点回来
+
+**点击交互**:
+
+- **点色带左侧的城市名** → 切换该条目的 `includeInCoreTime`,立即持久化。城市名是按钮
+  (`aria-pressed` 表示是否参与)
+- **`PARTIAL_OVERLAP` 的提示行**(`… — tap to exclude it`)本身就是按钮,点击即排除离群条目。
+  收起态没有城市名可点,提示必须自己能用;它同时承担「点城市名可以排除」这一交互的可发现性
+- 全部排除 → `NO_ENTRIES`,文案改为 `No cities in core time` + `Expand to include a city`(收起)/
+  `Tap a city to include it`(展开)
+
+**closest 的展示(`NO_OVERLAP_TODAY`)**:
+
+- 收起态只给基准时刻和提示:`Closest — 17:30 yours` + 瓶颈提示(§5.3)。不逐城市列出本地时刻 ——
+  5 个城市就会换行三次,10 个会挤满面板
+- 展开态:**一条竖线在 closest 槽位穿过所有行**,谁在自己的工作时段内、谁在外,一眼可见,不需要
+  读数字;这是这个展示的核心。第三列补充各城市在该时刻的本地时间,瓶颈条目加粗(并列时全部
+  加粗)。竖线取槽位中点,避免恰好落在某行色块的边缘、看不出在内还是在外。时间列按最宽值自适应
+  (11px 加粗的 `05:30` 约 28px),不写死宽度
+
+**颜色**:
+
+- **橙色(`--color-secondary`)只保留给本面板的重叠框**,含义是「这段时间所有人都行」。界面其它
+  位置一律不用 —— 它曾同时表示置顶、分区标题、搜索匹配、日出、转换器角标等无关语义,已全部换掉
+- closest 竖线用**中性白** + 顶端圆点,不用橙色:closest 按定义不是所有人都行;而且重叠框在色带上
+  被裁成每行两道短橙线,一道橙色竖线会被读成一个很窄的重叠区。竖线是一个元素贯穿所有行,
+  不是每行一截 —— 这是它和重叠框在视觉重量上的区别:框是区域,线是单点
+- 时间列的强调靠字重,不靠色相(与卡片底栏的日期说明同一原则,§9.2)
+- 色带底色为转换器渐变(`--gradient-converter`),工作块为 `#5c7cd6`
+
+**可读性**:变暗的行(休息或被排除)名称仍是按钮,必须可读。统一为中性白 50%,在面板底色
+`#202025` 上 5.1:1,满足 12px 文字的 AA(4.5:1)—— 这是硬线,不为视觉偏好让步(实测:25% 为
+2.3:1,35% 为 3.2:1,45% 为 4.4:1)。行内的 `YOU` / `Off` 标签不再叠加额外透明度(叠加后曾低至
+2.4:1);删除线用文字颜色,同为 5.1:1。基准城市的蓝色在 50% 时只有 3.1:1,所以变暗的行统一
+改用中性色,`YOU` 标签仍标明是谁。休息与排除靠 `Off` 标签 vs 删除线、色带 45% vs 25% 区分,
+不靠文字亮度。
 
 ### 9.4 设置页
 
@@ -478,15 +746,33 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 
 ### 10.4 业务用例
 
-- Tokyo + Boston,默认工时 → `overlap` 为空,`closest` 非空
+- Tokyo + Boston,默认工时 → `overlap` 为空,`closest` 非空(06:30 JST;两个城市不判 `PARTIAL_OVERLAP`)
 - Tokyo + Singapore + Berlin,默认工时 → `overlap` = 16:00–18:00 JST
 - 单条目 → `overlap` = 自身工作时段
-- 全部条目 `includeInCoreTime: false` → 空状态,且不报错
+- 全部条目 `includeInCoreTime: false` → `NO_ENTRIES`,不报错,`rows` 仍逐条返回
 - 某条目 `workDays` 为空数组 → 该条目永不参与,`overlap` 为空
+- Shanghai / Boston / Tokyo / Kathmandu / Bangkok,基准东京,周五 → `PARTIAL_OVERLAP`,排除 Boston,
+  子集 overlap = 12:30–18:00 JST(加德满都的第一个工作槽是当地 09:15)
+- 同上再加 New York → 没有唯一离群者,`NO_OVERLAP_TODAY`;closest = 18:30,不落在任何条目的
+  `end` 上;Boston 与 New York 并列瓶颈(210 分钟);加德满都偏离严格为 0
+- 同上五城市,周一上午的东京(波士顿仍是周日)→ `PARTIAL_OFF`,`workingOverlap` = 12:30–18:00;
+  波士顿的 `offToday` 为 true,尽管轴末端擦到它周一的工作槽
+- 某条目今天休息、其余条目可以重叠 → `PARTIAL_OFF`,不是 `PARTIAL_OVERLAP`
+- `closest` 的任一条目:偏离量为 0 ⇔ 该槽位是它的工作块
 
 ### 10.5 迁移
 
 真实 v1 数据 → 条目数、顺序、置顶状态一致;重复执行结果不变。
+
+按 §3.5 的四种起始状态分别覆盖:
+
+- 全新安装 → v2 默认值(24 小时制),不写 `backup_v1`
+- 纯 v1,三种排序模式各一遍(`newest` / `time` / `alphabet`,按 v1 的纯字符串格式写入)
+- 2.1.0 产生的 v2,v1 的 key 在第一次打开之后:什么都没改(最常见)/ 加过城市 / 删过城市 /
+  改过排序模式 / 改过 12/24 / 清空了列表 —— 结果都以 v1 的 key 为准;`backup_v1` 保持 2.1.0
+  写下的原样;v1 的 key 不被修改
+- 3.0.0 产生的 v2 → 只读取;重建之后用户在 3.0.0 里的改动,不会被仍然存在的 v1 key 覆盖
+- 无法识别的排序模式 / 12/24 值 → `console.warn` 带原始值,回退到 v1 的默认
 
 ---
 
@@ -506,7 +792,7 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 
 第 8 步放最后:先让功能在自己环境跑一周,确认计算无误再收费。付费墙后面藏一个算错时间的功能,退款成本远高于晚上线一周。
 
-下一版:人物模式 + 分组 + Core Time 周视图。
+下一版:人物模式 + 分组 + Core Time 周视图。推迟的项目与理由见 §13。
 
 ---
 
@@ -533,3 +819,29 @@ test/
 ```
 
 `core/` 下所有模块不得引用 `chrome.*` 或 DOM。
+
+---
+
+## 13. Backlog
+
+已决定推迟的项目,连同理由一起记下,避免下次重新推演。
+
+| 项目 | 推迟到 | 理由 |
+| ---- | ------ | ---- |
+| 人物模式 + 分组 | 下一版 | 改动列表主体结构(头像列、分组层级),不适合和 Core Time 同版上线。数据字段已在 §2.1 保留,不需要再迁移 |
+| Core Time 周视图 | 随付费通道 | Pro 功能(§8),没有购买通道前不做 |
+| 多语言 EN / JA / ZH | 界面文案稳定后 | 文案还在改,现在抽 JSON 只会反复改两遍。注意:`chrome.i18n` 按浏览器语言读 `_locales`,**无法在运行时切换**;要在应用内切换语言,需要自建一层 |
+| `localStorage` → `chrome.storage` | 与 DST 版本一起 | service worker 读不到 `localStorage`,DST 后台检测(§6.4)需要它。`storage` 权限不产生用户可见的警告,但换存储意味着又一次数据迁移(备份、幂等、失败不写入,同 §3.1),和 DST 一起做只迁一次。那次迁移同样要对照 §3.5 的全部起始状态,外加「已在 chrome.storage」这一种 |
+| ExtPay 接入 | 付费通道上线时 | §8.1 约定 `isPro()` 为唯一入口,但**它目前还不存在**:代码里没有任何 Pro 判断,Pro 功能(按城市自定义工时 / 工作日)只以只读 + "coming in the next update" 呈现。接入时先按 §8.1 建立 `isPro()`,再在它内部接 ExtPay,调用点只认 `isPro()` |
+| closest:基准时区不在城市列表里时 | 下一版 | 并列取最早是刻意保留的(§5.3),但它依赖使用者自己作为条目参与计算。基准时区不是任何条目时(例如用系统时区而没添加自己的城市),没有任何东西惩罚使用者的深夜,closest 可能给出凌晨的建议;基准 chip 可以自由切换后,这种情况更容易出现。**修法方向**:把基准时区的默认工时也纳入偏离计算,无论它是否作为条目存在 —— 开会的人总是在场的。本版不改 |
+
+### 13.1 案例:同一份判断被多处消费
+
+**Off 标签 bug(v3.0.0 开发中发现并修复)。** Core Time 的状态判断同时被结论行、色带、行标签、
+closest 标记线、时间列消费。色带上的 Off 标签曾自己算「今天是否休息」(整条轴上没有工作槽),
+结论行则按 §5.3 的规则算(`referenceDate` 这一刻的本地星期)。两种算法在轴擦到另一天的工时时
+给出不同答案,于是同一个面板上,结论说「只有 4 个城市在上班」,色带上的波士顿却没有 Off 标签。
+
+教训:**状态判断被多处消费时,任何一处自行计算都会产生不一致**,哪怕那处的算法单独看起来是对的。
+下次加新的展示元素时,只读 `coreTime()` 返回的字段;缺数据就在 core 的返回值里加字段(`offToday`
+就是这样加的),不在 UI 里补算。规则见 §5.3。

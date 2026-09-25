@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from 'react';
 import '@styles/Header.scss';
 import Searchbar from '../components/Searchbar';
 import ResetButton from './ResetButton';
 import { TimezoneInfo } from './Timezone';
-import { getSystemTimezone, localHHMM } from '../core/tz';
+import { resolveReferenceChip } from '../core/model';
+import { friendlyZoneName, getSystemTimezone, localHHMM } from '../core/tz';
 import type { AppSettings, Entry } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition } from '../App';
 
@@ -19,12 +20,6 @@ interface HeaderProps {
   entries: Entry[];
   settings: AppSettings;
   setSettings: Dispatch<SetStateAction<AppSettings>>;
-}
-
-// "Asia/Tokyo" -> "Tokyo" — same convention as an entry's default label.
-function friendlyZoneName(zone: string): string {
-  const last = zone.split('/').pop() ?? zone;
-  return last.replace(/_/g, ' ');
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -66,20 +61,11 @@ const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const effectiveTimezone = settings.referenceTimezone ?? getSystemTimezone();
-  const chipEntry = entries.find((entry) => entry.timezone === effectiveTimezone);
-  const chipCityLabel = chipEntry?.label ?? friendlyZoneName(effectiveTimezone);
+  // Name and selected option come from core (spec §9.1). Time is the zone's.
+  const chip = resolveReferenceChip(entries, settings, getSystemTimezone());
   const chipTime = localHHMM(effectiveTimezone, chipNow);
-
-  const referenceOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const options: { timezone: string; label: string }[] = [];
-    entries.forEach((entry) => {
-      if (seen.has(entry.timezone)) return;
-      seen.add(entry.timezone);
-      options.push({ timezone: entry.timezone, label: entry.label });
-    });
-    return options;
-  }, [entries]);
+  const isSelected = (entryId: string) =>
+    chip.selection.kind === 'entry' && chip.selection.entryId === entryId;
 
   const toggleTzMenu = () => {
     onSearchOpenChange(false);
@@ -87,8 +73,16 @@ const Header: React.FC<HeaderProps> = ({
     setShowTzMenu((prev) => !prev);
   };
 
-  const selectReferenceTimezone = (timezone: string | null) => {
-    setSettings((prev) => ({ ...prev, referenceTimezone: timezone }));
+  // Every entry is its own option, same-zone ones included — people know
+  // their cities by name, and one silently missing reads as a bug. Picking one
+  // stores its zone (for every calculation) and its id (for the name); System
+  // clears both.
+  const selectReference = (entry: Entry | null) => {
+    setSettings((prev) => ({
+      ...prev,
+      referenceTimezone: entry?.timezone ?? null,
+      referenceEntryId: entry?.id ?? null,
+    }));
     setShowTzMenu(false);
   };
 
@@ -293,7 +287,7 @@ const Header: React.FC<HeaderProps> = ({
               onClick={toggleTzMenu}>
               <span className="header-tz-chip__logo" />
               <span className="header-tz-chip__pill">
-                <span className="header-tz-chip__city">{chipCityLabel}</span>
+                <span className="header-tz-chip__city">{chip.label}</span>
                 <span className="header-tz-chip__time">{chipTime}</span>
                 <svg
                   className="header-tz-chip__chevron"
@@ -326,26 +320,24 @@ const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   className={`header-tz-chip__option ${
-                    settings.referenceTimezone === null ? 'active' : ''
+                    chip.selection.kind === 'system' ? 'active' : ''
                   }`}
-                  onClick={() => selectReferenceTimezone(null)}>
+                  aria-pressed={chip.selection.kind === 'system'}
+                  onClick={() => selectReference(null)}>
                   System timezone
                   <span className="header-tz-chip__option-sub">
                     {friendlyZoneName(getSystemTimezone())}
                   </span>
                 </button>
-                {referenceOptions.length > 0 && (
-                  <div className="header-tz-chip__divider" />
-                )}
-                {referenceOptions.map((option) => (
+                {entries.length > 0 && <div className="header-tz-chip__divider" />}
+                {entries.map((entry) => (
                   <button
                     type="button"
-                    key={option.timezone}
-                    className={`header-tz-chip__option ${
-                      settings.referenceTimezone === option.timezone ? 'active' : ''
-                    }`}
-                    onClick={() => selectReferenceTimezone(option.timezone)}>
-                    {option.label}
+                    key={entry.id}
+                    className={`header-tz-chip__option ${isSelected(entry.id) ? 'active' : ''}`}
+                    aria-pressed={isSelected(entry.id)}
+                    onClick={() => selectReference(entry)}>
+                    {entry.label}
                   </button>
                 ))}
               </div>

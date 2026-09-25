@@ -342,7 +342,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               target="_blank"
               rel="noopener noreferrer">
               <span className="settings-panel__label">Website</span>
-              <span className="settings-panel__value">useskies.com</span>
+              <span className="settings-panel__row-end">
+                <span className="settings-panel__value">useskies.com</span>
+                <ExternalIcon />
+              </span>
             </a>
 
             <div className="settings-panel__row">

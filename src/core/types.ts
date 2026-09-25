@@ -56,7 +56,14 @@ export interface AppSettings {
   // Deprecated — manual order is the only order now. Kept for the same reason
   // as Entry.pinned: freezeDisplayOrder() needs it to reproduce the old order.
   sortOrder: SortOrder;
+  // null = System (follows the machine). Every time calculation reads this.
   referenceTimezone: string | null;
+  // Which list entry the user picked as the reference, if any — only for the
+  // chip's name and the menu's selected state: two entries can share a zone
+  // (Boston, New York), and the zone alone can't say which was chosen.
+  // Optional: data saved before it existed doesn't have it, and
+  // resolveReferenceChip() then falls back to the zone.
+  referenceEntryId?: string | null;
   defaultWorkHours: WorkHours;
   defaultWorkDays: WorkDays;
   coreTimePanel: CoreTimePanelMode;

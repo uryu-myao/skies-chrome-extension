@@ -21,6 +21,14 @@ export interface CoreTimeAxisSlot {
 
 export interface CoreTimeRow {
   entryId: string;
+  // entry.includeInCoreTime. An excluded entry still gets its row, so the
+  // panel can show it dimmed rather than hide it, but it takes no part in
+  // the overlap or the conclusion.
+  included: boolean;
+  // Not a work day for this entry at referenceDate — the same test the
+  // conclusion's offEntryIds come from. Not derivable from `blocks`: the
+  // axis can graze yesterday's or tomorrow's working hours (§5.3).
+  offToday: boolean;
   blocks: boolean[];
   localDate: string;
   crossesDay: boolean;
@@ -31,16 +39,28 @@ export interface CoreTimeOverlapRange {
   endSlot: number;
 }
 
+// Which side of its own work window an entry is on; null while inside it.
+export type WorkWindowDirection = 'BEFORE_START' | 'AFTER_END';
+
 export interface CoreTimeClosestPerEntry {
   entryId: string;
   localTime: string;
   deviationMinutes: number;
+  direction: WorkWindowDirection | null;
 }
 
 export interface CoreTimeClosest {
+  slot: number;
   refTime: string;
   perEntry: CoreTimeClosestPerEntry[];
+  // The largest single deviation at refTime — the bottleneck entry's. Always
+  // > 0: a slot where every deviation is 0 is an overlap slot, and then the
+  // conclusion is OVERLAP, not NO_OVERLAP_TODAY.
   gapMinutes: number;
+  // Every entry at gapMinutes, in list order. More than one on a tie — and
+  // then none of them alone is "the" bottleneck: excluding one wouldn't
+  // close the gap, so the UI must not name just one.
+  bottleneckEntryIds: string[];
 }
 
 export interface CoreTimeNextOverlap {
@@ -57,11 +77,25 @@ export type CoreTimeConclusion =
   | { status: 'NO_ENTRIES' }
   | { status: 'OVERLAP' }
   | { status: 'NO_OVERLAP_TODAY'; closest: CoreTimeClosest }
+  // Everyone is on a work day and the full overlap is empty, but dropping
+  // exactly one entry — the one outlier — leaves a non-empty one. Not the
+  // same thing as PARTIAL_OFF: that's someone off today (workDays), this is
+  // work *hours* that don't line up. `overlap` is the subset's.
+  | {
+      status: 'PARTIAL_OVERLAP';
+      overlap: CoreTimeOverlapRange[];
+      includedIds: string[];
+      excludedId: string;
+    }
   | { status: 'ALL_OFF'; offEntryIds: string[]; nextOverlap: CoreTimeNextOverlap | null }
   | {
       status: 'PARTIAL_OFF';
       workingEntryIds: string[];
       offEntryIds: string[];
+      // The working entries' own overlap today — usable now, where
+      // nextOverlap is the next one that includes everybody. Empty with
+      // fewer than two working, or when they don't line up either.
+      workingOverlap: CoreTimeOverlapRange[];
       nextOverlap: CoreTimeNextOverlap | null;
     };
 
@@ -73,6 +107,8 @@ export interface CoreTimeResult {
 }
 
 export interface CoreTimeInput {
+  // The whole list, in list order. Only entries with includeInCoreTime take
+  // part in the overlap and the conclusion; every entry gets a row.
   entries: Entry[];
   settings: AppSettings;
   referenceDate: Date;
@@ -87,26 +123,65 @@ function buildSlotInstants(referenceTimezone: string, referenceDate: Date): Date
   );
 }
 
-function buildRow(entry: Entry, settings: AppSettings, slotInstants: Date[]): CoreTimeRow {
+interface WorkWindowPosition {
+  deviationMinutes: number;
+  direction: WorkWindowDirection | null;
+}
+
+// The one definition of "is this entry working at `instant`" (§5.2 rule 3:
+// local weekday ∈ workDays and local time ∈ [start, end)). Rows, the overlap
+// and closest all derive from it, so a slot is a working slot exactly when
+// its deviation is 0. Null when the local weekday isn't a work day at all
+// (including an empty workDays list): no finite deviation exists.
+//
+// Outside the window, the deviation is how far a meeting starting at this
+// slot sits outside the entry's day: how early it starts before `start`, or
+// how far its one-slot length runs past `end`. That's what keeps a slot
+// starting exactly at `end` — outside [start, end) — from counting as 0.
+function workWindowPosition(
+  entry: Entry,
+  settings: AppSettings,
+  instant: Date
+): WorkWindowPosition | null {
   const { start, end } = resolveWorkHours(entry, settings);
   const { days } = resolveWorkDays(entry, settings);
-  const daySet = new Set(days);
+  if (!days.includes(localWeekday(entry.timezone, instant))) return null;
+
+  const minutes = localMinutesOfDay(entry.timezone, instant);
   const startMinutes = start * 60;
   const endMinutes = end * 60;
+  if (minutes < startMinutes) {
+    return { deviationMinutes: startMinutes - minutes, direction: 'BEFORE_START' };
+  }
+  if (minutes >= endMinutes) {
+    return { deviationMinutes: minutes + MINUTES_PER_SLOT - endMinutes, direction: 'AFTER_END' };
+  }
+  return { deviationMinutes: 0, direction: null };
+}
 
-  const blocks = slotInstants.map((instant) => {
-    const weekday = localWeekday(entry.timezone, instant);
-    if (!daySet.has(weekday)) return false;
-    const minutes = localMinutesOfDay(entry.timezone, instant);
-    return minutes >= startMinutes && minutes < endMinutes;
-  });
+function buildRow(
+  entry: Entry,
+  settings: AppSettings,
+  slotInstants: Date[],
+  referenceDate: Date
+): CoreTimeRow {
+  const blocks = slotInstants.map(
+    (instant) => workWindowPosition(entry, settings, instant)?.deviationMinutes === 0
+  );
 
   const localDate = localDateKey(entry.timezone, slotInstants[0]);
   const crossesDay = slotInstants.some(
     (instant) => localDateKey(entry.timezone, instant) !== localDate
   );
 
-  return { entryId: entry.id, blocks, localDate, crossesDay };
+  return {
+    entryId: entry.id,
+    included: entry.includeInCoreTime,
+    offToday: !isOnWorkdayToday(entry, settings, referenceDate),
+    blocks,
+    localDate,
+    crossesDay,
+  };
 }
 
 // Intersection of every row's working slots, collapsed into contiguous ranges.
@@ -127,25 +202,11 @@ function computeOverlapRanges(rows: CoreTimeRow[]): CoreTimeOverlapRange[] {
   return ranges;
 }
 
-// Minutes an entry's local time is outside its own working window at `instant`.
-// Infinity when the entry's local weekday isn't a work day at all (including
-// an entry with an empty workDays list, which never has a valid window).
-function deviationMinutes(entry: Entry, settings: AppSettings, instant: Date): number {
-  const { start, end } = resolveWorkHours(entry, settings);
-  const { days } = resolveWorkDays(entry, settings);
-  const weekday = localWeekday(entry.timezone, instant);
-  if (!days.includes(weekday)) return Infinity;
-
-  const minutes = localMinutesOfDay(entry.timezone, instant);
-  const startMinutes = start * 60;
-  const endMinutes = end * 60;
-  if (minutes >= startMinutes && minutes < endMinutes) return 0;
-  return minutes < startMinutes ? startMinutes - minutes : minutes - endMinutes;
-}
-
 // Reference-axis slot minimizing the sum of every entry's deviation from its
 // own working window. Ties broken by earliest slot. Null when no slot has a
 // finite total (e.g. an entry with no valid work day anywhere on this axis).
+// The bottleneck is the entry with the largest deviation at that slot; on a
+// tie, all of them.
 function computeClosest(
   entries: Entry[],
   settings: AppSettings,
@@ -160,16 +221,17 @@ function computeClosest(
     let valid = true;
 
     for (const entry of entries) {
-      const deviation = deviationMinutes(entry, settings, instant);
-      if (!Number.isFinite(deviation)) {
+      const position = workWindowPosition(entry, settings, instant);
+      if (position === null) {
         valid = false;
         break;
       }
-      total += deviation;
+      total += position.deviationMinutes;
       perEntry.push({
         entryId: entry.id,
         localTime: localHHMM(entry.timezone, instant),
-        deviationMinutes: deviation,
+        deviationMinutes: position.deviationMinutes,
+        direction: position.direction,
       });
     }
 
@@ -181,10 +243,16 @@ function computeClosest(
 
   if (best === null) return null;
 
+  const gapMinutes = Math.max(...best.perEntry.map((p) => p.deviationMinutes));
+
   return {
+    slot: best.slot,
     refTime: formatHHMM(best.slot * MINUTES_PER_SLOT),
     perEntry: best.perEntry,
-    gapMinutes: Math.max(...best.perEntry.map((p) => p.deviationMinutes)),
+    gapMinutes,
+    bottleneckEntryIds: best.perEntry
+      .filter((p) => p.deviationMinutes === gapMinutes)
+      .map((p) => p.entryId),
   };
 }
 
@@ -213,7 +281,7 @@ function findNextOverlap(
     const { year, month, day } = addLocalCalendarDays(referenceTimezone, referenceDate, daysFromToday);
     const dayAnchor = new Date(localMidnightUtcMillis(referenceTimezone, year, month, day));
     const slotInstants = buildSlotInstants(referenceTimezone, dayAnchor);
-    const rows = entries.map((entry) => buildRow(entry, settings, slotInstants));
+    const rows = entries.map((entry) => buildRow(entry, settings, slotInstants, dayAnchor));
     const overlap = computeOverlapRanges(rows);
 
     if (overlap.length > 0) {
@@ -228,20 +296,49 @@ function findNextOverlap(
   return null;
 }
 
+// Leave-one-out: drop each row in turn and recompute the overlap of the rest.
+// Returns the PARTIAL_OVERLAP conclusion only when exactly one drop works —
+// several candidates means no single outlier to name, none means it isn't
+// one city's fault; both fall back to closest. Deliberately no search for
+// the largest workable subset: that's exponential in the number of cities
+// and not something the panel could explain in a sentence. Needs three
+// rows: "all but X" with two cities is just the other city's own hours.
+function findSingleOutlier(
+  rows: CoreTimeRow[]
+): Extract<CoreTimeConclusion, { status: 'PARTIAL_OVERLAP' }> | null {
+  if (rows.length < 3) return null;
+
+  let found: Extract<CoreTimeConclusion, { status: 'PARTIAL_OVERLAP' }> | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    const rest = rows.filter((_, j) => j !== i);
+    const overlap = computeOverlapRanges(rest);
+    if (overlap.length === 0) continue;
+    if (found) return null;
+    found = {
+      status: 'PARTIAL_OVERLAP',
+      overlap,
+      includedIds: rest.map((row) => row.entryId),
+      excludedId: rows[i].entryId,
+    };
+  }
+  return found;
+}
+
 function computeConclusion(
   entries: Entry[],
   settings: AppSettings,
   referenceTimezone: string,
   referenceDate: Date,
+  rows: CoreTimeRow[],
   overlap: CoreTimeOverlapRange[],
   slotInstants: Date[]
 ): CoreTimeConclusion {
   if (entries.length === 0) return { status: 'NO_ENTRIES' };
   if (overlap.length > 0) return { status: 'OVERLAP' };
 
-  const offEntryIds = entries
-    .filter((entry) => !isOnWorkdayToday(entry, settings, referenceDate))
-    .map((entry) => entry.id);
+  // From the rows, so the panel's per-row Off tag and this list can't
+  // disagree.
+  const offEntryIds = rows.filter((row) => row.offToday).map((row) => row.entryId);
 
   if (offEntryIds.length === entries.length) {
     return {
@@ -254,13 +351,23 @@ function computeConclusion(
   if (offEntryIds.length > 0) {
     const offSet = new Set(offEntryIds);
     const workingEntryIds = entries.map((entry) => entry.id).filter((id) => !offSet.has(id));
+    // Same idea as PARTIAL_OVERLAP: part of the group can meet today, and
+    // "next full overlap" alone would hide that. One working entry's
+    // "overlap" is just its own hours, so that needs two.
+    const workingRows = rows.filter((row) => !offSet.has(row.entryId));
     return {
       status: 'PARTIAL_OFF',
       workingEntryIds,
       offEntryIds,
+      workingOverlap: workingRows.length >= 2 ? computeOverlapRanges(workingRows) : [],
       nextOverlap: findNextOverlap(entries, settings, referenceTimezone, referenceDate),
     };
   }
+
+  // Everyone's on a work day, so the empty overlap is the hours. With several
+  // cities that's usually one outlier.
+  const partialOverlap = findSingleOutlier(rows);
+  if (partialOverlap) return partialOverlap;
 
   // Every entry is on its own work day today, so some slot on this axis
   // should satisfy all of them simultaneously — computeClosest returning
@@ -287,13 +394,16 @@ export function coreTime({ entries, settings, referenceDate }: CoreTimeInput): C
     refTime: formatHHMM(slot * MINUTES_PER_SLOT),
   }));
 
-  const rows = entries.map((entry) => buildRow(entry, settings, slotInstants));
-  const overlap = computeOverlapRanges(rows);
+  const rows = entries.map((entry) => buildRow(entry, settings, slotInstants, referenceDate));
+  const includedEntries = entries.filter((entry) => entry.includeInCoreTime);
+  const includedRows = rows.filter((row) => row.included);
+  const overlap = computeOverlapRanges(includedRows);
   const conclusion = computeConclusion(
-    entries,
+    includedEntries,
     settings,
     referenceTimezone,
     referenceDate,
+    includedRows,
     overlap,
     slotInstants
   );

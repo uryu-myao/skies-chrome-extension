@@ -87,12 +87,74 @@
   }
 
   &__band {
+    // Containing block for the closest marker, which is placed on the grid.
+    position: relative;
     padding: 4px 14px 12px;
     display: grid;
     grid-template-columns: minmax(46px, max-content) 1fr;
     align-items: center;
     column-gap: 10px;
     row-gap: 4px;
+
+    // NO_OVERLAP_TODAY adds each city's local time at the closest slot.
+    &--closest {
+      grid-template-columns: minmax(46px, max-content) 1fr max-content;
+    }
+  }
+
+  // Sized to the widest time, bold included, so it never clips.
+  &__row-time {
+    font-family: 'Lato', sans-serif;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    opacity: 0.5;
+
+    &--bottleneck {
+      font-weight: 700;
+      opacity: 1;
+    }
+  }
+
+  // Positioned against the track column across every track row (an
+  // absolutely positioned grid child uses its grid area as containing block).
+  &__marker-layer {
+    position: absolute;
+    // Both lines explicit: for an absolutely positioned item an `auto` end
+    // line is the container's padding edge, which would take in the time
+    // column too.
+    grid-column: 2 / 3;
+    top: -4px;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+  }
+
+  // A point, not a region: one continuous neutral line with a cap, where the
+  // overlap outline is an orange box per row. Orange stays "these hours work
+  // for everyone"; the closest slot is by definition not that.
+  &__marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1.5px;
+    transform: translateX(-50%);
+    border-radius: 1px;
+    background: var(--color-font-timezone);
+    opacity: 0.85;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: 50%;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: inherit;
+      transform: translateX(-50%);
+    }
   }
 
   &__row {
@@ -101,27 +163,74 @@
     // display:contents generates no box of its own, so opacity/title on the
     // row itself would be silently ignored — dim each child directly, with
     // enough specificity to still win on a row that's also the baseline row.
-    &--off {
-      .core-time-panel__row-label,
+    //
+    // A dimmed row — off today, or excluded by the user — still has a
+    // button for a name, so the name must stay readable. Measured on
+    // #202025: white at 50% is 5.1:1, past AA for 12px (45% was 4.4:1, 25%
+    // 2.3:1). The baseline blue would drop to 3.1:1 at 50%, so a dimmed row
+    // goes neutral; its YOU tag still says whose it is. The tags take the
+    // row's 50% as is: their own extra dimming on top put them at 2.4–4.0:1.
+    // The strike-through is drawn in the text colour, so it's 5.1:1 too.
+    // Off and excluded are told apart by the Off tag vs the strike-through
+    // and by how far the band dims — not by the name's brightness.
+    &--off,
+    &--excluded {
+      .core-time-panel__row-label {
+        color: var(--color-font-timezone);
+        opacity: 0.5;
+
+        &:hover {
+          opacity: 0.8;
+        }
+      }
+
+      .core-time-panel__row-baseline-tag,
+      .core-time-panel__row-off-tag {
+        opacity: 1;
+      }
+    }
+
+    &--off .core-time-panel__track {
+      opacity: 0.45;
+    }
+
+    &--excluded {
+      .core-time-panel__row-name,
+      .core-time-panel__row-label:hover .core-time-panel__row-name {
+        text-decoration: line-through;
+      }
+
       .core-time-panel__track {
-        opacity: 0.45;
+        opacity: 0.25;
       }
     }
   }
 
+  // A button: tapping the name toggles the city in/out of Core Time.
   &__row-label {
     display: flex;
     align-items: baseline;
     gap: 4px;
     max-width: 96px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
     font-family: 'Poppins', serif;
     font-size: 12px;
     font-weight: 600;
+    text-align: left;
+    cursor: pointer;
     opacity: 0.85;
 
     &--baseline {
       color: #9db8ea;
       opacity: 1;
+    }
+
+    &:hover .core-time-panel__row-name {
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
   }
 
@@ -239,20 +348,23 @@
     gap: 3px;
   }
 
+  // Wraps rather than truncating: with every range listed ("00:00–07:00,
+  // 22:00–24:00") and labels up to 32 characters, an ellipsis would cut off
+  // exactly the range the line is there to give.
   &__headline {
     font-family: 'Poppins', serif;
     font-size: 12px;
     font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
   // App's primary accent blue (same token Settings uses for its active
   // segmented-control/day-toggle states) — orange read as too jarring here.
+  // The ranges stay together, so a wrap falls before them, not mid-range.
   &__headline-range {
     color: #9cb2e7;
     padding-left: 4px;
+    white-space: nowrap;
   }
 
   &__detail {
@@ -269,8 +381,20 @@
     opacity: 0.5;
   }
 
-  &__muted {
-    opacity: 0.6;
-    padding-left: 6px;
+  // The PARTIAL_OVERLAP hint doubles as the exclude control.
+  &__hint-action {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      opacity: 0.8;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
   }
 }
