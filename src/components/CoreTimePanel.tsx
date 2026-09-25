@@ -104,7 +104,9 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
 
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
 
-  if (settings.coreTimePanel === 'hidden' || entries.length === 0) {
+  // Shown with an empty list too: that's NO_ENTRIES, a new user's first
+  // screen, and "Add a city to compare" is what it's there to say.
+  if (settings.coreTimePanel === 'hidden') {
     return null;
   }
 
@@ -128,9 +130,10 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
 
     switch (conclusion.status) {
       case 'NO_ENTRIES':
-        // The panel isn't rendered at all without entries, so here it means
-        // every city was excluded (or closest's null fallback, see coretime).
-        if (includedCount === 0) {
+        // Three ways here: no cities at all, every city excluded, or
+        // closest's null fallback (a bug path, see coretime) — only the
+        // excluded case needs its own wording.
+        if (entries.length > 0 && includedCount === 0) {
           return (
             <div className="core-time-panel__conclusion">
               <span className="core-time-panel__headline">No cities in core time</span>
@@ -254,8 +257,8 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
   };
 
   // Still expandable with every city excluded — the band is where they're
-  // brought back.
-  const canExpand = !isEditMode;
+  // brought back. With no cities there's no band to show.
+  const canExpand = !isEditMode && entries.length > 0;
   const cityWord = entries.length === 1 ? 'city' : 'cities';
   const countText =
     includedCount === entries.length
