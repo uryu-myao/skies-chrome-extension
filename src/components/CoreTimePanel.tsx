@@ -214,12 +214,23 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
 
       case 'PARTIAL_OFF': {
         const workingLabels = conclusion.workingEntryIds.map(labelOf);
-        const verb = workingLabels.length === 1 ? 'is' : 'are';
+        const workingCount = workingLabels.length;
+        const verb = workingCount === 1 ? 'is' : 'are';
+        // Names read fine up to two; past that a count keeps it one line.
+        const who = workingCount >= 3 ? `${workingCount} cities` : joinLabels(workingLabels);
+        const [first, ...rest] = conclusion.workingOverlap;
         return (
           <div className="core-time-panel__conclusion">
             <span className="core-time-panel__headline">
-              Only {joinLabels(workingLabels)} {verb} working today
+              Only {who} {verb} working today
             </span>
+            {first && (
+              <span className="core-time-panel__detail">
+                {workingCount >= 3 ? `Those ${workingCount}` : 'They'} overlap{' '}
+                {formatSlotTime(result.axis, first.startSlot)}–{formatSlotTime(result.axis, first.endSlot)}
+                {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
+              </span>
+            )}
             {renderNextOverlap('Next full overlap', conclusion.nextOverlap)}
           </div>
         );
@@ -241,14 +252,19 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
       ? `${entries.length} ${cityWord}`
       : `${includedCount} of ${entries.length} ${cityWord}`;
 
-  // PARTIAL_OVERLAP outlines the subset's overlap on the subset's rows only;
-  // otherwise the full overlap (empty unless OVERLAP) goes on every included
-  // row. Excluded rows never get it.
+  // PARTIAL_OVERLAP and PARTIAL_OFF outline the subset's overlap on the
+  // subset's rows only; otherwise the full overlap (empty unless OVERLAP)
+  // goes on every included row. Excluded rows never get it.
   const overlapOf = (entryId: string, included: boolean): CoreTimeOverlapRange[] => {
     const { conclusion } = result;
     if (!included) return [];
-    if (conclusion.status !== 'PARTIAL_OVERLAP') return result.overlap;
-    return conclusion.includedIds.includes(entryId) ? conclusion.overlap : [];
+    if (conclusion.status === 'PARTIAL_OVERLAP') {
+      return conclusion.includedIds.includes(entryId) ? conclusion.overlap : [];
+    }
+    if (conclusion.status === 'PARTIAL_OFF') {
+      return conclusion.workingEntryIds.includes(entryId) ? conclusion.workingOverlap : [];
+    }
+    return result.overlap;
   };
 
   // NO_OVERLAP_TODAY: a marker at the closest slot runs through every row,

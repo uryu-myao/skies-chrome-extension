@@ -356,6 +356,8 @@ const SATURDAY_NOON_JST = new Date('2026-07-18T03:00:00Z');
 const SATURDAY_MORNING_JST = new Date('2026-07-18T01:00:00Z');
 // Sunday 2026-07-19 12:00 in Tokyo, 11:00 in Singapore.
 const SUNDAY_NOON_JST = new Date('2026-07-19T03:00:00Z');
+// Monday 2026-09-28 10:00 in Tokyo, still Sunday 21:00 in Boston (EDT).
+const MONDAY_MORNING_JST = new Date('2026-09-28T01:00:00Z');
 
 describe('coreTime — §5.3 off-day states', () => {
   it('ALL_OFF: everyone is on their weekend, nextOverlap skips Sunday to Monday', () => {
@@ -425,10 +427,12 @@ describe('coreTime — §5.3 off-day states', () => {
 
     expect(result.overlap).toEqual([]);
     // Next *full* overlap needs Tokyo back too: Monday, 09:00 CST = 10:00 JST
+    // One working entry: no "overlap" of its own hours to report.
     expect(result.conclusion).toEqual({
       status: 'PARTIAL_OFF',
       workingEntryIds: [shanghai.id],
       offEntryIds: [tokyo.id],
+      workingOverlap: [],
       nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 20, endSlot: 36 },
     });
   });
@@ -448,8 +452,52 @@ describe('coreTime — §5.3 off-day states', () => {
       status: 'PARTIAL_OFF',
       workingEntryIds: [newYork.id],
       offEntryIds: [tokyo.id],
+      workingOverlap: [],
       nextOverlap: null,
     });
+  });
+
+  it('PARTIAL_OFF also gives the working cities’ overlap today — Monday in Asia, Sunday in Boston', () => {
+    // Monday 10:00 JST is still Sunday 21:00 in Boston. The four Asian cities
+    // can meet today; "next full overlap" alone would hide that.
+    const { shanghai, boston, tokyo, kathmandu, bangkok } = asiaAndBoston();
+    const result = coreTime({
+      entries: [shanghai, boston, tokyo, kathmandu, bangkok],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: MONDAY_MORNING_JST,
+    });
+
+    // Boston's hours never meet Kathmandu's, so no full overlap in 7 days.
+    expect(result.conclusion).toEqual({
+      status: 'PARTIAL_OFF',
+      workingEntryIds: [shanghai.id, tokyo.id, kathmandu.id, bangkok.id],
+      offEntryIds: [boston.id],
+      workingOverlap: [{ startSlot: 25, endSlot: 36 }],
+      nextOverlap: null,
+    });
+  });
+
+  it("PARTIAL_OFF's working overlap is empty when the working cities don't line up either", () => {
+    // Saturday: Tokyo is off; Shanghai (works Saturdays) and New York (still
+    // Friday) are working, 12h apart.
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const shanghai = createEntry({
+      timezone: 'Asia/Shanghai',
+      label: 'Shanghai',
+      workDays: [1, 2, 3, 4, 5, 6],
+    });
+    const newYork = createEntry({ timezone: 'America/New_York', label: 'New York' });
+    const result = coreTime({
+      entries: [tokyo, shanghai, newYork],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SATURDAY_MORNING_JST,
+    });
+
+    const { conclusion } = result;
+    expect(conclusion.status).toBe('PARTIAL_OFF');
+    if (conclusion.status !== 'PARTIAL_OFF') return;
+    expect(conclusion.workingEntryIds).toEqual([shanghai.id, newYork.id]);
+    expect(conclusion.workingOverlap).toEqual([]);
   });
 
   it('nextOverlap is null when the 7-day search finds nothing — an entry that never works', () => {

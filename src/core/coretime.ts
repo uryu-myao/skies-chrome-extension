@@ -88,6 +88,10 @@ export type CoreTimeConclusion =
       status: 'PARTIAL_OFF';
       workingEntryIds: string[];
       offEntryIds: string[];
+      // The working entries' own overlap today — usable now, where
+      // nextOverlap is the next one that includes everybody. Empty with
+      // fewer than two working, or when they don't line up either.
+      workingOverlap: CoreTimeOverlapRange[];
       nextOverlap: CoreTimeNextOverlap | null;
     };
 
@@ -331,10 +335,15 @@ function computeConclusion(
   if (offEntryIds.length > 0) {
     const offSet = new Set(offEntryIds);
     const workingEntryIds = entries.map((entry) => entry.id).filter((id) => !offSet.has(id));
+    // Same idea as PARTIAL_OVERLAP: part of the group can meet today, and
+    // "next full overlap" alone would hide that. One working entry's
+    // "overlap" is just its own hours, so that needs two.
+    const workingRows = rows.filter((row) => !offSet.has(row.entryId));
     return {
       status: 'PARTIAL_OFF',
       workingEntryIds,
       offEntryIds,
+      workingOverlap: workingRows.length >= 2 ? computeOverlapRanges(workingRows) : [],
       nextOverlap: findNextOverlap(entries, settings, referenceTimezone, referenceDate),
     };
   }
