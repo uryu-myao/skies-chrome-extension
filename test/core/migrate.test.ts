@@ -16,6 +16,7 @@ import {
 } from '../../src/core/model';
 import type { AppData, Entry, SortOrder } from '../../src/core/types';
 import v1Real from '../fixtures/v1-real.json';
+import from210 from '../fixtures/v2-written-by-2.1.0.json';
 
 // v1-real.json is a real v1 export pulled from DevTools -> Application ->
 // Local Storage (per §10.5's "real v1 dataset" requirement) — sortMode and
@@ -206,7 +207,10 @@ describe('freezeDisplayOrder', () => {
 });
 
 describe('migrate — freezing the pre-manual-order display order', () => {
-  it('freezes and persists existing v2 data that has no order yet', () => {
+  // v2 data without `order` and no v1 keys existed only in pre-release dev
+  // builds; every real user with order-less v2 data came from 2.1.0 and still
+  // has v1 keys (see "upgrading from 2.1.0" below).
+  it('freezes and persists existing v2 data that has no order yet (no v1 keys)', () => {
     const data = legacyData(
       [
         createEntry({ timezone: 'Asia/Tokyo', label: 'A' }),
@@ -257,44 +261,6 @@ describe('migrate — freezing the pre-manual-order display order', () => {
   });
 });
 
-// The user's reproduction: five cities, Boston and Shanghai pinned.
-const FIVE_CITIES = [
-  { id: 'c1', city: 'Bangkok', zone: 'Asia/Bangkok' },
-  { id: 'c2', city: 'Boston', zone: 'America/New_York' },
-  { id: 'c3', city: 'Kathmandu', zone: 'Asia/Kathmandu' },
-  { id: 'c4', city: 'Shanghai', zone: 'Asia/Shanghai' },
-  { id: 'c5', city: 'Tokyo', zone: 'Asia/Tokyo' },
-];
-// US on DST: Boston −4, Kathmandu +5:45, Bangkok +7, Shanghai +8, Tokyo +9.
-const SEP_25 = new Date('2026-09-25T07:00:00Z');
-
-function seedFiveCities(sortMode: string): void {
-  localStorage.setItem(V1_TIMEZONES_KEY, JSON.stringify(FIVE_CITIES));
-  localStorage.setItem(V1_PINNED_KEY, JSON.stringify(['c2', 'c4']));
-  localStorage.setItem(V1_SORT_MODE_KEY, sortMode);
-}
-
-describe('migrate — pure v1, end to end through every sort mode', () => {
-  it('alphabet: pinned first, each group by name', () => {
-    seedFiveCities('alphabet');
-    const data = migrate(SEP_25);
-    expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Bangkok', 'Kathmandu', 'Tokyo']);
-    expect(data.settings.sortOrder).toBe('name');
-  });
-
-  it('time: pinned first, each group furthest behind first (v1 sorted by local time)', () => {
-    seedFiveCities('time');
-    const data = migrate(SEP_25);
-    expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Kathmandu', 'Bangkok', 'Tokyo']);
-    expect(data.settings.sortOrder).toBe('offset');
-  });
-
-  it('newest: pinned first, each group newest first (stored array reversed)', () => {
-    seedFiveCities('newest');
-    expect(labels(migrate(SEP_25))).toEqual(['Shanghai', 'Boston', 'Tokyo', 'Kathmandu', 'Bangkok']);
-  });
-});
-
 describe('readV1Snapshot — v1 stored sort mode and hour format as plain strings', () => {
   it('reads the plain strings every published v1 wrote, without warning', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -340,11 +306,133 @@ describe('mapV1ToV2 — without a value, what v1 showed, not v2 defaults', () =>
   });
 });
 
+// The user's reproduction: five cities, Boston and Shanghai pinned.
+const FIVE_CITIES = [
+  { id: 'c1', city: 'Bangkok', zone: 'Asia/Bangkok' },
+  { id: 'c2', city: 'Boston', zone: 'America/New_York' },
+  { id: 'c3', city: 'Kathmandu', zone: 'Asia/Kathmandu' },
+  { id: 'c4', city: 'Shanghai', zone: 'Asia/Shanghai' },
+  { id: 'c5', city: 'Tokyo', zone: 'Asia/Tokyo' },
+];
+// US on DST: Boston −4, Kathmandu +5:45, Bangkok +7, Shanghai +8, Tokyo +9.
+const SEP_25 = new Date('2026-09-25T07:00:00Z');
+
+function seedFiveCities(sortMode: string): void {
+  localStorage.setItem(V1_TIMEZONES_KEY, JSON.stringify(FIVE_CITIES));
+  localStorage.setItem(V1_PINNED_KEY, JSON.stringify(['c2', 'c4']));
+  localStorage.setItem(V1_SORT_MODE_KEY, sortMode);
+}
+
+describe('migrate — pure v1, end to end through every sort mode', () => {
+  it('alphabet: pinned first, each group by name', () => {
+    seedFiveCities('alphabet');
+    const data = migrate(SEP_25);
+    expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Bangkok', 'Kathmandu', 'Tokyo']);
+    expect(data.settings.sortOrder).toBe('name');
+  });
+
+  it('time: pinned first, each group furthest behind first (v1 sorted by local time)', () => {
+    seedFiveCities('time');
+    const data = migrate(SEP_25);
+    expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Kathmandu', 'Bangkok', 'Tokyo']);
+    expect(data.settings.sortOrder).toBe('offset');
+  });
+
+  it('newest: pinned first, each group newest first (stored array reversed)', () => {
+    seedFiveCities('newest');
+    expect(labels(migrate(SEP_25))).toEqual(['Shanghai', 'Boston', 'Tokyo', 'Kathmandu', 'Bangkok']);
+  });
+});
+
 describe('migrate — fresh install (nothing stored)', () => {
   it('gets v2 defaults — 24-hour, not v1’s 12-hour fallback — and no v1 backup', () => {
     const data = migrate(SEP_25);
     expect(data.entries).toEqual([]);
     expect(data.settings).toEqual(DEFAULT_SETTINGS);
     expect(localStorage.getItem(BACKUP_V1_STORAGE_KEY)).toBeNull();
+  });
+});
+
+// A browser that ran 2.1.0: its first popup open wrote timemate.data.v2 and
+// timemate.backup_v1 (the fixture, generated by 2.1.0's own code: Bangkok,
+// Boston pinned, Kathmandu; newest; 12-hour). After that 2.1.0's UI kept
+// writing only the v1 keys — `v1Changes` is what the user did afterwards.
+function seedAfter210(v1Changes: Record<string, string> = {}): void {
+  localStorage.setItem(APP_DATA_STORAGE_KEY, from210['timemate.data.v2']);
+  localStorage.setItem(BACKUP_V1_STORAGE_KEY, from210['timemate.backup_v1']);
+  for (const [key, value] of Object.entries({ ...from210.v1Keys, ...v1Changes })) {
+    localStorage.setItem(key, value);
+  }
+}
+
+const DAY_ONE = JSON.parse(from210.v1Keys['timemate.timezones.v1']) as typeof FIVE_CITIES;
+
+describe('migrate — upgrading from 2.1.0 (v2 without order, v1 keys still there)', () => {
+  it('the fixture really is what 2.1.0 wrote: no order on any entry', () => {
+    const stale = JSON.parse(from210['timemate.data.v2']) as AppData;
+    expect(needsOrderFreeze(stale)).toBe(true);
+  });
+
+  it('nothing changed since the first open (the common case): same cities, same order', () => {
+    seedAfter210();
+    const data = migrate(SEP_25);
+    expect(labels(data)).toEqual(['Boston', 'Kathmandu', 'Bangkok']);
+    expect(needsOrderFreeze(loadAppData()!)).toBe(false);
+  });
+
+  it('added a city since: it is there', () => {
+    seedAfter210({
+      [V1_TIMEZONES_KEY]: JSON.stringify([...DAY_ONE, { id: 'c4', city: 'Shanghai', zone: 'Asia/Shanghai' }]),
+    });
+    expect(labels(migrate(SEP_25))).toEqual(['Boston', 'Shanghai', 'Kathmandu', 'Bangkok']);
+  });
+
+  it('removed a city since: it stays removed', () => {
+    seedAfter210({
+      [V1_TIMEZONES_KEY]: JSON.stringify(DAY_ONE.filter((city) => city.city !== 'Kathmandu')),
+    });
+    expect(labels(migrate(SEP_25))).toEqual(['Boston', 'Bangkok']);
+  });
+
+  it('changed the sort mode since: the new one is used', () => {
+    seedAfter210({ [V1_SORT_MODE_KEY]: 'alphabet' });
+    const data = migrate(SEP_25);
+    expect(labels(data)).toEqual(['Boston', 'Bangkok', 'Kathmandu']);
+    expect(data.settings.sortOrder).toBe('name');
+  });
+
+  it('changed 12/24 since: the new one is used', () => {
+    seedAfter210({ [V1_HOUR_FORMAT_KEY]: '24' });
+    expect(migrate(SEP_25).settings.hour24).toBe(true);
+  });
+
+  it('emptied the list since: it is empty, not the three cities from the first open', () => {
+    seedAfter210({ [V1_TIMEZONES_KEY]: '[]' });
+    expect(migrate(SEP_25).entries).toEqual([]);
+  });
+
+  it('never replaces the backup 2.1.0 took on its first open', () => {
+    seedAfter210({
+      [V1_TIMEZONES_KEY]: JSON.stringify([...DAY_ONE, { id: 'c4', city: 'Shanghai', zone: 'Asia/Shanghai' }]),
+    });
+    migrate(SEP_25);
+    expect(localStorage.getItem(BACKUP_V1_STORAGE_KEY)).toBe(from210['timemate.backup_v1']);
+  });
+
+  it('leaves the v1 keys untouched', () => {
+    seedAfter210({ [V1_SORT_MODE_KEY]: 'time' });
+    migrate(SEP_25);
+    for (const [key, value] of Object.entries({ ...from210.v1Keys, [V1_SORT_MODE_KEY]: 'time' })) {
+      expect(localStorage.getItem(key)).toBe(value);
+    }
+  });
+
+  it('rebuilds once: afterwards v2 written by 3.0.0 is read as is, v1 keys or not', () => {
+    seedAfter210();
+    const rebuilt = migrate(SEP_25);
+    // The user reorders in 3.0.0; the v1 keys (still there) say otherwise.
+    saveAppData({ ...rebuilt, entries: [...rebuilt.entries].reverse() });
+
+    expect(labels(migrate(SEP_25))).toEqual(['Bangkok', 'Kathmandu', 'Boston']);
   });
 });

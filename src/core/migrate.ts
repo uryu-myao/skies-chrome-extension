@@ -176,17 +176,35 @@ function hasV1Data(): boolean {
   return localStorage.getItem(V1_TIMEZONES_KEY) !== null;
 }
 
-// Entry point: run once at startup, before any rendering; the caller renders
-// from the returned data. Idempotent — if v2 data already exists this is a
-// read, plus a one-time freezeDisplayOrder() for data saved before manual
-// ordering. A fresh install gets v2 defaults, not v1's fallbacks. On failure,
-// v1 data is left untouched and nothing is written, so the caller never
-// renders an empty list.
+// v2 data 2.1.0 left behind. 2.1.0 ran this migration silently on its first
+// popup open and never again (v2 existed from then on), while its UI kept
+// reading and writing only the v1 keys — so anything the user did in 2.1.0
+// after that first open is in the v1 keys and not here. Its entries have no
+// `order` (added after 2.1.0 shipped), and the v1 keys are still there. It
+// was never shown or edited by a v2 UI, so rebuilding it from the v1 keys
+// loses nothing.
+function isLeftBy210(data: AppData): boolean {
+  return needsOrderFreeze(data) && hasV1Data();
+}
+
+// Entry point: run at startup, before any rendering; the caller renders from
+// the returned data. Four starting states (spec §3.5) — check every change
+// against all of them, not just a fresh profile:
+//
+//   nothing stored          fresh install → v2 defaults
+//   v1 keys only            never opened 2.1.0 → migrate from v1
+//   v2 without order + v1   left by 2.1.0 → rebuild from the (newer) v1 keys
+//   v2 with order           written by 3.0.0+ → read as is
+//
+// Idempotent: once v2 has `order` it's only read. The v1 keys are never
+// modified, and timemate.backup_v1 is written once — a rebuild doesn't
+// replace the snapshot 2.1.0 took on its first open. On failure nothing is
+// written and the caller still never renders an empty list.
 export function migrate(now: Date = new Date()): AppData {
   const existing = loadAppData();
-  if (existing) return freezeOrderOnce(existing, now);
+  if (existing && !isLeftBy210(existing)) return freezeOrderOnce(existing, now);
 
-  if (!hasV1Data()) {
+  if (!existing && !hasV1Data()) {
     const fresh = createDefaultAppData();
     try {
       saveAppData(fresh);
@@ -206,7 +224,9 @@ export function migrate(now: Date = new Date()): AppData {
   } catch (err) {
     console.error('[Skies] v1→v2 migration failed, v1 data left untouched:', err);
     // Return the best-effort in-memory mapping even if persisting it failed,
-    // so a caller never renders an empty list off the back of a write error.
-    return mapped ?? createDefaultAppData();
+    // so a caller never renders an empty list off the back of a write error;
+    // failing that, 2.1.0's older v2 data beats nothing.
+    if (mapped) return mapped;
+    return existing ? freezeDisplayOrder(existing, now) : createDefaultAppData();
   }
 }
