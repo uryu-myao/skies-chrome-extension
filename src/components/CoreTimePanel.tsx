@@ -197,7 +197,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
               className="core-time-panel__muted-line core-time-panel__hint-action"
               onClick={() => onToggleCoreTime(conclusion.excludedId)}>
               {isYou
-                ? "You're outside your work hours — tap to exclude yourself"
+                ? "Your hours don't overlap — tap to exclude yourself"
                 : `${excludedLabel} is outside its work hours — tap to exclude it`}
             </button>
           </div>
