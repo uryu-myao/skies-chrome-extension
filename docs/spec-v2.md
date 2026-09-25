@@ -116,13 +116,26 @@ v1 city                          →  entry.label(同时记为 entry.defaultLabe
 v1 lat / lon                     →  entry.lat / entry.lon
 v1 id ∈ timemate.pinned.v1       →  entry.pinned
 timemate.sort-mode.v1            →  settings.sortOrder
-    newest → manual,time → offset,alphabet → name;缺失或无效 → 默认值
-timemate.hour-format.v1          →  settings.hour24('24' → true,'12' → false;缺失 → 默认值)
+    newest → manual,time → offset,alphabet → name
+timemate.hour-format.v1          →  settings.hour24('24' → true,'12' → false)
 (其余字段填 null / 默认值)
 entry.id 新生成(v1 的 id 只用于匹配置顶列表)
 ```
 
 条目顺序与 v1 存储数组一一对应,随后经过 §3.4 固化为用户当时看到的显示顺序。
+
+**存储格式**:城市列表与置顶列表是 JSON 数组;**排序模式与 12/24 是纯字符串**(`alphabet`、`24`,
+不带引号)。所有发布过的 v1(1.0.2–2.1.0)都用 `localStorage.setItem(key, value)` 直接写入、按原样
+读回,迁移同样按原样比较,不做 `JSON.parse`。手工构造测试数据时注意:`JSON.stringify('alphabet')`
+存进去的是 `"alphabet"`(带引号),那不是 v1 会写出的值。
+
+**缺失与无法识别的值**,回退到 **v1 自己在这种情况下显示的样子**,而不是 v2 的默认值,这样没有人
+的界面会在迁移中变样:排序模式回退 `newest`,12/24 回退 12 小时制(v2 新用户的默认是 24 小时制;
+全新安装没有任何 v1 的 key,拿到的是 v2 默认值)。
+
+- key **缺失**是正常情况,静默回退
+- key **存在但值无法识别**时,必须 `console.warn`(带上原始值)再回退,**不得静默降级** —— 否则
+  老用户的设置被无声替换,事后没有任何迹象。与 §3.4「不得回退到原始添加顺序」是同一类保护
 
 ### 3.3 验收
 

@@ -294,3 +294,57 @@ describe('migrate — pure v1, end to end through every sort mode', () => {
     expect(labels(migrate(SEP_25))).toEqual(['Shanghai', 'Boston', 'Tokyo', 'Kathmandu', 'Bangkok']);
   });
 });
+
+describe('readV1Snapshot — v1 stored sort mode and hour format as plain strings', () => {
+  it('reads the plain strings every published v1 wrote, without warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.setItem(V1_SORT_MODE_KEY, 'alphabet');
+    localStorage.setItem(V1_HOUR_FORMAT_KEY, '24');
+
+    expect(readV1Snapshot()).toMatchObject({ sortMode: 'alphabet', hourFormat: '24' });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('an unrecognised sort mode warns, with the raw value — never a silent fallback', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // JSON-encoded is not a v1 format: v1 never wrote '"alphabet"'.
+    localStorage.setItem(V1_SORT_MODE_KEY, JSON.stringify('alphabet'));
+
+    expect(readV1Snapshot().sortMode).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain(V1_SORT_MODE_KEY);
+    expect(warn.mock.calls[0][0]).toContain(JSON.stringify('"alphabet"'));
+  });
+
+  it('an unrecognised hour format warns too', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.setItem(V1_HOUR_FORMAT_KEY, 'h24');
+
+    expect(readV1Snapshot().hourFormat).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain(V1_HOUR_FORMAT_KEY);
+  });
+
+  it('a missing key is normal, not a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    readV1Snapshot();
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('mapV1ToV2 — without a value, what v1 showed, not v2 defaults', () => {
+  it('no sort mode → newest (manual); no hour format → 12-hour', () => {
+    const data = mapV1ToV2({ timezones: [], pinnedIds: [], sortMode: null, hourFormat: null });
+    expect(data.settings.sortOrder).toBe('manual');
+    expect(data.settings.hour24).toBe(false);
+  });
+});
+
+describe('migrate — fresh install (nothing stored)', () => {
+  it('gets v2 defaults — 24-hour, not v1’s 12-hour fallback — and no v1 backup', () => {
+    const data = migrate(SEP_25);
+    expect(data.entries).toEqual([]);
+    expect(data.settings).toEqual(DEFAULT_SETTINGS);
+    expect(localStorage.getItem(BACKUP_V1_STORAGE_KEY)).toBeNull();
+  });
+});

@@ -32,6 +32,20 @@ const SORT_MODE_TO_ORDER: Record<V1SortMode, SortOrder> = {
   alphabet: 'name',
 };
 
+// What v1 itself showed when its key was missing or held anything else. A v1
+// user falls back to these, not to v2's defaults (24-hour), so nobody's view
+// changes in the move.
+const V1_DEFAULT_SORT_MODE: V1SortMode = 'newest';
+const V1_DEFAULT_HOUR_FORMAT: V1HourFormat = '12';
+
+// Not silent: an unrecognised value means a user's setting is being replaced,
+// and there'd be no other trace of it.
+function warnUnrecognised(key: string, raw: string, fallback: string): void {
+  console.warn(
+    `[Skies] ${key} holds an unrecognised value ${JSON.stringify(raw)}; migrating it as ${fallback}, which is what v1 showed for it`
+  );
+}
+
 function safeParseArray<T>(raw: string | null): T[] {
   if (!raw) return [];
   try {
@@ -57,15 +71,25 @@ export function readV1Snapshot(): V1Snapshot {
     localStorage.getItem(V1_PINNED_KEY)
   ).filter((id) => typeof id === 'string');
 
+  // Every published v1 (1.0.2–2.1.0) wrote these two as plain strings —
+  // localStorage.setItem(key, 'alphabet'), not JSON — and read them back the
+  // same way, so they're compared as stored. A JSON-encoded '"alphabet"' was
+  // never a v1 value. A missing key is normal (null); anything else warns.
   const sortModeRaw = localStorage.getItem(V1_SORT_MODE_KEY);
   const sortMode: V1SortMode | null =
     sortModeRaw === 'newest' || sortModeRaw === 'time' || sortModeRaw === 'alphabet'
       ? sortModeRaw
       : null;
+  if (sortModeRaw !== null && sortMode === null) {
+    warnUnrecognised(V1_SORT_MODE_KEY, sortModeRaw, `"${V1_DEFAULT_SORT_MODE}"`);
+  }
 
   const hourFormatRaw = localStorage.getItem(V1_HOUR_FORMAT_KEY);
   const hourFormat: V1HourFormat | null =
     hourFormatRaw === '12' || hourFormatRaw === '24' ? hourFormatRaw : null;
+  if (hourFormatRaw !== null && hourFormat === null) {
+    warnUnrecognised(V1_HOUR_FORMAT_KEY, hourFormatRaw, `"${V1_DEFAULT_HOUR_FORMAT}"`);
+  }
 
   return { timezones, pinnedIds, sortMode, hourFormat };
 }
@@ -88,10 +112,8 @@ export function mapV1ToV2(snapshot: V1Snapshot): AppData {
 
   const settings: AppSettings = {
     ...DEFAULT_SETTINGS,
-    hour24: snapshot.hourFormat ? snapshot.hourFormat === '24' : DEFAULT_SETTINGS.hour24,
-    sortOrder: snapshot.sortMode
-      ? SORT_MODE_TO_ORDER[snapshot.sortMode]
-      : DEFAULT_SETTINGS.sortOrder,
+    hour24: (snapshot.hourFormat ?? V1_DEFAULT_HOUR_FORMAT) === '24',
+    sortOrder: SORT_MODE_TO_ORDER[snapshot.sortMode ?? V1_DEFAULT_SORT_MODE],
   };
 
   return { version: 2, entries, groups: [], settings };
@@ -148,14 +170,31 @@ function backupV1Once(snapshot: V1Snapshot): void {
   );
 }
 
+// Every v1 build wrote the city list on first mount, so its key — even as
+// "[]" — means this browser ran v1. A fresh install has none of the v1 keys.
+function hasV1Data(): boolean {
+  return localStorage.getItem(V1_TIMEZONES_KEY) !== null;
+}
+
 // Entry point: run once at startup, before any rendering; the caller renders
 // from the returned data. Idempotent — if v2 data already exists this is a
 // read, plus a one-time freezeDisplayOrder() for data saved before manual
-// ordering. On failure, v1 data is left untouched and nothing is written, so
-// the caller never renders an empty list.
+// ordering. A fresh install gets v2 defaults, not v1's fallbacks. On failure,
+// v1 data is left untouched and nothing is written, so the caller never
+// renders an empty list.
 export function migrate(now: Date = new Date()): AppData {
   const existing = loadAppData();
   if (existing) return freezeOrderOnce(existing, now);
+
+  if (!hasV1Data()) {
+    const fresh = createDefaultAppData();
+    try {
+      saveAppData(fresh);
+    } catch (err) {
+      console.error('[Skies] failed to save the initial data:', err);
+    }
+    return fresh;
+  }
 
   let mapped: AppData | null = null;
   try {
