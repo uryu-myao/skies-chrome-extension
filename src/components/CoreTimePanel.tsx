@@ -9,6 +9,7 @@ interface CoreTimePanelProps {
   entries: Entry[];
   settings: AppSettings;
   isEditMode: boolean;
+  onToggleCoreTime: (entryId: string) => void;
 }
 
 interface SlotRange {
@@ -55,7 +56,12 @@ function joinLabels(labels: string[]): string {
   return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 }
 
-const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEditMode }) => {
+const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
+  entries,
+  settings,
+  isEditMode,
+  onToggleCoreTime,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   // Bumped on leaving edit mode so the result is recomputed once for "now",
   // even if the edit didn't change the entries.
@@ -73,16 +79,14 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
   }, [isEditMode]);
   const showExpanded = isExpanded && !isEditMode;
 
-  const filteredEntries = useMemo(
-    () => entries.filter((entry) => entry.includeInCoreTime),
-    [entries]
-  );
-
+  // Every entry goes in: coreTime leaves the excluded ones out of the overlap
+  // and the conclusion but still returns their rows, which stay visible
+  // (dimmed) so the user can see who they excluded and tap them back in.
   const result = useMemo(
-    () => coreTime({ entries: filteredEntries, settings, referenceDate: new Date() }),
+    () => coreTime({ entries, settings, referenceDate: new Date() }),
     // recalcToken isn't read, it only forces a fresh referenceDate.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filteredEntries, settings, recalcToken]
+    [entries, settings, recalcToken]
   );
 
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
@@ -91,8 +95,9 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
     return null;
   }
 
+  const includedCount = result.rows.filter((row) => row.included).length;
   const entryOf = (entryId: string): Entry | undefined =>
-    filteredEntries.find((entry) => entry.id === entryId);
+    entries.find((entry) => entry.id === entryId);
   const labelOf = (entryId: string): string => entryOf(entryId)?.label ?? '';
 
   const renderNextOverlap = (label: string, nextOverlap: { weekday: number; startSlot: number; endSlot: number } | null) => {
@@ -110,12 +115,25 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
 
     switch (conclusion.status) {
       case 'NO_ENTRIES':
+        // The panel isn't rendered at all without entries, so here it means
+        // every city was excluded (or closest's null fallback, see coretime).
+        if (includedCount === 0) {
+          return (
+            <div className="core-time-panel__conclusion">
+              <span className="core-time-panel__headline">No cities in core time</span>
+              <span className="core-time-panel__muted-line">
+                {showExpanded ? 'Tap a city to include it' : 'Expand to include a city'}
+              </span>
+            </div>
+          );
+        }
         return <span className="core-time-panel__headline">Add a city to compare</span>;
 
       case 'OVERLAP': {
         const [first, ...rest] = result.overlap;
         const range = `${formatSlotTime(result.axis, first.startSlot)}–${formatSlotTime(result.axis, first.endSlot)}`;
-        const prefix = filteredEntries.length === 1 ? labelOf(filteredEntries[0].id) : 'Overlap';
+        const onlyIncluded = includedCount === 1 ? result.rows.find((row) => row.included) : undefined;
+        const prefix = onlyIncluded ? labelOf(onlyIncluded.entryId) : 'Overlap';
         return (
           <span className="core-time-panel__headline">
             {prefix} <span className="core-time-panel__headline-range">{range}</span>
@@ -166,9 +184,14 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
               <span className="core-time-panel__headline-range">{range}</span>
               {rest.length > 0 && <span className="core-time-panel__muted"> +{rest.length} more</span>}
             </span>
-            <span className="core-time-panel__muted-line">
+            {/* The hint is itself the control — it has to work collapsed too,
+                where there are no city names to tap. */}
+            <button
+              type="button"
+              className="core-time-panel__muted-line core-time-panel__hint-action"
+              onClick={() => onToggleCoreTime(conclusion.excludedId)}>
               {excludedLabel} is outside its work hours — tap to exclude it
-            </span>
+            </button>
           </div>
         );
       }
@@ -201,13 +224,21 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
     }
   };
 
-  const canExpand = filteredEntries.length > 0 && !isEditMode;
-  const cityWord = filteredEntries.length === 1 ? 'city' : 'cities';
+  // Still expandable with every city excluded — the band is where they're
+  // brought back.
+  const canExpand = !isEditMode;
+  const cityWord = entries.length === 1 ? 'city' : 'cities';
+  const countText =
+    includedCount === entries.length
+      ? `${entries.length} ${cityWord}`
+      : `${includedCount} of ${entries.length} ${cityWord}`;
 
   // PARTIAL_OVERLAP outlines the subset's overlap on the subset's rows only;
-  // otherwise the full overlap (empty unless OVERLAP) goes on every row.
-  const overlapOf = (entryId: string): CoreTimeOverlapRange[] => {
+  // otherwise the full overlap (empty unless OVERLAP) goes on every included
+  // row. Excluded rows never get it.
+  const overlapOf = (entryId: string, included: boolean): CoreTimeOverlapRange[] => {
     const { conclusion } = result;
+    if (!included) return [];
     if (conclusion.status !== 'PARTIAL_OVERLAP') return result.overlap;
     return conclusion.includedIds.includes(entryId) ? conclusion.overlap : [];
   };
@@ -216,7 +247,8 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
     key: row.entryId,
     label: labelOf(row.entryId),
     blocks: row.blocks,
-    overlap: overlapOf(row.entryId),
+    overlap: overlapOf(row.entryId, row.included),
+    included: row.included,
     isBaseline: entryOf(row.entryId)?.timezone === referenceTimezone,
     isOff: row.blocks.every((block) => !block),
   }));
@@ -231,7 +263,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
         disabled={!canExpand}>
         <span className="core-time-panel__title">Core time</span>
         <span className="core-time-panel__meta">
-          today · {filteredEntries.length} {cityWord}
+          today · {countText}
           {canExpand && (
             <svg
               className="core-time-panel__chevron"
@@ -250,10 +282,16 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
         <div className="core-time-panel__band">
           {rows.map((row) => (
             <div
-              className={`core-time-panel__row ${row.isOff ? 'core-time-panel__row--off' : ''}`}
+              className={`core-time-panel__row ${row.isOff ? 'core-time-panel__row--off' : ''} ${
+                row.included ? '' : 'core-time-panel__row--excluded'
+              }`}
               key={row.key}>
-              <span
-                className={`core-time-panel__row-label ${row.isBaseline ? 'core-time-panel__row-label--baseline' : ''}`}>
+              <button
+                type="button"
+                className={`core-time-panel__row-label ${row.isBaseline ? 'core-time-panel__row-label--baseline' : ''}`}
+                onClick={() => onToggleCoreTime(row.key)}
+                aria-pressed={row.included}
+                aria-label={`${row.label}: ${row.included ? 'included in' : 'excluded from'} core time`}>
                 <span className="core-time-panel__row-name" title={row.label}>
                   {row.label}
                 </span>
@@ -263,7 +301,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({ entries, settings, isEdit
                 {row.isOff && (
                   <span className="core-time-panel__row-off-tag">Off</span>
                 )}
-              </span>
+              </button>
               <div
                 className="core-time-panel__track"
                 title={row.isOff ? 'Not a work day' : undefined}>

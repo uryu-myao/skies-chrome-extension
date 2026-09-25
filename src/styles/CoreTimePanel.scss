@@ -107,21 +107,42 @@
         opacity: 0.45;
       }
     }
+
+    // Excluded from Core Time by the user: kept in place, dimmer than an
+    // off day so the two read differently.
+    &--excluded {
+      .core-time-panel__row-label,
+      .core-time-panel__track {
+        opacity: 0.25;
+      }
+    }
   }
 
+  // A button: tapping the name toggles the city in/out of Core Time.
   &__row-label {
     display: flex;
     align-items: baseline;
     gap: 4px;
     max-width: 96px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
     font-family: 'Poppins', serif;
     font-size: 12px;
     font-weight: 600;
+    text-align: left;
+    cursor: pointer;
     opacity: 0.85;
 
     &--baseline {
       color: #9db8ea;
       opacity: 1;
+    }
+
+    &:hover .core-time-panel__row-name {
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
   }
 
@@ -272,5 +293,22 @@
   &__muted {
     opacity: 0.6;
     padding-left: 6px;
+  }
+
+  // The PARTIAL_OVERLAP hint doubles as the exclude control.
+  &__hint-action {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      opacity: 0.8;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
   }
 }

@@ -9,6 +9,7 @@ import {
   resolveWorkDays,
   resolveWorkHours,
   saveAppData,
+  toggleIncludeInCoreTime,
 } from '../../src/core/model';
 import type { AppSettings, Entry } from '../../src/core/types';
 
@@ -86,6 +87,21 @@ describe('renameEntry / resetEntryLabel', () => {
   it('reset on a never-renamed entry is a no-op on the label', () => {
     const entry = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
     expect(resetEntryLabel(entry)).toEqual(entry);
+  });
+});
+
+describe('toggleIncludeInCoreTime', () => {
+  it('flips only includeInCoreTime, and flipping twice restores the entry', () => {
+    const entry = createEntry({ timezone: 'America/New_York', label: 'Boston' });
+    const excluded = toggleIncludeInCoreTime(entry);
+    expect(excluded).toEqual({ ...entry, includeInCoreTime: false });
+    expect(toggleIncludeInCoreTime(excluded)).toEqual(entry);
+  });
+
+  it('survives a save/load round trip', () => {
+    const entry = toggleIncludeInCoreTime(createEntry({ timezone: 'America/New_York' }));
+    saveAppData({ version: 2, entries: [entry], groups: [], settings: DEFAULT_SETTINGS });
+    expect(loadAppData()?.entries[0].includeInCoreTime).toBe(false);
   });
 });
 

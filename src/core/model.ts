@@ -61,6 +61,10 @@ export function resetEntryLabel(entry: Entry): Entry {
   return { ...entry, label: defaultLabelOf(entry) };
 }
 
+export function toggleIncludeInCoreTime(entry: Entry): Entry {
+  return { ...entry, includeInCoreTime: !entry.includeInCoreTime };
+}
+
 export interface ResolvedWorkHours extends WorkHours {
   isDefault: boolean;
 }

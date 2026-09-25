@@ -63,7 +63,7 @@ describe('coreTime — §10.4 business cases', () => {
     expect(result.conclusion).toEqual({ status: 'OVERLAP' });
   });
 
-  it('all entries excluded from Core Time: empty state, no error', () => {
+  it('no entries at all: empty state, no error', () => {
     const result = coreTime({
       entries: [],
       settings: settingsWithReference('Asia/Tokyo'),
@@ -275,6 +275,49 @@ describe('coreTime — PARTIAL_OVERLAP (§5.3 leave-one-out)', () => {
     });
 
     expect(result.conclusion.status).toBe('PARTIAL_OFF');
+  });
+});
+
+describe('coreTime — includeInCoreTime', () => {
+  it('an excluded entry keeps its row but takes no part in the overlap or conclusion', () => {
+    const { shanghai, boston, tokyo, kathmandu, bangkok } = asiaAndBoston();
+    const excludedBoston = { ...boston, includeInCoreTime: false };
+    const result = coreTime({
+      entries: [shanghai, excludedBoston, tokyo, kathmandu, bangkok],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: FRIDAY_AFTERNOON_JST,
+    });
+
+    // Rows for everyone, in list order, so the panel can show Boston dimmed.
+    expect(result.rows.map((row) => [row.entryId, row.included])).toEqual([
+      [shanghai.id, true],
+      [boston.id, false],
+      [tokyo.id, true],
+      [kathmandu.id, true],
+      [bangkok.id, true],
+    ]);
+    expect(result.rows[1].blocks.some(Boolean)).toBe(true);
+    // Without Boston the other four overlap — the same range PARTIAL_OVERLAP
+    // pointed at.
+    expect(result.overlap).toEqual([{ startSlot: 25, endSlot: 36 }]);
+    expect(result.conclusion).toEqual({ status: 'OVERLAP' });
+  });
+
+  it('every entry excluded: NO_ENTRIES, rows still returned', () => {
+    const entries = Object.values(asiaAndBoston()).map((entry) => ({
+      ...entry,
+      includeInCoreTime: false,
+    }));
+    const result = coreTime({
+      entries,
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: FRIDAY_AFTERNOON_JST,
+    });
+
+    expect(result.rows).toHaveLength(5);
+    expect(result.rows.every((row) => !row.included)).toBe(true);
+    expect(result.overlap).toEqual([]);
+    expect(result.conclusion).toEqual({ status: 'NO_ENTRIES' });
   });
 });
 

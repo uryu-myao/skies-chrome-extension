@@ -21,6 +21,10 @@ export interface CoreTimeAxisSlot {
 
 export interface CoreTimeRow {
   entryId: string;
+  // entry.includeInCoreTime. An excluded entry still gets its row, so the
+  // panel can show it dimmed rather than hide it, but it takes no part in
+  // the overlap or the conclusion.
+  included: boolean;
   blocks: boolean[];
   localDate: string;
   crossesDay: boolean;
@@ -91,6 +95,8 @@ export interface CoreTimeResult {
 }
 
 export interface CoreTimeInput {
+  // The whole list, in list order. Only entries with includeInCoreTime take
+  // part in the overlap and the conclusion; every entry gets a row.
   entries: Entry[];
   settings: AppSettings;
   referenceDate: Date;
@@ -151,7 +157,7 @@ function buildRow(entry: Entry, settings: AppSettings, slotInstants: Date[]): Co
     (instant) => localDateKey(entry.timezone, instant) !== localDate
   );
 
-  return { entryId: entry.id, blocks, localDate, crossesDay };
+  return { entryId: entry.id, included: entry.includeInCoreTime, blocks, localDate, crossesDay };
 }
 
 // Intersection of every row's working slots, collapsed into contiguous ranges.
@@ -359,13 +365,15 @@ export function coreTime({ entries, settings, referenceDate }: CoreTimeInput): C
   }));
 
   const rows = entries.map((entry) => buildRow(entry, settings, slotInstants));
-  const overlap = computeOverlapRanges(rows);
+  const includedEntries = entries.filter((entry) => entry.includeInCoreTime);
+  const includedRows = rows.filter((row) => row.included);
+  const overlap = computeOverlapRanges(includedRows);
   const conclusion = computeConclusion(
-    entries,
+    includedEntries,
     settings,
     referenceTimezone,
     referenceDate,
-    rows,
+    includedRows,
     overlap,
     slotInstants
   );
