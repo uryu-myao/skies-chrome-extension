@@ -198,19 +198,34 @@ function offsetMinutes(timezone, date) {
 
 ```js
 coreTime({
-  entries,        // 仅 includeInCoreTime === true 的条目
+  entries,        // 完整列表,按列表顺序。只有 includeInCoreTime === true 的条目参与
+                  // overlap 与结论;被排除的条目仍各有一行,供面板变暗显示
   settings,
   referenceDate   // 参考时区的某一天
 }) → {
   axis: [{ slot, refTime }],        // 48 格
-  rows: [{ entryId, blocks, localDate, crossesDay }],
-  overlap: [{ startSlot, endSlot }] | [],
+  rows: [{
+    entryId,
+    included,     // = includeInCoreTime
+    offToday,     // 该条目在 referenceDate 这一刻不在自己的 workDays 内(见 5.3)
+    blocks,       // 48 个布尔:该槽位是否为工作槽
+    localDate,
+    crossesDay
+  }],
+  overlap: [{ startSlot, endSlot }] | [],   // 参与条目的交集
   conclusion:                        // 状态枚举 + 数据,不含文案,见 5.3
     | { status: 'NO_ENTRIES' }
     | { status: 'OVERLAP' }
-    | { status: 'NO_OVERLAP_TODAY', closest: { refTime, perEntry: [...], gapMinutes } }
+    | { status: 'PARTIAL_OVERLAP', overlap, includedIds, excludedId }
+    | { status: 'NO_OVERLAP_TODAY', closest: {
+          slot, refTime,
+          perEntry: [{ entryId, localTime, deviationMinutes, direction }],
+                    // direction: 'BEFORE_START' | 'AFTER_END' | null(在工作时段内)
+          gapMinutes,             // 该槽位上最大的单个偏离量,恒 > 0
+          bottleneckEntryIds      // 偏离量等于 gapMinutes 的全部条目,列表顺序
+      } }
     | { status: 'ALL_OFF', offEntryIds, nextOverlap: { daysFromToday, weekday, startSlot, endSlot } | null }
-    | { status: 'PARTIAL_OFF', workingEntryIds, offEntryIds, nextOverlap: {...} | null }
+    | { status: 'PARTIAL_OFF', workingEntryIds, offEntryIds, workingOverlap: [...] | [], nextOverlap: {...} | null }
 }
 ```
 
@@ -218,27 +233,73 @@ coreTime({
 
 1. 以参考时区的当日 00:00 为起点,生成 48 个 30 分钟槽位
 2. 对每个条目、每个槽位:换算成该条目的本地时刻与本地星期
-3. 该槽位计入工作时段,当且仅当:本地星期 ∈ `workDays` 且本地时刻 ∈ `[start, end)`
-4. `overlap` = 所有条目工作槽位的交集
+3. 该槽位计入工作时段,当且仅当:本地星期 ∈ `workDays` 且本地时刻 ∈ `[start, end)`。
+   **这是系统内「工作时间」的唯一定义**:色带的工作块、`overlap`、`closest` 的偏离量都由同一个
+   函数(`workWindowPosition`)得出,槽位是工作槽 ⇔ 它的偏离量为 0。曾经两处各写一份边界判断,
+   `closest` 把恰好落在 `end` 上的槽位算作偏离 0,而 `overlap` 认为它不在工作时段内
+4. `overlap` = 所有参与条目工作槽位的交集
 5. `overlap` 为空时,进入 5.3 的状态判断——不再直接计算 `closest`,是否计算 `closest` 本身取决于该状态判断的结果
 
 ### 5.3 空状态是主状态,不是异常
 
-东京 + 波士顿在默认工时下**必然**零重叠。这是最常见的情况,必须给出可操作的结果,而不是一句「计算失败」类的兜底文案。零重叠之外,「今天恰好是休息日」同样是常态而非异常,需要单独识别,不能和「工时对不上」混成一种状态。
+东京 + 波士顿在默认工时下**必然**零重叠。这是最常见的情况,必须给出可操作的结果,而不是一句「计算失败」类的兜底文案。零重叠之外,「今天恰好是休息日」同样是常态而非异常,需要单独识别,不能和「工时对不上」混成一种状态。城市一多,全员交集为空更是常态 —— 所以还要识别「只差一个城市」。
 
-`overlap` 为空时,按下表判断状态。**展开态与收起态渲染必须共用同一个状态判断,不允许两套逻辑**;判断本身放在 `core/coretime.ts`,只返回状态枚举 + 该状态需要的数据,不含任何文案字符串,文案全部由 UI 层渲染:
+**任何展示 Core Time 状态的元素都必须读同一份判断结果,不得自行计算。** 判断只在
+`core/coretime.ts` 里做一次:`conclusion`,加上每行的 `included` / `offToday` / `blocks`。
+结论行、色带、行标签(Off 标签)、closest 标记线、时间列,以及展开态与收起态,全部只读这份
+结果;UI 缺什么数据,就在 core 的返回值里加字段,不在渲染层补算。判断只返回状态枚举 + 该状态
+需要的数据,不含任何文案字符串,文案全部由 UI 层渲染。
+
+> 这条约束最初只写了「展开态与收起态共用同一个状态判断」,但平行计算会换个位置出现:
+> 色带上的 Off 标签曾按「整条轴上没有工作槽」自行判断,结论行则按 `referenceDate` 这一刻的
+> 本地星期判断。轴擦到另一天的工时时两者就不一致 —— 周一上午的东京轴上,22:00–23:30 是
+> 波士顿周一 09:00–10:30,结论说「只有 4 个城市在上班」,展开的色带上波士顿却没有 Off 标签。
+> 现在两者都读 `rows[].offToday`,`offEntryIds` 也由它得出。
+
+按下表**自上而下**判断状态:
 
 | 状态               | 触发条件                                                    | 数据                                                |
 | ------------------ | ------------------------------------------------------------ | --------------------------------------------------- |
-| `NO_ENTRIES`       | 参与计算的条目数为 0;也是下方计算异常时的统一兜底             | —                                                    |
+| `NO_ENTRIES`       | 参与计算的条目数为 0(包括全部被用户排除);也是下方计算异常时的统一兜底 | —                                                    |
 | `OVERLAP`          | `overlap` 非空                                                | `overlap` 数组                                       |
-| `ALL_OFF`          | `overlap` 为空,且所有条目在 `referenceDate` 这一刻都不在各自 `workDays` 内 | 被排除条目 id 列表、`nextOverlap`                     |
-| `PARTIAL_OFF`      | `overlap` 为空,部分(非全部)条目在 `referenceDate` 这一刻不在各自 `workDays` 内 | 在岗条目 id 列表、被排除条目 id 列表、`nextOverlap`   |
-| `NO_OVERLAP_TODAY` | `overlap` 为空,且所有条目在 `referenceDate` 这一刻都在各自 `workDays` 内 | `closest`                                            |
+| `ALL_OFF`          | `overlap` 为空,且所有参与条目在 `referenceDate` 这一刻都不在各自 `workDays` 内 | 休息条目 id 列表、`nextOverlap`                       |
+| `PARTIAL_OFF`      | `overlap` 为空,部分(非全部)参与条目在 `referenceDate` 这一刻不在各自 `workDays` 内 | 在岗条目 id 列表、休息条目 id 列表、`workingOverlap`、`nextOverlap` |
+| `PARTIAL_OVERLAP`  | `overlap` 为空,所有参与条目今天都在工作日,且**恰好一个**条目被排除后其余条目的 `overlap` 非空;至少 3 个参与条目 | 子集的 `overlap`、`includedIds`、`excludedId`       |
+| `NO_OVERLAP_TODAY` | 以上都不满足:所有参与条目今天都在工作日,工时对不上,且没有唯一的离群条目 | `closest`                                            |
 
-**判断"今天是否在场"用的是 `referenceDate` 这一个具体瞬间的本地星期,不是扫描整条 48 槽轴。** 扫描整条轴会产生两种边界假象:(a) 一个与参考时区零偏移的条目,它在轴上的本地星期是恒定值,一旦当天不是它的工作日,会让轴上全部 48 个槽位都判定为不可行,`closest` 因此直接返回 `null`;(b) 一个有偏移的条目,轴的两端可能分别落在两个不同日历日,恰好把前一天工作日的一小段划进轴内,产出「周六 00:00」这类没有实际意义的建议。改成只看 `referenceDate` 这一个瞬间,这两种假象都不会出现。
+`PARTIAL_OFF` 先于 `PARTIAL_OVERLAP`:有人今天休息是 `workDays` 的问题,不是工时离群,两者不混用。
 
-**`NO_OVERLAP_TODAY` 的 `closest`**:在参考轴上找一个槽位,使得**所有条目距离各自工作时段的总偏离分钟数最小**。返回该时刻、各条目的本地时刻、以及最大偏离量(用于生成「4h after your day ends」这类提示)。若存在多个并列最优解,取最早的一个。这个分支的前提是当天所有条目都在工作日内,正常情况下必然有解;若仍返回 `null`(例如日期变更线两侧的极端偏移组合),视为 bug:`console.error` 并回退到 `NO_ENTRIES`,不再新增第二套「计算失败」文案。
+**判断"今天是否在场"用的是 `referenceDate` 这一个具体瞬间的本地星期,不是扫描整条 48 槽轴。** 扫描整条轴会产生两种边界假象:(a) 一个与参考时区零偏移的条目,它在轴上的本地星期是恒定值,一旦当天不是它的工作日,会让轴上全部 48 个槽位都判定为不可行,`closest` 因此直接返回 `null`;(b) 一个有偏移的条目,轴的两端可能分别落在两个不同日历日,恰好把前一天工作日的一小段划进轴内,产出「周六 00:00」这类没有实际意义的建议。改成只看 `referenceDate` 这一个瞬间,这两种假象都不会出现。这个结果按行暴露为 `rows[].offToday`。
+
+**`PARTIAL_OVERLAP`(去一法)**:依次排除一个参与条目,计算其余条目的 `overlap`。恰好一个排除能产生
+非空 `overlap` 时返回该状态;多个排除都能产生(没有唯一的离群者),或没有任何一个能产生(不是一个
+城市的问题)时,落到 `NO_OVERLAP_TODAY`。**不做「最大可行子集」搜索**:子集数量随城市数指数增长,
+规则也无法向用户一句话解释;去一法覆盖真实场景中最常见的「一个离群时区」。至少 3 个参与条目:
+两个城市时,「除了 X 都重叠」只是另一个城市自己的工时,没有信息量。
+
+**`PARTIAL_OFF` 的 `workingOverlap`**:在岗条目今天自己的交集,与 `nextOverlap`(下一次**全员**
+重叠)并列返回。周一上午的东京,波士顿还是周日 —— 亚洲几个城市今天就能凑上,只说「下次全员重叠」
+会把今天可用的窗口藏起来。少于 2 个在岗条目,或在岗条目之间也对不上时为空数组。
+
+**`NO_OVERLAP_TODAY` 的 `closest`**:
+
+- **偏离量**:条目在工作时段内为 0;早于 `start` 时为 `start − 本地时刻`(会议开始得有多早);
+  晚于或等于 `end` 时为 `本地时刻 + 30 − end`(一格长的会议超出 `end` 多少)。因此恰好从
+  `end` 开始的槽位偏离 30 分钟而非 0 —— `end` 本身不在 `[start, end)` 内。偏离量按条目的实际
+  本地时刻计算,不对齐到网格:加德满都(+5:45)的本地时刻落在 :15 / :45,在工作时段内时严格为 0。
+- **选槽位**:所有参与条目偏离量**之和**最小的槽位;并列取最早。**并列取最早是刻意保留的**:
+  并列区间内,最早的槽位通常把不便算在使用者自己头上(东京 + 波士顿:06:30 让你早起 2.5 小时,
+  而不是让波士顿晚睡)。工具替使用者承担,比替同事做决定更得体,用户随时可以自己还价。曾考虑
+  以「最大偏离量最小」作第二排序键(更平均),未采用。已知缺陷见 §13。
+- **返回**:槽位与时刻、每个条目的本地时刻 / 偏离量 / 方向、`gapMinutes`(该槽位上最大的单个
+  偏离量,即瓶颈的偏离;恒 > 0,若为 0 则所有条目都在工作,应为 `OVERLAP`)、
+  `bottleneckEntryIds`(偏离量等于 `gapMinutes` 的全部条目)。
+- **提示文案**用最大偏离量,指向瓶颈:单一瓶颈时点名并给方向(`4.5h before Boston's day starts` /
+  `2h after Boston's day ends`;瓶颈是基准城市时说 `your day`)。**并列时给数量和小时数,不点名**
+  (`2 cities are 3.5h outside their work hours`):只点名一个会让用户以为排除它就能解决,实际不会;
+  小时数说明指的是偏离最大的那几个,而不是所有不在工作时间的城市。
+- 这个分支的前提是当天所有条目都在工作日内,正常情况下必然有解;若仍返回 `null`(例如日期变更线
+  两侧的极端偏移组合),视为 bug:`console.error` 并回退到 `NO_ENTRIES`,不再新增第二套「计算失败」文案。
 
 **`ALL_OFF` / `PARTIAL_OFF` 的 `nextOverlap`**:从明天起,以参考时区的日历日为单位向后逐日搜索——每天各自生成一条完整的 48 槽轴并计算 `overlap`(与当天的算法完全一致),取第一个 `overlap` 非空的日期,返回该日期的星期与时段。上限 7 天;超出上限仍未找到则返回 `null`,UI 不渲染这一行,而不是再补一句兜底文案。
 
@@ -246,14 +307,28 @@ coreTime({
 
 ```
 OVERLAP            Overlap 11:00–18:00
+PARTIAL_OVERLAP    All but Boston overlap 12:30–18:00
+                   Boston is outside its work hours — tap to exclude it
+  (离群者是你)     All but you overlap 12:30–18:00
+                   Your hours don't overlap — tap to exclude yourself
 NO_OVERLAP_TODAY   No overlap today
-                   Closest — 22:00 yours / 09:00 Shanghai's
+                   Closest — 17:30 yours
+                   4.5h before Boston's day starts
+  (瓶颈并列)       2 cities are 3.5h outside their work hours
 ALL_OFF            Everyone's off today
                    Next overlap — Mon 11:00–18:00
-PARTIAL_OFF        Only Shanghai is working today
-                   Next full overlap — Mon 11:00–18:00
+PARTIAL_OFF        Only 4 cities are working today
+                   Those 4 overlap 12:30–18:00
+                   Next full overlap — Tue 11:00–18:00
+  (1–2 个在岗)     Only Shanghai and Tokyo are working today
+                   They overlap 10:00–18:00
 NO_ENTRIES         Add a city to compare
+  (全部被排除)     No cities in core time
+                   Tap a city to include it        (收起态:Expand to include a city)
 ```
+
+`PARTIAL_OVERLAP` 的第二行本身就是按钮,见 §9.3。3 个以上在岗城市用计数,1–2 个用名字 —— 少数时
+名字比数字清楚。
 
 ### 5.4 单条目
 
@@ -301,6 +376,21 @@ Your 16:00 slot becomes 17:00 for Kenji.
 - 当前版本的 manifest 不声明任何权限(`permissions` / `optional_permissions` /
   `host_permissions` 均无)。这是商店页面上的信任优势 —— 新增任何权限(包括可选权限)前,
   都应先评估必要性。
+
+### 6.4 调度
+
+第 1、2 层在 popup 打开时随渲染计算,不需要任何调度。只有后台的周期性检测(第 3 层系统通知)
+需要定时:
+
+- **必须使用 `chrome.alarms`**。不得使用 `setTimeout` / `setInterval` —— service worker 空闲约
+  30 秒就会被挂起,计时器随之消失;也不得使用 `requestAnimationFrame` —— service worker 里没有它,
+  页面里它在后台标签页也不触发。
+- alarm 在浏览器重启后不保证保留:在 `runtime.onInstalled` 与 `runtime.onStartup` 中检查并按需
+  重建(与 `background.js` 现在设置卸载问卷链接的方式相同)。
+- `chrome.alarms` 需要 `alarms` 权限。它不产生用户可见的警告,不会触发更新时的重新授权,但会结束
+  「manifest 不声明任何权限」的现状 —— 按 §6.3 先评估。
+- service worker 读不到 `localStorage`,后台检测拿不到城市列表。前提是存储先迁到
+  `chrome.storage`,见 §13。
 
 ---
 
@@ -430,11 +520,54 @@ Base   UTC+09                            TUE | 22 SEP    ← 基准时区对应�
 
 ### 9.3 Core Time 面板
 
-底部常驻,非 tab。收起时只显示结论行,展开显示色带。
+底部常驻,非 tab。收起时只显示结论行,展开显示色带。进入编辑模式时收起,退出时展开(行序
+跟随列表,刚排好的顺序直接可见)。面板上所有元素只读 `coreTime()` 的结果,见 §5.3。
 
-**橙色(`--color-secondary`)只保留给本面板的重叠框**,界面其它位置一律不用 —— 它曾同时表示
-置顶、分区标题、搜索匹配、日出、转换器角标等无关语义,已全部换掉。
-**色带配色复用卡片的天空渐变色板**,使两个视图共用同一套颜色语言。
+**头部**:`Core time` + `today · 5 cities`;有条目被排除时为 `today · 4 of 5 cities`。点击展开/
+收起。全部条目都被排除时仍可展开 —— 色带是把城市加回来的地方。
+
+**色带**:每个条目一行,顺序同列表,**包括被排除的条目**。轴为参考时区当天 0–24 点,蓝色块是
+该条目的工作槽(`rows[].blocks`)。
+
+- 重叠区用橙色框标出,只画在参与该重叠的行上:`OVERLAP` 画全员 `overlap`,`PARTIAL_OVERLAP`
+  与 `PARTIAL_OFF` 画子集的 overlap。被排除的行不画
+- 今天休息的行(`rows[].offToday`):`Off` 标签,色带 45%
+- 被用户排除的行:名称加删除线,色带 25%。**不隐藏** —— 用户需要记得排除过谁,也要能点回来
+
+**点击交互**:
+
+- **点色带左侧的城市名** → 切换该条目的 `includeInCoreTime`,立即持久化。城市名是按钮
+  (`aria-pressed` 表示是否参与)
+- **`PARTIAL_OVERLAP` 的提示行**(`… — tap to exclude it`)本身就是按钮,点击即排除离群条目。
+  收起态没有城市名可点,提示必须自己能用;它同时承担「点城市名可以排除」这一交互的可发现性
+- 全部排除 → `NO_ENTRIES`,文案改为 `No cities in core time` + `Expand to include a city`(收起)/
+  `Tap a city to include it`(展开)
+
+**closest 的展示(`NO_OVERLAP_TODAY`)**:
+
+- 收起态只给基准时刻和提示:`Closest — 17:30 yours` + 瓶颈提示(§5.3)。不逐城市列出本地时刻 ——
+  5 个城市就会换行三次,10 个会挤满面板
+- 展开态:**一条竖线在 closest 槽位穿过所有行**,谁在自己的工作时段内、谁在外,一眼可见,不需要
+  读数字;这是这个展示的核心。第三列补充各城市在该时刻的本地时间,瓶颈条目加粗(并列时全部
+  加粗)。竖线取槽位中点,避免恰好落在某行色块的边缘、看不出在内还是在外。时间列按最宽值自适应
+  (11px 加粗的 `05:30` 约 28px),不写死宽度
+
+**颜色**:
+
+- **橙色(`--color-secondary`)只保留给本面板的重叠框**,含义是「这段时间所有人都行」。界面其它
+  位置一律不用 —— 它曾同时表示置顶、分区标题、搜索匹配、日出、转换器角标等无关语义,已全部换掉
+- closest 竖线用**中性白** + 顶端圆点,不用橙色:closest 按定义不是所有人都行;而且重叠框在色带上
+  被裁成每行两道短橙线,一道橙色竖线会被读成一个很窄的重叠区。竖线是一个元素贯穿所有行,
+  不是每行一截 —— 这是它和重叠框在视觉重量上的区别:框是区域,线是单点
+- 时间列的强调靠字重,不靠色相(与卡片底栏的日期说明同一原则,§9.2)
+- 色带底色为转换器渐变(`--gradient-converter`),工作块为 `#5c7cd6`
+
+**可读性**:变暗的行(休息或被排除)名称仍是按钮,必须可读。统一为中性白 50%,在面板底色
+`#202025` 上 5.1:1,满足 12px 文字的 AA(4.5:1)—— 这是硬线,不为视觉偏好让步(实测:25% 为
+2.3:1,35% 为 3.2:1,45% 为 4.4:1)。行内的 `YOU` / `Off` 标签不再叠加额外透明度(叠加后曾低至
+2.4:1);删除线用文字颜色,同为 5.1:1。基准城市的蓝色在 50% 时只有 3.1:1,所以变暗的行统一
+改用中性色,`YOU` 标签仍标明是谁。休息与排除靠 `Off` 标签 vs 删除线、色带 45% vs 25% 区分,
+不靠文字亮度。
 
 ### 9.4 设置页
 
@@ -521,11 +654,19 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 
 ### 10.4 业务用例
 
-- Tokyo + Boston,默认工时 → `overlap` 为空,`closest` 非空
+- Tokyo + Boston,默认工时 → `overlap` 为空,`closest` 非空(06:30 JST;两个城市不判 `PARTIAL_OVERLAP`)
 - Tokyo + Singapore + Berlin,默认工时 → `overlap` = 16:00–18:00 JST
 - 单条目 → `overlap` = 自身工作时段
-- 全部条目 `includeInCoreTime: false` → 空状态,且不报错
+- 全部条目 `includeInCoreTime: false` → `NO_ENTRIES`,不报错,`rows` 仍逐条返回
 - 某条目 `workDays` 为空数组 → 该条目永不参与,`overlap` 为空
+- Shanghai / Boston / Tokyo / Kathmandu / Bangkok,基准东京,周五 → `PARTIAL_OVERLAP`,排除 Boston,
+  子集 overlap = 12:30–18:00 JST(加德满都的第一个工作槽是当地 09:15)
+- 同上再加 New York → 没有唯一离群者,`NO_OVERLAP_TODAY`;closest = 18:30,不落在任何条目的
+  `end` 上;Boston 与 New York 并列瓶颈(210 分钟);加德满都偏离严格为 0
+- 同上五城市,周一上午的东京(波士顿仍是周日)→ `PARTIAL_OFF`,`workingOverlap` = 12:30–18:00;
+  波士顿的 `offToday` 为 true,尽管轴末端擦到它周一的工作槽
+- 某条目今天休息、其余条目可以重叠 → `PARTIAL_OFF`,不是 `PARTIAL_OVERLAP`
+- `closest` 的任一条目:偏离量为 0 ⇔ 该槽位是它的工作块
 
 ### 10.5 迁移
 
