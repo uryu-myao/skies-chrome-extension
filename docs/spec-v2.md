@@ -760,9 +760,31 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - **About**(本版新增,不在最初的分区规划内)— Share Skies(复制商店链接,
   按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Website
   (右侧灰字 `useskies.com`,打开 https://useskies.com;行文案用 "Website" 而非品牌名)/ Version
-  (读取 `package.json` 的版本号,而非写死字符串)。这里收纳的是原头部 logo 弹出
-  菜单的内容。行尾图标按动作区分:离开扩展的外链用「箭头出框」,Share 是复制到剪贴板、
+  (读取 `package.json` 的版本号,而非写死字符串)/ Recent updates(见下)。这里收纳的是原头部
+  logo 弹出菜单的内容。行尾图标按动作区分:离开扩展的外链用「箭头出框」,Share 是复制到剪贴板、
   用复制图标(复制后短暂变成勾),`›` 只留给 popup 内部的跳转(如 Edit city list)。
+
+**Recent updates**(3.1.1 起):在 About 卡片里、Version 行之下 —— 它说的就是这个版本变了什么,
+所以跟着 Version,不单独成一个分区。
+
+```
+Version                      v3.1.1
+───────────────────────────────────
+Recent updates
+· Up to 30 cities (was 10)
+· Core Time is much faster
+```
+
+写法约定。前两条是这个区块可信度的前提 —— 用户会拿它对照自己的使用,对不上一次,以后就不再读:
+
+- **只描述变了什么,不评价好坏。** 写能被验证的事实:`Up to 30 cities (was 10)`。不写「全新」
+  「更好用」「更强大」这类评价,不用 NEW 标签或感叹号
+- **只保留 2–3 条。** 发新版本时替换旧条目,不累积。它是「最近」,不是 changelog;条目一多就没人读。
+  `test/components/recentUpdates.test.ts` 把条数卡在 2–3,加第 4 条会让测试失败,逼着先删旧的
+- **纯静态。** 条目硬编码在 `src/components/recentUpdates.ts`,不从 changelog 生成;不做展开收起、
+  「已读」状态、徽章或红点
+- **视觉权重低于设置项。** 11px、次级灰(不透明度 50%,与 Version 的值相同),没有行分隔线、
+  没有悬停或点击态。它是记录,不是公告
 
 **DST alerts** 与 **Account** 两个分区仍未实现,分别等待构建顺序(§11)第 7、8 步
 (`dst.js` 检测与横幅、接入 ExtPay)完成后再加入。注意 **About ≠ Account**:About 是
