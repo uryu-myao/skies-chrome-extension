@@ -30,7 +30,7 @@ It is designed for quick cross-time-zone planning:
 
 ### World Clock Panel
 
-- Add up to 10 cities
+- Add up to 30 cities
 - Keep a custom city list in local storage
 - Each card's footer leads with the gap to the reference time zone
   (`−13h`, `+3:30h`, or `Base`), with the UTC offset beside it
@@ -104,6 +104,7 @@ It is designed for quick cross-time-zone planning:
 │   │   ├── migrate.ts     # v1 → v2, freezing the old display order
 │   │   ├── tz.ts          # offsets, relative gaps, local dates
 │   │   ├── coretime.ts    # working-hours intersection
+│   │   ├── suncache.ts    # sunrise/sunset cache keys, pruned on open
 │   │   └── dst.ts         # upcoming DST transitions
 │   ├── components/
 │   │   ├── Header.tsx
