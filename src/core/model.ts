@@ -20,6 +20,25 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dstNotificationEnabled: false,
 };
 
+// The most cities the list holds, free and Pro alike (spec §8). Every way the
+// list can grow checks hasRoomForCity() — adding, Undo — and what's read on
+// open is capped to it.
+export const MAX_CITIES = 30;
+
+export function hasRoomForCity(entries: Entry[]): boolean {
+  return entries.length < MAX_CITIES;
+}
+
+// Stored data is only ever over the limit if something other than the app
+// wrote it — a hand-edited profile, a later version's data after a downgrade:
+// nothing this or any earlier version writes goes past 11. Keeps the top of
+// the list, what the user sees first.
+export function capToCityLimit(entries: Entry[]): Entry[] {
+  if (entries.length <= MAX_CITIES) return entries;
+  console.warn(`Skies: ${entries.length} cities stored, keeping the first ${MAX_CITIES}`);
+  return entries.slice(0, MAX_CITIES);
+}
+
 export function createDefaultAppData(): AppData {
   return {
     version: 2,

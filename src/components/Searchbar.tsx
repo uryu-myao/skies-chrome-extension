@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import '@styles/Searchbar.scss';
 import type { AddTimezoneResult } from '../App';
+import { MAX_CITIES } from '../core/model';
 
 function getUtcOffset(zone: string): string {
   const parts = new Intl.DateTimeFormat('en', {
@@ -258,7 +259,8 @@ const Searchbar: React.FC<SearchbarProps> = ({
   return (
     <div className="search-inner" ref={searchRef}>
       <div
-        className={`search-input__container ${showLimitTip ? 'limit-reached' : ''}`}>
+        className={`search-input__container ${showLimitTip ? 'limit-reached' : ''}`}
+        data-limit-tip={`You can add up to ${MAX_CITIES} cities`}>
         <input
           ref={inputRef}
           className="search-input__field"

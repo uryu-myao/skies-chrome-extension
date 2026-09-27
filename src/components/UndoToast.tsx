@@ -8,7 +8,9 @@ interface UndoToastProps {
   // Changes on every new message, so a second removal restarts the timer
   // even when its text happens to match the first.
   token: number;
-  onUndo: () => void;
+  // null: the removal can't be undone (the list is full again), so the
+  // toast just reports it.
+  onUndo: (() => void) | null;
   onDismiss: () => void;
 }
 
@@ -24,12 +26,16 @@ const UndoToast: React.FC<UndoToastProps> = ({ message, token, onUndo, onDismiss
       {message && (
         <>
           <span className="undo-toast__message">{message}</span>
-          <span className="undo-toast__sep" aria-hidden="true">
-            ·
-          </span>
-          <button type="button" className="undo-toast__undo" onClick={onUndo}>
-            Undo
-          </button>
+          {onUndo && (
+            <>
+              <span className="undo-toast__sep" aria-hidden="true">
+                ·
+              </span>
+              <button type="button" className="undo-toast__undo" onClick={onUndo}>
+                Undo
+              </button>
+            </>
+          )}
         </>
       )}
     </div>

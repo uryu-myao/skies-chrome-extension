@@ -6,7 +6,13 @@ import SettingsPanel from './components/SettingsPanel';
 import CitySettingsPanel from './components/CitySettingsPanel';
 import UndoToast from './components/UndoToast';
 import { TimezoneInfo } from './components/Timezone';
-import { renameEntry, resetEntryLabel, saveAppData, toggleIncludeInCoreTime } from './core/model';
+import {
+  hasRoomForCity,
+  renameEntry,
+  resetEntryLabel,
+  saveAppData,
+  toggleIncludeInCoreTime,
+} from './core/model';
 import { getSystemTimezone } from './core/tz';
 import type { AppData, AppSettings, Entry } from './core/types';
 import '@styles/_reset.css';
@@ -90,11 +96,15 @@ function App({ initialData }: AppProps) {
     setRemoved((prev) => ({ entry: entries[index], index, token: (prev?.token ?? 0) + 1 }));
   };
 
+  // Undo can't take the list past the city limit (spec §8): full again since
+  // the removal — a city added within the toast's 5 seconds — and the toast
+  // offers no Undo at all rather than a button that does nothing.
+  const canUndo = hasRoomForCity(entries);
   const undoRemove = () => {
     if (!removed) return;
     const { entry, index } = removed;
     setEntries((prev) => {
-      if (prev.some((e) => e.id === entry.id)) return prev;
+      if (prev.some((e) => e.id === entry.id) || !hasRoomForCity(prev)) return prev;
       const next = [...prev];
       next.splice(Math.min(index, next.length), 0, entry);
       return next;
@@ -209,7 +219,7 @@ function App({ initialData }: AppProps) {
       <UndoToast
         message={removed ? `Removed ${removed.entry.label}` : null}
         token={removed?.token ?? 0}
-        onUndo={undoRemove}
+        onUndo={canUndo ? undoRemove : null}
         onDismiss={dismissRemoved}
       />
     </div>

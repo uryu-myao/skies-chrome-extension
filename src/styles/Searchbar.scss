@@ -28,7 +28,8 @@
       }
 
       &::after {
-        content: 'You can add up to 10 cities';
+        // The number comes from MAX_CITIES (Searchbar.tsx), not from here.
+        content: attr(data-limit-tip);
         display: none;
         position: absolute;
         bottom: -23px;
