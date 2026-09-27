@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import '@styles/CoreTimePanel.scss';
 import { coreTime } from '../core/coretime';
-import type { CoreTimeOverlapRange } from '../core/coretime';
+import type { CoreTimeNextOverlap, CoreTimeOverlapRange } from '../core/coretime';
 import { getSystemTimezone, SLOTS_PER_DAY } from '../core/tz';
 import type { AppSettings, Entry } from '../core/types';
 
@@ -118,13 +118,18 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
   const entryOf = (entryId: string): Entry | undefined =>
     entries.find((entry) => entry.id === entryId);
   const labelOf = (entryId: string): string => entryOf(entryId)?.label ?? '';
+  // "you" in place of the city's name when that city is the reference —
+  // the user shouldn't have to remember which city is them.
+  const isYou = (entryId: string): boolean => entryOf(entryId)?.timezone === referenceTimezone;
 
-  const renderNextOverlap = (label: string, nextOverlap: { weekday: number; startSlot: number; endSlot: number } | null) => {
+  const renderNextOverlap = (label: string, nextOverlap: CoreTimeNextOverlap | null) => {
     if (!nextOverlap) return null;
     const range = `${formatSlotTime(result.axis, nextOverlap.startSlot)}–${formatSlotTime(result.axis, nextOverlap.endSlot)}`;
+    const { excludedId } = nextOverlap;
     return (
       <span className="core-time-panel__detail">
         {label} — {WEEKDAY_SHORT[nextOverlap.weekday]} {range}
+        {excludedId && ` (all but ${isYou(excludedId) ? 'you' : labelOf(excludedId)})`}
       </span>
     );
   };
@@ -196,15 +201,12 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
       }
 
       case 'PARTIAL_OVERLAP': {
-        // "you" when the outlier is the reference city, as in closest's
-        // "yours" / "your day" — the user shouldn't have to remember which
-        // city is them.
-        const isYou = entryOf(conclusion.excludedId)?.timezone === referenceTimezone;
+        const excludedIsYou = isYou(conclusion.excludedId);
         const excludedLabel = labelOf(conclusion.excludedId);
         return (
           <div className="core-time-panel__conclusion">
             <span className="core-time-panel__headline">
-              All but {isYou ? 'you' : excludedLabel} overlap{' '}
+              All but {excludedIsYou ? 'you' : excludedLabel} overlap{' '}
               <span className="core-time-panel__headline-range">
                 {formatRanges(result.axis, conclusion.overlap)}
               </span>
@@ -215,7 +217,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
               type="button"
               className="core-time-panel__muted-line core-time-panel__hint-action"
               onClick={() => onToggleCoreTime(conclusion.excludedId)}>
-              {isYou
+              {excludedIsYou
                 ? "Your hours don't overlap — tap to exclude yourself"
                 : `${excludedLabel} is outside its work hours — tap to exclude it`}
             </button>

@@ -68,6 +68,9 @@ export interface CoreTimeNextOverlap {
   weekday: number;
   startSlot: number;
   endSlot: number;
+  // The one entry left out that day by leave-one-out (ALL_OFF only); null
+  // when everyone overlaps.
+  excludedId: string | null;
 }
 
 // The panel's conclusion as a status + exactly the data that status needs —
@@ -271,11 +274,18 @@ function isOnWorkdayToday(entry: Entry, settings: AppSettings, referenceDate: Da
 // First of the next `MAX_LOOKAHEAD_DAYS` reference-timezone calendar days
 // with a non-empty overlap. Each candidate day gets its own full 48-slot
 // axis and row/overlap computation, same as `coreTime` does for today.
+//
+// With `allowOneExcluded` (ALL_OFF), a day where everyone doesn't line up
+// still counts if leave-one-out finds its single outlier — same rule as
+// PARTIAL_OVERLAP. Day by day, earliest wins: an "all but X" Monday comes
+// before an everyone Tuesday. Without it, with enough cities spread out,
+// a full overlap within the week practically never exists (spec §5.3).
 function findNextOverlap(
   entries: Entry[],
   settings: AppSettings,
   referenceTimezone: string,
-  referenceDate: Date
+  referenceDate: Date,
+  allowOneExcluded: boolean
 ): CoreTimeNextOverlap | null {
   for (let daysFromToday = 1; daysFromToday <= MAX_LOOKAHEAD_DAYS; daysFromToday++) {
     const { year, month, day } = addLocalCalendarDays(referenceTimezone, referenceDate, daysFromToday);
@@ -283,13 +293,20 @@ function findNextOverlap(
     const slotInstants = buildSlotInstants(referenceTimezone, dayAnchor);
     const rows = entries.map((entry) => buildRow(entry, settings, slotInstants, dayAnchor));
     const overlap = computeOverlapRanges(rows);
+    const found =
+      overlap.length > 0
+        ? { overlap, excludedId: null }
+        : allowOneExcluded
+          ? findSingleOutlier(rows)
+          : null;
 
-    if (overlap.length > 0) {
+    if (found) {
       return {
         daysFromToday,
         weekday: localWeekday(referenceTimezone, dayAnchor),
-        startSlot: overlap[0].startSlot,
-        endSlot: overlap[0].endSlot,
+        startSlot: found.overlap[0].startSlot,
+        endSlot: found.overlap[0].endSlot,
+        excludedId: found.excludedId,
       };
     }
   }
@@ -344,7 +361,7 @@ function computeConclusion(
     return {
       status: 'ALL_OFF',
       offEntryIds,
-      nextOverlap: findNextOverlap(entries, settings, referenceTimezone, referenceDate),
+      nextOverlap: findNextOverlap(entries, settings, referenceTimezone, referenceDate, true),
     };
   }
 
@@ -360,7 +377,10 @@ function computeConclusion(
       workingEntryIds,
       offEntryIds,
       workingOverlap: workingRows.length >= 2 ? computeOverlapRanges(workingRows) : [],
-      nextOverlap: findNextOverlap(entries, settings, referenceTimezone, referenceDate),
+      // Full overlap only: workingOverlap already gives today's subset, and
+      // the city off today is usually the later days' outlier too — "all
+      // but Boston" on Tuesday would just repeat it (spec §5.3).
+      nextOverlap: findNextOverlap(entries, settings, referenceTimezone, referenceDate, false),
     };
   }
 

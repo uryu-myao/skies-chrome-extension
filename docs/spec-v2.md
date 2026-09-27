@@ -273,8 +273,10 @@ coreTime({
           gapMinutes,             // 该槽位上最大的单个偏离量,恒 > 0
           bottleneckEntryIds      // 偏离量等于 gapMinutes 的全部条目,列表顺序
       } }
-    | { status: 'ALL_OFF', offEntryIds, nextOverlap: { daysFromToday, weekday, startSlot, endSlot } | null }
+    | { status: 'ALL_OFF', offEntryIds, nextOverlap: { daysFromToday, weekday, startSlot, endSlot, excludedId } | null }
+                    // excludedId: 那一天去一法排除的条目;全员重叠时为 null
     | { status: 'PARTIAL_OFF', workingEntryIds, offEntryIds, workingOverlap: [...] | [], nextOverlap: {...} | null }
+                    // 这里的 nextOverlap 只找全员重叠,excludedId 恒为 null
 }
 ```
 
@@ -352,6 +354,19 @@ coreTime({
 
 **`ALL_OFF` / `PARTIAL_OFF` 的 `nextOverlap`**:从明天起,以参考时区的日历日为单位向后逐日搜索——每天各自生成一条完整的 48 槽轴并计算 `overlap`(与当天的算法完全一致),取第一个 `overlap` 非空的日期,返回该日期的星期与时段。上限 7 天;超出上限仍未找到则返回 `null`,UI 不渲染这一行,而不是再补一句兜底文案。
 
+**`ALL_OFF` 的逐日搜索带去一法**:某天全员 `overlap` 为空时,对当天的行套用与 `PARTIAL_OVERLAP`
+完全相同的规则(恰好一个条目被排除后其余非空;至少 3 个参与条目),成立就采用这一天,并在
+`excludedId` 返回被排除的条目;全员重叠时 `excludedId` 为 `null`。**逐日判断,取最早的一天**:
+某天只能「除 X 外」重叠,而更晚的某天全员重叠时,返回的是更早那天的「除 X 外」。两者都不成立
+的日子跳过;7 天都不成立时仍为 `null`,不渲染。理由与 `PARTIAL_OVERLAP` 相同:城市一多,全员
+交集在未来 7 天内几乎必然为空,只找全员重叠的 `nextOverlap` 会恒为 `null` —— 10 个分散全球的
+城市在周日只剩一句 `Everyone's off today`,没有任何可操作的信息。
+
+**`PARTIAL_OFF` 的 `nextOverlap` 仍只找全员重叠**(文案 `Next full overlap`),不套用去一法。
+`PARTIAL_OFF` 已经用 `workingOverlap` 给出今天可用的子集;而今天休息的那个城市,通常正是之后
+各天的离群者 —— 周一上午的东京加波士顿,去一法给出的是「周二,除波士顿外」,只是把
+`workingOverlap` 换个日期重复一遍。
+
 文案示例(UI 层渲染,`core/` 本身不含任何文案字符串):
 
 ```
@@ -366,6 +381,8 @@ NO_OVERLAP_TODAY   No overlap today
   (瓶颈并列)       2 cities are 3.5h outside their work hours
 ALL_OFF            Everyone's off today
                    Next overlap — Mon 11:00–18:00
+  (那天有离群者)   Next overlap — Mon 11:00–18:00 (all but Boston)
+  (离群者是你)     Next overlap — Mon 11:00–18:00 (all but you)
 PARTIAL_OFF        Only 4 cities are working today
                    Those 4 overlap 12:30–18:00
                    Next full overlap — Tue 11:00–18:00
@@ -778,6 +795,9 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - 同上五城市,周一上午的东京(波士顿仍是周日)→ `PARTIAL_OFF`,`workingOverlap` = 12:30–18:00;
   波士顿的 `offToday` 为 true,尽管轴末端擦到它周一的工作槽
 - 某条目今天休息、其余条目可以重叠 → `PARTIAL_OFF`,不是 `PARTIAL_OVERLAP`
+- Tokyo / Seoul / Shanghai / New York,基准东京,周日 → `ALL_OFF`,`nextOverlap` = 周一
+  10:00–18:00,`excludedId` 为 New York;两个东亚 + 两个美国城市 → 没有唯一离群者,`nextOverlap` 为 `null`
+- 周一只有一个条目不上班、周二全员重叠 → `ALL_OFF` 的 `nextOverlap` 取周一(除它外),不是周二
 - `closest` 的任一条目:偏离量为 0 ⇔ 该槽位是它的工作块
 
 ### 10.5 迁移
