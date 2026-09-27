@@ -8,6 +8,7 @@ import {
   resetEntryLabel,
   resolveWorkDays,
   resolveWorkHours,
+  referenceRoleOf,
   resolveReferenceChip,
   saveAppData,
   toggleIncludeInCoreTime,
@@ -161,6 +162,38 @@ describe('resolveReferenceChip — the chip name and selected option (§9.1)', (
       referenceEntryId: tsu.id,
     };
     expect(resolveReferenceChip(entries, stale, SYSTEM).label).toBe('Boston');
+  });
+});
+
+describe('referenceRoleOf — YOU is identity, BASE is relation (§9.3)', () => {
+  const tokyo = createEntry({ id: 'tokyo', timezone: 'Asia/Tokyo', label: 'Tokyo' });
+  const tsu = createEntry({ id: 'tsu', timezone: 'Asia/Tokyo', label: 'Tsu' });
+  const boston = createEntry({ id: 'boston', timezone: 'America/New_York', label: 'Boston' });
+  const entries = [tokyo, tsu, boston];
+  const SYSTEM = 'Asia/Tokyo';
+
+  const rolesFor = (settings: AppSettings) => {
+    const chip = resolveReferenceChip(entries, settings, SYSTEM);
+    const zone = settings.referenceTimezone ?? SYSTEM;
+    return entries.map((entry) => referenceRoleOf(entry, chip, zone));
+  };
+
+  it('two entries in the reference zone: only the picked one is you, the other is base', () => {
+    const settings = { ...DEFAULT_SETTINGS, referenceTimezone: 'Asia/Tokyo', referenceEntryId: tsu.id };
+    expect(rolesFor(settings)).toEqual(['base', 'you', null]);
+  });
+
+  it('System picks no entry: nobody is you, the system zone is base', () => {
+    expect(rolesFor({ ...DEFAULT_SETTINGS, referenceTimezone: null, referenceEntryId: null })).toEqual([
+      'base',
+      'base',
+      null,
+    ]);
+  });
+
+  it('the picked entry removed: you moves to the chip’s fallback, same as its name', () => {
+    const settings = { ...DEFAULT_SETTINGS, referenceTimezone: 'Asia/Tokyo', referenceEntryId: 'gone' };
+    expect(rolesFor(settings)).toEqual(['you', 'base', null]);
   });
 });
 

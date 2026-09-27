@@ -3,6 +3,7 @@ import '@styles/CoreTimePanel.scss';
 import { coreTime } from '../core/coretime';
 import type { CoreTimeNextOverlap, CoreTimeOverlapRange } from '../core/coretime';
 import { getSystemTimezone, SLOTS_PER_DAY } from '../core/tz';
+import { referenceRoleOf, resolveReferenceChip, type ReferenceRole } from '../core/model';
 import type { AppSettings, Entry } from '../core/types';
 
 interface CoreTimePanelProps {
@@ -106,7 +107,8 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
     [isHidden, entries, settings, recalcToken]
   );
 
-  const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
+  const systemTimezone = getSystemTimezone();
+  const referenceTimezone = settings.referenceTimezone ?? systemTimezone;
 
   // Shown with an empty list too: that's NO_ENTRIES, a new user's first
   // screen, and "Add a city to compare" is what it's there to say.
@@ -118,9 +120,17 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
   const entryOf = (entryId: string): Entry | undefined =>
     entries.find((entry) => entry.id === entryId);
   const labelOf = (entryId: string): string => entryOf(entryId)?.label ?? '';
-  // "you" in place of the city's name when that city is the reference —
-  // the user shouldn't have to remember which city is them.
-  const isYou = (entryId: string): boolean => entryOf(entryId)?.timezone === referenceTimezone;
+  // YOU is the one entry the chip has selected; BASE, any other entry in the
+  // reference zone (spec §9.3). The same chip the header shows, so the two
+  // can't disagree on who "you" is.
+  const chip = resolveReferenceChip(entries, settings, systemTimezone);
+  const roleOf = (entryId: string): ReferenceRole => {
+    const entry = entryOf(entryId);
+    return entry ? referenceRoleOf(entry, chip, referenceTimezone) : null;
+  };
+  // "you" in place of a city's name only for the YOU row — the user
+  // shouldn't have to remember which city is them.
+  const isYou = (entryId: string): boolean => roleOf(entryId) === 'you';
 
   const renderNextOverlap = (label: string, nextOverlap: CoreTimeNextOverlap | null) => {
     if (!nextOverlap) return null;
@@ -299,7 +309,9 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
     blocks: row.blocks,
     overlap: overlapOf(row.entryId, row.included),
     included: row.included,
-    isBaseline: entryOf(row.entryId)?.timezone === referenceTimezone,
+    // Both roles are in the reference zone, so both get the baseline blue;
+    // the tag says which one is you.
+    role: roleOf(row.entryId),
     // From core, not from the blocks: the axis can graze another day's
     // working hours, which left a city that's off today without its tag.
     isOff: row.offToday,
@@ -342,15 +354,17 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
               key={row.key}>
               <button
                 type="button"
-                className={`core-time-panel__row-label ${row.isBaseline ? 'core-time-panel__row-label--baseline' : ''}`}
+                className={`core-time-panel__row-label ${row.role ? 'core-time-panel__row-label--baseline' : ''}`}
                 onClick={() => onToggleCoreTime(row.key)}
                 aria-pressed={row.included}
                 aria-label={`${row.label}: ${row.included ? 'included in' : 'excluded from'} core time`}>
                 <span className="core-time-panel__row-name" title={row.label}>
                   {row.label}
                 </span>
-                {row.isBaseline && (
-                  <span className="core-time-panel__row-baseline-tag">You</span>
+                {row.role && (
+                  <span className="core-time-panel__row-baseline-tag">
+                    {row.role === 'you' ? 'You' : 'Base'}
+                  </span>
                 )}
                 {row.isOff && (
                   <span className="core-time-panel__row-off-tag">Off</span>

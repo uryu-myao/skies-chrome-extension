@@ -109,6 +109,21 @@ export function resolveReferenceChip(
   return { label: entry.label, selection: { kind: 'entry', entryId: entry.id } };
 }
 
+// An entry's part in the reference, for the Core Time band's tag (spec §9.3).
+// 'you' is identity — the one entry the chip has selected, so never more than
+// one, and none under System. 'base' is relation — any other entry in the
+// reference zone, as many as there are (the card's `Base` means the same).
+export type ReferenceRole = 'you' | 'base' | null;
+
+export function referenceRoleOf(
+  entry: Entry,
+  chip: ReferenceChip,
+  referenceTimezone: string
+): ReferenceRole {
+  if (chip.selection.kind === 'entry' && chip.selection.entryId === entry.id) return 'you';
+  return entry.timezone === referenceTimezone ? 'base' : null;
+}
+
 export interface ResolvedWorkHours extends WorkHours {
   isDefault: boolean;
 }
