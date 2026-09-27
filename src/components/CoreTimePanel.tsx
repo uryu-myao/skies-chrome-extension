@@ -92,21 +92,25 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
   }, [isEditMode]);
   const showExpanded = isExpanded && !isEditMode;
 
+  const isHidden = settings.coreTimePanel === 'hidden';
+
   // Every entry goes in: coreTime leaves the excluded ones out of the overlap
   // and the conclusion but still returns their rows, which stay visible
   // (dimmed) so the user can see who they excluded and tap them back in.
+  // Not computed at all while hidden (spec §9.3) — the hook can't be skipped,
+  // but the work inside it can.
   const result = useMemo(
-    () => coreTime({ entries, settings, referenceDate: new Date() }),
+    () => (isHidden ? null : coreTime({ entries, settings, referenceDate: new Date() })),
     // recalcToken isn't read, it only forces a fresh referenceDate.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entries, settings, recalcToken]
+    [isHidden, entries, settings, recalcToken]
   );
 
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
 
   // Shown with an empty list too: that's NO_ENTRIES, a new user's first
   // screen, and "Add a city to compare" is what it's there to say.
-  if (settings.coreTimePanel === 'hidden') {
+  if (result === null) {
     return null;
   }
 
