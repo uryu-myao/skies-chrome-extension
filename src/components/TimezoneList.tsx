@@ -20,12 +20,10 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Timezone, { TimezoneInfo } from './Timezone';
-import { createEntry } from '../core/model';
+import { createEntry, hasRoomForCity } from '../core/model';
 import type { Entry } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition, HourFormat } from '../App';
 import '@styles/EditList.scss';
-
-const MAX_CITIES = 10;
 
 // A reorder only ever moves a row up or down.
 const lockToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
@@ -124,7 +122,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
         return prev; // 如果已存在，返回原数组
       }
 
-      if (prev.length >= MAX_CITIES) {
+      if (!hasRoomForCity(prev)) {
         result = 'limit';
         return prev;
       }

@@ -90,7 +90,7 @@ key 是老用户数据所在的位置,改一个字就等于让所有老用户的
 | `timemate.pinned.v1`        | v1 置顶 id 列表(同上)                          |
 | `timemate.sort-mode.v1`     | v1 排序模式(同上)                              |
 | `timemate.hour-format.v1`   | v1 12/24 小时制(同上)                          |
-| `timemate.sun.<zone>.<日期>` | 卡片天色用的日出日落缓存,每个时区每天一条        |
+| `timemate.sun.<zone>.<日期>` | 卡片天色用的日出日落缓存,每个时区每天一条。每次打开 popup 时清理:只保留现有条目所在时区、该时区当天的那一条,往日的与已删除城市的全部删除 |
 
 ### 3.1 要求
 
@@ -220,9 +220,16 @@ function offsetMinutes(timezone, date) {
 }
 ```
 
+示例为了可读每次新建 formatter;实现中复用,见 §4.2。
+
 ### 4.2 硬性规则
 
 - **偏移必须按具体日期计算,严禁缓存。** DST 切换当天,同一时区上午和下午的偏移不同。
+- **禁止缓存的是结果,不是 formatter。** 偏移、本地日期、本地时刻都随 `date` 变化,不得缓存。
+  `Intl.DateTimeFormat` 实例只记住时区和要输出的字段,每次调用都按传入的 `date` 重新计算,复用它
+  不会让任何结果过期。`core/tz.ts` 按(字段组合, 时区)复用实例:新建一个约 21µs,复用约 1.4µs
+  (Chrome 实测),而一次 `coreTime()` 要调用数千次(30 个城市、需要往后找 7 天时约 2.5 万次)。
+  **不要把复用 formatter 当成违反上一条而改回每次新建。**
 - **不得硬编码任何偏移值。** 不写 `{ 'Asia/Tokyo': 9 }` 这类表。
 - **粒度为 30 分钟。** 存在 +5:30(印度)、+5:45(尼泊尔)、−3:30(纽芬兰)、+12:45(查塔姆)。所有轴与算法按 48 格处理,不用 24 格。
 - **每个条目的本地日期独立计算。** 判断工作日时使用该条目自己的本地 `getDay()`,不能用参考时区的星期。
@@ -266,8 +273,10 @@ coreTime({
           gapMinutes,             // 该槽位上最大的单个偏离量,恒 > 0
           bottleneckEntryIds      // 偏离量等于 gapMinutes 的全部条目,列表顺序
       } }
-    | { status: 'ALL_OFF', offEntryIds, nextOverlap: { daysFromToday, weekday, startSlot, endSlot } | null }
+    | { status: 'ALL_OFF', offEntryIds, nextOverlap: { daysFromToday, weekday, startSlot, endSlot, excludedId } | null }
+                    // excludedId: 那一天去一法排除的条目;全员重叠时为 null
     | { status: 'PARTIAL_OFF', workingEntryIds, offEntryIds, workingOverlap: [...] | [], nextOverlap: {...} | null }
+                    // 这里的 nextOverlap 只找全员重叠,excludedId 恒为 null
 }
 ```
 
@@ -345,6 +354,19 @@ coreTime({
 
 **`ALL_OFF` / `PARTIAL_OFF` 的 `nextOverlap`**:从明天起,以参考时区的日历日为单位向后逐日搜索——每天各自生成一条完整的 48 槽轴并计算 `overlap`(与当天的算法完全一致),取第一个 `overlap` 非空的日期,返回该日期的星期与时段。上限 7 天;超出上限仍未找到则返回 `null`,UI 不渲染这一行,而不是再补一句兜底文案。
 
+**`ALL_OFF` 的逐日搜索带去一法**:某天全员 `overlap` 为空时,对当天的行套用与 `PARTIAL_OVERLAP`
+完全相同的规则(恰好一个条目被排除后其余非空;至少 3 个参与条目),成立就采用这一天,并在
+`excludedId` 返回被排除的条目;全员重叠时 `excludedId` 为 `null`。**逐日判断,取最早的一天**:
+某天只能「除 X 外」重叠,而更晚的某天全员重叠时,返回的是更早那天的「除 X 外」。两者都不成立
+的日子跳过;7 天都不成立时仍为 `null`,不渲染。理由与 `PARTIAL_OVERLAP` 相同:城市一多,全员
+交集在未来 7 天内几乎必然为空,只找全员重叠的 `nextOverlap` 会恒为 `null` —— 10 个分散全球的
+城市在周日只剩一句 `Everyone's off today`,没有任何可操作的信息。
+
+**`PARTIAL_OFF` 的 `nextOverlap` 仍只找全员重叠**(文案 `Next full overlap`),不套用去一法。
+`PARTIAL_OFF` 已经用 `workingOverlap` 给出今天可用的子集;而今天休息的那个城市,通常正是之后
+各天的离群者 —— 周一上午的东京加波士顿,去一法给出的是「周二,除波士顿外」,只是把
+`workingOverlap` 换个日期重复一遍。
+
 文案示例(UI 层渲染,`core/` 本身不含任何文案字符串):
 
 ```
@@ -359,6 +381,8 @@ NO_OVERLAP_TODAY   No overlap today
   (瓶颈并列)       2 cities are 3.5h outside their work hours
 ALL_OFF            Everyone's off today
                    Next overlap — Mon 11:00–18:00
+  (那天有离群者)   Next overlap — Mon 11:00–18:00 (all but Boston)
+  (离群者是你)     Next overlap — Mon 11:00–18:00 (all but you)
 PARTIAL_OFF        Only 4 cities are working today
                    Those 4 overlap 12:30–18:00
                    Next full overlap — Tue 11:00–18:00
@@ -469,14 +493,33 @@ off-hours 其余
 
 |                | 免费                  | Pro                 |
 | -------------- | --------------------- | ------------------- |
-| 城市时钟       | 最多 10 个            | 同                  |
+| 城市时钟       | 最多 30 个            | 同                  |
 | Core Time 面板 | 可见可用,统一默认工时 | 自定义工时 + 周视图 |
 | DST 预警       | —                     | 全部                |
 | 设置页         | 全部可见可进入        | 同                  |
 
-城市上限是 `TimezoneList.tsx` 的 `MAX_CITIES = 10`,免费与 Pro 相同;第 11 个城市被拒绝,搜索框
-提示已达上限。基准 chip 的下拉(§9.1)与 Core Time 色带的布局都以这个上限为前提;要放开它,先
-回头看这两处。
+城市上限是 `core/model.ts` 的 `MAX_CITIES = 30`,免费与 Pro 相同。**凡是能让列表变长的地方都检查
+同一个上限**(`hasRoomForCity()`):
+
+- **添加**:满 30 个时第 31 个被拒绝,搜索框提示 `You can add up to 30 cities`(文案里的数字取自
+  `MAX_CITIES`,不写死)
+- **Undo**:放回会超出上限时 —— 满员时删一个、5 秒内又加一个 —— toast 只显示 `Removed X`,不再
+  提供 Undo,删除即生效。不留一个点了没反应的按钮
+- **读取**:打开 popup 时,超出上限的部分被截掉(保留列表顶部的 30 个,`console.warn` 记录),
+  随后照常写回。任何版本写入的数据都不超过 11 个(3.0.0 的上限是 10,Undo 不检查时最多到 11),
+  所以这一步只防手工改动或将来的降级,不会删掉真实用户的城市
+
+**3.0.0 的上限是 10,来历不明。** 它来自 `4f4f7d1`(2026-03-01,v1 发布前),commit message 只有
+"add 10-city limit",没有说明。当时 Core Time 面板与基准 chip 的下拉都还不存在,所以它不是为
+这两处定的。
+
+**当时真正的约束是 Core Time 色带没有自己的滚动。** 展开后面板高约 119 + 17.8n px(结论两行时),
+540px 的 popup 去掉头部与边距后只剩约 436px 给面板:约 17 行时列表区被压到 0,再多,结论行就
+被挤出 popup(3.0.0 实测:20 个城市超出 23px,30 个完全看不见)。`PARTIAL_OVERLAP` 的「点此
+排除」按钮就在结论行上,被挤出后点不到。Chrome 的 popup 最高 600px,加高也只能多放约 3 行。
+3.1.0 让色带在 10 行后自己滚动(§9.3),这条约束随之消失,上限提高到 30。基准 chip 的下拉(§9.1)
+不构成约束:它在 10 个城市时就已经需要滚动。30 个城市时打开 popup 的首帧约 39ms(复用 formatter
+之后,§4.2;之前是 521ms)。
 
 人物模式推迟后,Pro 的内容为:**按条目自定义工作时间 / 工作日、Core Time 周视图、DST 预警**。
 
@@ -531,19 +574,26 @@ export async function isPro() { ... }
 System 与同时区条目并不等价:System 跟随电脑的时区(出差时会变),选条目则固定在该时区。
 
 点击展开一个下拉列表:「System timezone」(副标题为系统时区的派生名),分隔线下**列出全部条目,
-不按时区去重** —— 用户按城市名认条目,自己添加的城市在下拉里消失会被当成 bug。列表最多 10 个
-条目(§8),下拉最高 240px、超出滚动,不需要分组。选条目时同时保存其时区
+不按时区去重** —— 用户按城市名认条目,自己添加的城市在下拉里消失会被当成 bug。下拉最高
+240px(完整可见约 6 项),超出滚动 —— 10 个城市时就已经需要滚动;不需要分组。选条目时同时保存其时区
 (`referenceTimezone`)与 id(`referenceEntryId`);选 System 时两者都清为 `null`。当前选中项蓝底
 高亮,并以 `aria-pressed` 标记。
 
-**chip 名称与 Base / YOU 跟随不同的值,这是有意设计,不是不一致**:
+**身份与关系跟随不同的值,这是有意设计,不是不一致**:
 
-- **chip 的名称回答「我选了哪个城市」**(身份)—— 跟随 `referenceEntryId`。
-- **卡片的 `Base`(§9.2)与 Core Time 的 `YOU` / `your` / `yours`(§5.3、§9.3)回答「这一行与基准
-  差多少」**(关系)—— 跟随 `referenceTimezone`。基准为 New York 时,Boston 同样是 `Base` / `YOU`:
-  两者零时差,只标其中一个会让用户以为它们之间有区别。
+- **身份 —— 「我选了哪个城市」**:chip 的名称、Core Time 色带的 `YOU` 标签(§9.3),以及结论里
+  代替城市名的 `you`(`All but you overlap`、`(all but you)`)。都跟随 `resolveReferenceChip()` 的
+  选中项(`referenceEntryId`,被删除时回退到同时区剩下的第一个条目)。**同一时刻至多一个**;选
+  System 时没有任何条目是 `YOU`。
+- **关系 —— 「这一行与基准差多少」**:卡片的 `Base`(§9.2)、色带的 `BASE` 标签(§9.3),以及
+  描述基准时刻的 `your` / `yours`(`Closest — 17:30 yours`、`before your day starts`)。跟随
+  `referenceTimezone`。基准为 New York 时,Boston 同样是 `Base`:两者零时差,只标其中一个会让
+  用户以为它们之间有区别。
 
-不要把 Base / YOU 改成跟随选中的条目,也不要把 chip 名称改成跟随时区。
+**`YOU` 曾经也跟随时区**(3.0.0),同时区的两个条目于是都显示 `YOU`。逻辑上说得通,渲染出来却像
+bug:`YOU` 是第一人称,天然唯一,出现两次只会被理解成出错。`Base` 出现两次不会:它描述的是关系,
+不是身份。所以 3.1.0 起 `YOU` 改为跟随选中项,`Base` 维持跟随时区。不要把 `Base` 改成跟随选中
+项,也不要把 chip 名称或 `YOU` 改回跟随时区。
 
 选定后,下方城市列表与 Core Time 轴据此立即重算(两者本来就读
 `settings.referenceTimezone`,切换后自动生效,无需额外联动代码)。chip 背景与头部其它
@@ -571,7 +621,8 @@ System 与同时区条目并不等价:System 跟随电脑的时区(出差时会�
   uses the defaults in Settings.` —— 其中 `Settings` 可点击,直接打开设置页并定位到 Core time
   分区(看到这句话的人正想去改那个默认值);`Remove this city` 为红色破坏性样式)。原「悬停齿轮 → 横滑露出
   置顶 / 删除」菜单及其首次提示动画已移除,置顶一并移除(§3.4)。手势总表见 §9.5
-- 删除没有二次确认,立即生效,底部弹出 `Removed Bangkok · Undo`(约 5 秒),Undo 放回原位置
+- 删除没有二次确认,立即生效,底部弹出 `Removed Bangkok · Undo`(约 5 秒),Undo 放回原位置。
+  放回会超出城市上限时只显示 `Removed Bangkok`,没有 Undo(§8)
 
 **底部信息栏**
 
@@ -595,6 +646,8 @@ Base   UTC+09                            TUE | 22 SEP    ← 基准时区对应�
 - **`Base` 跟随基准时区,不跟随 chip 中选中的条目。** 同一时区的条目都显示 `Base`:基准为 New York
   时 Boston 也是 `Base`。`Base` 表达的是这一行与基准的时差(关系),两者零时差;chip 的名称表达的
   是选了哪个城市(身份)。两者跟随不同的值是有意设计,见 §9.1。
+- **`Base` 可以出现多次,Core Time 的 `YOU` 不行**(§9.3)。`Base` 是关系,两个城市都与基准零时差,
+  标两次正确且不引起误解;`YOU` 是第一人称的身份,只能有一个。卡片上不用 `YOU`。
 - **UTC 偏移保留,降为次级**(更小、更暗):`UTC+09` / `UTC−04` / `UTC+05:45`,零偏移为 `UTC`。
   它是无歧义的可信度锚点,不删除。不显示时区缩写(§4.2)。
 - **右侧星期 + 日期对所有条目照常显示**,不做「仅在与基准不同日时显示」的条件隐藏,**颜色也始终不变**。
@@ -618,11 +671,35 @@ Base   UTC+09                            TUE | 22 SEP    ← 基准时区对应�
 **城市列表为空时面板照常显示**(除非设置为 Hide):结论为 `NO_ENTRIES` 的 `Add a city to compare`,
 头部为 `today · 0 cities`,没有色带可展开。这是新用户的第一屏,面板不能缺席。
 
+**设置为 Hide 时不计算 `coreTime()`**,而不只是不渲染 —— 没人看的结论不该占用打开 popup 的第一帧。
+
 **色带**:每个条目一行,顺序同列表,**包括被排除的条目**。轴为参考时区当天 0–24 点,蓝色块是
 该条目的工作槽(`rows[].blocks`)。
 
 - 重叠区用橙色框标出,只画在参与该重叠的行上:`OVERLAP` 画全员 `overlap`,`PARTIAL_OVERLAP`
   与 `PARTIAL_OFF` 画子集的 overlap。被排除的行不画
+- **`YOU` 与 `BASE` 标签**(§9.1):chip 选中的那个条目标 `YOU` —— 身份,至多一个;基准时区里的
+  其他条目标 `BASE` —— 关系,可以有多个,与卡片的 `Base` 同一个词、同一个含义。选 System 时
+  没有条目标 `YOU`,基准时区里的条目都标 `BASE`:System 不对应任何条目(chip 此时也不显示条目
+  名,§9.1)。城市名的基准蓝色跟随关系,这些行都是蓝色。结论里代替城市名的 `you`
+  (`All but you overlap`、`(all but you)`)与 `YOU` 标签是同一个判断,只指 `YOU` 那一行。
+  曾经两行都标 `YOU`(同为 `Asia/Tokyo`),被当成 bug —— 见 §9.1
+
+**色带最多显示 10 行,超出在色带内部滚动**:
+
+- 滚动容器只包色带网格。头部与结论行在容器外,**结论行始终可见** —— `PARTIAL_OVERLAP` 的「点此
+  排除」按钮在结论行上。3.0.0 的色带没有滚动,面板高约 119 + 17.8n px,20 个城市时结论行就被挤出
+  popup(§8)
+- 最大高度 = 恰好 10 行:行高是 12px 城市名 × 1.15 行高 = 13.8px,加 4px 行距,再加上边距与刻度行,
+  约 210px。10 个及以下与 3.0.0 相同(上边距多 2px,见下),第 11 个起滚动。展开态面板最高约
+  300px,popup 里的列表仍能露出一张多卡片
+- 刻度行(0 6 12 18 24)用 `position: sticky; bottom: 0` 固定在滚动区底部,留在网格里(subgrid),
+  不移出:城市名那一列按最长的名字自适应宽度,移出网格就与色带对不齐
+- `overscroll-behavior: contain`:滚到底不带动下面的城市列表
+- 刻度行上方有一道底部渐隐,与城市列表底部是同一个渐变(`--color-bg-info` → 透明),提示下面还有
+  行;随滚动淡出,滚到底时消失,不能滚动时不出现
+- closest 竖线跨越全部行,随内容一起滚动。上边距从 4px 改为 6px,竖线顶端的圆点才不会被滚动容器
+  裁掉
 - 今天休息的行(`rows[].offToday`):`Off` 标签,色带 45%
 - 被用户排除的行:名称加删除线,色带 25%。**不隐藏** —— 用户需要记得排除过谁,也要能点回来
 
@@ -656,9 +733,9 @@ Base   UTC+09                            TUE | 22 SEP    ← 基准时区对应�
 
 **可读性**:变暗的行(休息或被排除)名称仍是按钮,必须可读。统一为中性白 50%,在面板底色
 `#202025` 上 5.1:1,满足 12px 文字的 AA(4.5:1)—— 这是硬线,不为视觉偏好让步(实测:25% 为
-2.3:1,35% 为 3.2:1,45% 为 4.4:1)。行内的 `YOU` / `Off` 标签不再叠加额外透明度(叠加后曾低至
+2.3:1,35% 为 3.2:1,45% 为 4.4:1)。行内的 `YOU` / `BASE` / `Off` 标签不再叠加额外透明度(叠加后曾低至
 2.4:1);删除线用文字颜色,同为 5.1:1。基准城市的蓝色在 50% 时只有 3.1:1,所以变暗的行统一
-改用中性色,`YOU` 标签仍标明是谁。休息与排除靠 `Off` 标签 vs 删除线、色带 45% vs 25% 区分,
+改用中性色,`YOU` / `BASE` 标签仍标明是谁。休息与排除靠 `Off` 标签 vs 删除线、色带 45% vs 25% 区分,
 不靠文字亮度。
 
 ### 9.4 设置页
@@ -758,6 +835,9 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - 同上五城市,周一上午的东京(波士顿仍是周日)→ `PARTIAL_OFF`,`workingOverlap` = 12:30–18:00;
   波士顿的 `offToday` 为 true,尽管轴末端擦到它周一的工作槽
 - 某条目今天休息、其余条目可以重叠 → `PARTIAL_OFF`,不是 `PARTIAL_OVERLAP`
+- Tokyo / Seoul / Shanghai / New York,基准东京,周日 → `ALL_OFF`,`nextOverlap` = 周一
+  10:00–18:00,`excludedId` 为 New York;两个东亚 + 两个美国城市 → 没有唯一离群者,`nextOverlap` 为 `null`
+- 周一只有一个条目不上班、周二全员重叠 → `ALL_OFF` 的 `nextOverlap` 取周一(除它外),不是周二
 - `closest` 的任一条目:偏离量为 0 ⇔ 该槽位是它的工作块
 
 ### 10.5 迁移

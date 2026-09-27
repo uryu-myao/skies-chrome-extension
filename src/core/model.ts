@@ -20,6 +20,25 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dstNotificationEnabled: false,
 };
 
+// The most cities the list holds, free and Pro alike (spec §8). Every way the
+// list can grow checks hasRoomForCity() — adding, Undo — and what's read on
+// open is capped to it.
+export const MAX_CITIES = 30;
+
+export function hasRoomForCity(entries: Entry[]): boolean {
+  return entries.length < MAX_CITIES;
+}
+
+// Stored data is only ever over the limit if something other than the app
+// wrote it — a hand-edited profile, a later version's data after a downgrade:
+// nothing this or any earlier version writes goes past 11. Keeps the top of
+// the list, what the user sees first.
+export function capToCityLimit(entries: Entry[]): Entry[] {
+  if (entries.length <= MAX_CITIES) return entries;
+  console.warn(`Skies: ${entries.length} cities stored, keeping the first ${MAX_CITIES}`);
+  return entries.slice(0, MAX_CITIES);
+}
+
 export function createDefaultAppData(): AppData {
   return {
     version: 2,
@@ -107,6 +126,21 @@ export function resolveReferenceChip(
     return { label: friendlyZoneName(zone), selection: { kind: 'none' } };
   }
   return { label: entry.label, selection: { kind: 'entry', entryId: entry.id } };
+}
+
+// An entry's part in the reference, for the Core Time band's tag (spec §9.3).
+// 'you' is identity — the one entry the chip has selected, so never more than
+// one, and none under System. 'base' is relation — any other entry in the
+// reference zone, as many as there are (the card's `Base` means the same).
+export type ReferenceRole = 'you' | 'base' | null;
+
+export function referenceRoleOf(
+  entry: Entry,
+  chip: ReferenceChip,
+  referenceTimezone: string
+): ReferenceRole {
+  if (chip.selection.kind === 'entry' && chip.selection.entryId === entry.id) return 'you';
+  return entry.timezone === referenceTimezone ? 'base' : null;
 }
 
 export interface ResolvedWorkHours extends WorkHours {

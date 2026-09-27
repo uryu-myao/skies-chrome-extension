@@ -375,7 +375,7 @@ describe('coreTime — §5.3 off-day states', () => {
     expect(result.conclusion).toEqual({
       status: 'ALL_OFF',
       offEntryIds: [tokyo.id, singapore.id],
-      nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 20, endSlot: 36 },
+      nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 20, endSlot: 36, excludedId: null },
     });
   });
 
@@ -392,7 +392,7 @@ describe('coreTime — §5.3 off-day states', () => {
     expect(result.conclusion).toEqual({
       status: 'ALL_OFF',
       offEntryIds: [tokyo.id],
-      nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 18, endSlot: 36 },
+      nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 18, endSlot: 36, excludedId: null },
     });
   });
 
@@ -408,7 +408,7 @@ describe('coreTime — §5.3 off-day states', () => {
     expect(result.conclusion).toEqual({
       status: 'ALL_OFF',
       offEntryIds: [tokyo.id, singapore.id],
-      nextOverlap: { daysFromToday: 1, weekday: 1, startSlot: 20, endSlot: 36 },
+      nextOverlap: { daysFromToday: 1, weekday: 1, startSlot: 20, endSlot: 36, excludedId: null },
     });
   });
 
@@ -433,7 +433,7 @@ describe('coreTime — §5.3 off-day states', () => {
       workingEntryIds: [shanghai.id],
       offEntryIds: [tokyo.id],
       workingOverlap: [],
-      nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 20, endSlot: 36 },
+      nextOverlap: { daysFromToday: 2, weekday: 1, startSlot: 20, endSlot: 36, excludedId: null },
     });
   });
 
@@ -468,6 +468,8 @@ describe('coreTime — §5.3 off-day states', () => {
     });
 
     // Boston's hours never meet Kathmandu's, so no full overlap in 7 days.
+    // PARTIAL_OFF doesn't fall back to leave-one-out: that would be "Tuesday,
+    // all but Boston" — the working overlap again, a day later.
     expect(result.conclusion).toEqual({
       status: 'PARTIAL_OFF',
       workingEntryIds: [shanghai.id, tokyo.id, kathmandu.id, bangkok.id],
@@ -530,6 +532,64 @@ describe('coreTime — §5.3 off-day states', () => {
       status: 'ALL_OFF',
       offEntryIds: [tokyo.id],
       nextOverlap: null,
+    });
+  });
+});
+
+describe('coreTime — ALL_OFF nextOverlap with leave-one-out (§5.3)', () => {
+  it('no full overlap all week: the next day with a single outlier, naming it', () => {
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const seoul = createEntry({ timezone: 'Asia/Seoul', label: 'Seoul' });
+    const shanghai = createEntry({ timezone: 'Asia/Shanghai', label: 'Shanghai' });
+    const newYork = createEntry({ timezone: 'America/New_York', label: 'New York' });
+    const result = coreTime({
+      entries: [tokyo, seoul, shanghai, newYork],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SUNDAY_NOON_JST,
+    });
+
+    // Monday on the Tokyo axis: Shanghai starts 10:00 JST (slot 20), Tokyo
+    // and Seoul end 18:00 (slot 36). New York's Monday only starts at 22:00
+    // JST, and without it the other three line up.
+    expect(result.conclusion).toEqual({
+      status: 'ALL_OFF',
+      offEntryIds: [tokyo.id, seoul.id, shanghai.id, newYork.id],
+      nextOverlap: { daysFromToday: 1, weekday: 1, startSlot: 20, endSlot: 36, excludedId: newYork.id },
+    });
+  });
+
+  it('two cities on each side: no single outlier on any day, still null', () => {
+    const result = coreTime({
+      entries: [
+        createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' }),
+        createEntry({ timezone: 'Asia/Seoul', label: 'Seoul' }),
+        createEntry({ timezone: 'America/New_York', label: 'New York' }),
+        createEntry({ timezone: 'America/Chicago', label: 'Chicago' }),
+      ],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SUNDAY_NOON_JST,
+    });
+
+    const { conclusion } = result;
+    expect(conclusion.status).toBe('ALL_OFF');
+    if (conclusion.status !== 'ALL_OFF') return;
+    expect(conclusion.nextOverlap).toBeNull();
+  });
+
+  it('day by day, earliest wins: "all but Sapporo" on Monday before everyone on Tuesday', () => {
+    const tokyo = createEntry({ timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const osaka = createEntry({ timezone: 'Asia/Tokyo', label: 'Osaka' });
+    const sapporo = createEntry({ timezone: 'Asia/Tokyo', label: 'Sapporo', workDays: [2] });
+    const result = coreTime({
+      entries: [tokyo, osaka, sapporo],
+      settings: settingsWithReference('Asia/Tokyo'),
+      referenceDate: SUNDAY_NOON_JST,
+    });
+
+    expect(result.conclusion).toEqual({
+      status: 'ALL_OFF',
+      offEntryIds: [tokyo.id, osaka.id, sapporo.id],
+      nextOverlap: { daysFromToday: 1, weekday: 1, startSlot: 18, endSlot: 36, excludedId: sapporo.id },
     });
   });
 });

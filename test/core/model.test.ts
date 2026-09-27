@@ -1,13 +1,17 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  capToCityLimit,
   createEntry,
   DEFAULT_SETTINGS,
   defaultLabelOf,
+  hasRoomForCity,
   loadAppData,
+  MAX_CITIES,
   renameEntry,
   resetEntryLabel,
   resolveWorkDays,
   resolveWorkHours,
+  referenceRoleOf,
   resolveReferenceChip,
   saveAppData,
   toggleIncludeInCoreTime,
@@ -161,6 +165,66 @@ describe('resolveReferenceChip — the chip name and selected option (§9.1)', (
       referenceEntryId: tsu.id,
     };
     expect(resolveReferenceChip(entries, stale, SYSTEM).label).toBe('Boston');
+  });
+});
+
+describe('referenceRoleOf — YOU is identity, BASE is relation (§9.3)', () => {
+  const tokyo = createEntry({ id: 'tokyo', timezone: 'Asia/Tokyo', label: 'Tokyo' });
+  const tsu = createEntry({ id: 'tsu', timezone: 'Asia/Tokyo', label: 'Tsu' });
+  const boston = createEntry({ id: 'boston', timezone: 'America/New_York', label: 'Boston' });
+  const entries = [tokyo, tsu, boston];
+  const SYSTEM = 'Asia/Tokyo';
+
+  const rolesFor = (settings: AppSettings) => {
+    const chip = resolveReferenceChip(entries, settings, SYSTEM);
+    const zone = settings.referenceTimezone ?? SYSTEM;
+    return entries.map((entry) => referenceRoleOf(entry, chip, zone));
+  };
+
+  it('two entries in the reference zone: only the picked one is you, the other is base', () => {
+    const settings = { ...DEFAULT_SETTINGS, referenceTimezone: 'Asia/Tokyo', referenceEntryId: tsu.id };
+    expect(rolesFor(settings)).toEqual(['base', 'you', null]);
+  });
+
+  it('System picks no entry: nobody is you, the system zone is base', () => {
+    expect(rolesFor({ ...DEFAULT_SETTINGS, referenceTimezone: null, referenceEntryId: null })).toEqual([
+      'base',
+      'base',
+      null,
+    ]);
+  });
+
+  it('the picked entry removed: you moves to the chip’s fallback, same as its name', () => {
+    const settings = { ...DEFAULT_SETTINGS, referenceTimezone: 'Asia/Tokyo', referenceEntryId: 'gone' };
+    expect(rolesFor(settings)).toEqual(['you', 'base', null]);
+  });
+});
+
+describe('city limit — one limit wherever the list can grow (§8)', () => {
+  const cities = (n: number) =>
+    Array.from({ length: n }, (_, i) => createEntry({ id: `c${i}`, timezone: 'Asia/Tokyo', label: `City ${i}` }));
+
+  it('is 30', () => {
+    expect(MAX_CITIES).toBe(30);
+  });
+
+  it('has room below the limit, none at it', () => {
+    expect(hasRoomForCity(cities(29))).toBe(true);
+    expect(hasRoomForCity(cities(30))).toBe(false);
+    expect(hasRoomForCity(cities(31))).toBe(false);
+  });
+
+  it('leaves a list within the limit untouched', () => {
+    const list = cities(30);
+    expect(capToCityLimit(list)).toBe(list);
+  });
+
+  it('keeps the top 30 of a longer list, and says so', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const capped = capToCityLimit(cities(33));
+    expect(capped.map((entry) => entry.id)).toEqual(cities(30).map((entry) => entry.id));
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
   });
 });
 
