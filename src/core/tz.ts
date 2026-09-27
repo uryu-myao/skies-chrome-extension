@@ -1,20 +1,52 @@
 export const SLOTS_PER_DAY = 48;
 export const MINUTES_PER_SLOT = 30;
 
+const OFFSET_FIELDS: Intl.DateTimeFormatOptions = {
+  hour12: false,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+};
+const TIME_OF_DAY_FIELDS: Intl.DateTimeFormatOptions = {
+  hour12: false,
+  hour: '2-digit',
+  minute: '2-digit',
+};
+const DATE_FIELDS: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+};
+
+const formatters = new Map<Intl.DateTimeFormatOptions, Map<string, Intl.DateTimeFormat>>();
+
+// One formatter per (fields, zone), reused. A formatter holds only the zone
+// and which fields to print — every answer is still computed from the date
+// passed to each call, so no offset or date is cached (§4.2). What's saved
+// is building it: ~21µs new vs ~1.4µs reused, and one coreTime() makes
+// thousands of these calls.
+function formatterFor(fields: Intl.DateTimeFormatOptions, timezone: string): Intl.DateTimeFormat {
+  let byZone = formatters.get(fields);
+  if (!byZone) {
+    byZone = new Map();
+    formatters.set(fields, byZone);
+  }
+  let dtf = byZone.get(timezone);
+  if (!dtf) {
+    dtf = new Intl.DateTimeFormat('en-US', { ...fields, timeZone: timezone });
+    byZone.set(timezone, dtf);
+  }
+  return dtf;
+}
+
 // The only sanctioned way to get a timezone's UTC offset — computed per
 // specific date, never cached, never hardcoded. On a DST-transition day the
 // AM/PM offsets for the same zone differ, which is why `date` is required.
 export function offsetMinutes(timezone: string, date: Date): number {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  const dtf = formatterFor(OFFSET_FIELDS, timezone);
   const parts = Object.fromEntries(
     dtf.formatToParts(date).map((p) => [p.type, p.value])
   ) as Record<string, string>;
@@ -61,12 +93,7 @@ export function formatUtcOffset(minutes: number): string {
 }
 
 export function localMinutesOfDay(timezone: string, date: Date): number {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const dtf = formatterFor(TIME_OF_DAY_FIELDS, timezone);
   const parts = Object.fromEntries(
     dtf.formatToParts(date).map((p) => [p.type, p.value])
   ) as Record<string, string>;
@@ -80,12 +107,7 @@ export interface LocalDateParts {
 }
 
 export function localDateParts(timezone: string, date: Date): LocalDateParts {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
+  const dtf = formatterFor(DATE_FIELDS, timezone);
   const parts = Object.fromEntries(
     dtf.formatToParts(date).map((p) => [p.type, p.value])
   ) as Record<string, string>;

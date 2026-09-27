@@ -40,6 +40,27 @@ describe('offsetMinutes — §10.1 DST boundaries', () => {
   });
 });
 
+// tz.ts reuses one Intl.DateTimeFormat per (fields, zone). That must never
+// turn into reusing an answer: the same zone, asked again for another
+// instant, answers for that instant.
+describe('formatter reuse — §4.2 caches the formatter, never the result', () => {
+  it('answers each call for its own date, across a DST switch and back', () => {
+    const beforeSwitch = new Date('2026-03-08T06:00:00Z');
+    const afterSwitch = new Date('2026-03-08T08:00:00Z');
+    expect(offsetMinutes('America/New_York', beforeSwitch)).toBe(-300);
+    expect(offsetMinutes('America/New_York', afterSwitch)).toBe(-240);
+    expect(offsetMinutes('America/New_York', beforeSwitch)).toBe(-300);
+  });
+
+  it('keeps zones apart when the fields are the same', () => {
+    const date = new Date('2026-06-15T23:30:00Z');
+    expect(localDateKey('Asia/Tokyo', date)).toBe('2026-06-16');
+    expect(localDateKey('America/New_York', date)).toBe('2026-06-15');
+    expect(localMinutesOfDay('Asia/Tokyo', date)).toBe(8 * 60 + 30);
+    expect(localMinutesOfDay('America/New_York', date)).toBe(19 * 60 + 30);
+  });
+});
+
 describe('offsetMinutes — §10.2 half/quarter-hour zones', () => {
   const at = new Date('2026-06-15T12:00:00Z');
 
