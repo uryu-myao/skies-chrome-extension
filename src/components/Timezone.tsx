@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import '@styles/_reset.css';
 import '@styles/Timezone.scss';
+import { sunCacheKey } from '../core/suncache';
 import {
   formatRelativeOffset,
   formatUtcOffset,
+  localDateKey,
   localDayDelta,
   offsetMinutes,
   relativeOffsetMinutes,
@@ -97,12 +99,11 @@ const Timezone: React.FC<TimezoneProps> = ({
     if (!lat || !lon) return;
 
     const fetchSunTimes = async () => {
-      const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(
-        new Date()
-      );
+      // Same key pruneSunCache() keeps, so the two can't disagree on "today".
+      const today = localDateKey(zone, new Date());
       if (sunTimesRef.current?.date === today) return;
 
-      const cacheKey = `timemate.sun.${zone}.${today}`;
+      const cacheKey = sunCacheKey(zone, today);
 
       // Hit cache first — zero network latency on repeat opens
       const cached = localStorage.getItem(cacheKey);
@@ -139,12 +140,8 @@ const Timezone: React.FC<TimezoneProps> = ({
           date: today,
         };
         sunTimesRef.current = result;
+        // Older days' keys are cleared when the popup opens (pruneSunCache).
         localStorage.setItem(cacheKey, JSON.stringify(result));
-        // Evict yesterday's entry to keep storage tidy
-        const yesterday = new Intl.DateTimeFormat('en-CA', {
-          timeZone: zone,
-        }).format(new Date(Date.now() - 86400000));
-        localStorage.removeItem(`timemate.sun.${zone}.${yesterday}`);
         setTimeOfDay(computeTimeOfDay(zone, new Date(), result));
       } catch {
         // silently ignore fetch errors
