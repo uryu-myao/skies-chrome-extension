@@ -95,43 +95,54 @@ export type ReferenceSelection =
 export interface ReferenceChip {
   label: string;
   selection: ReferenceSelection;
+  // The list entry that stands for the user — the Core Time band's YOU. Not
+  // always the selection: under System nothing is selected, yet the user
+  // still has a city in the list (spec §9.1, §9.3). Null when no entry fits.
+  youEntryId: string | null;
 }
 
-// The reference chip's name and the menu's selected option — identity: "which
-// did I pick". Deliberately not what Base / YOU follow: those mark every entry
-// in the reference zone, because they say how far a row is from the
-// reference, and Boston and New York are 0h apart (spec §9.1, §9.2).
+// Identity — "which one is me" — decided once, for the header chip and the
+// Core Time band alike, so the two can't disagree (spec §9.1). Base / BASE
+// are relation and follow the zone instead (referenceRoleOf below).
 //
-// - System (referenceTimezone null): the system zone's own name, never a
-//   list entry's label, even one in the same zone — or picking System next to
-//   a same-zone "Tsu" would still read "Tsu" and look ignored.
-// - A picked entry: its label, found by referenceEntryId.
+// - System (referenceTimezone null): the chip reads the system zone's own
+//   name, never a list entry's label, even one in the same zone — or picking
+//   System next to a same-zone "Tsu" would still read "Tsu" and look ignored.
+//   YOU is still the first entry in the system zone, if there is one:
+//   System is the default, and without it most users would never see YOU.
+// - A picked entry: its label, found by referenceEntryId; it's also YOU.
 // - That entry gone (removed), or data from before referenceEntryId: the
-//   first entry left in the zone, then the zone's own name.
+//   first entry left in the zone, then the zone's own name and no YOU.
 export function resolveReferenceChip(
   entries: Entry[],
   settings: AppSettings,
   systemTimezone: string
 ): ReferenceChip {
+  const firstIn = (zone: string) => entries.find((entry) => entry.timezone === zone);
+
   const zone = settings.referenceTimezone;
   if (zone === null) {
-    return { label: friendlyZoneName(systemTimezone), selection: { kind: 'system' } };
+    return {
+      label: friendlyZoneName(systemTimezone),
+      selection: { kind: 'system' },
+      youEntryId: firstIn(systemTimezone)?.id ?? null,
+    };
   }
 
   const picked = entries.find(
     (entry) => entry.id === settings.referenceEntryId && entry.timezone === zone
   );
-  const entry = picked ?? entries.find((candidate) => candidate.timezone === zone);
+  const entry = picked ?? firstIn(zone);
   if (!entry) {
-    return { label: friendlyZoneName(zone), selection: { kind: 'none' } };
+    return { label: friendlyZoneName(zone), selection: { kind: 'none' }, youEntryId: null };
   }
-  return { label: entry.label, selection: { kind: 'entry', entryId: entry.id } };
+  return { label: entry.label, selection: { kind: 'entry', entryId: entry.id }, youEntryId: entry.id };
 }
 
 // An entry's part in the reference, for the Core Time band's tag (spec §9.3).
-// 'you' is identity — the one entry the chip has selected, so never more than
-// one, and none under System. 'base' is relation — any other entry in the
-// reference zone, as many as there are (the card's `Base` means the same).
+// 'you' is identity — the chip's youEntryId, so never more than one. 'base'
+// is relation — any other entry in the reference zone, as many as there are
+// (the card's `Base` means the same).
 export type ReferenceRole = 'you' | 'base' | null;
 
 export function referenceRoleOf(
@@ -139,7 +150,7 @@ export function referenceRoleOf(
   chip: ReferenceChip,
   referenceTimezone: string
 ): ReferenceRole {
-  if (chip.selection.kind === 'entry' && chip.selection.entryId === entry.id) return 'you';
+  if (chip.youEntryId === entry.id) return 'you';
   return entry.timezone === referenceTimezone ? 'base' : null;
 }
 

@@ -581,10 +581,12 @@ System 与同时区条目并不等价:System 跟随电脑的时区(出差时会�
 
 **身份与关系跟随不同的值,这是有意设计,不是不一致**:
 
-- **身份 —— 「我选了哪个城市」**:chip 的名称、Core Time 色带的 `YOU` 标签(§9.3),以及结论里
-  代替城市名的 `you`(`All but you overlap`、`(all but you)`)。都跟随 `resolveReferenceChip()` 的
-  选中项(`referenceEntryId`,被删除时回退到同时区剩下的第一个条目)。**同一时刻至多一个**;选
-  System 时没有任何条目是 `YOU`。
+- **身份 —— 「哪一个是我」**:chip 的名称、Core Time 色带的 `YOU` 标签(§9.3),以及结论里
+  代替城市名的 `you`(`All but you overlap`、`(all but you)`)。都由 `resolveReferenceChip()` 一处
+  判定:选了条目时是那个条目(`referenceEntryId`,被删除时回退到同时区剩下的第一个条目);选
+  System 时是列表中第一个属于系统时区的条目,没有这样的条目就没有 `YOU`。**同一时刻至多一个**。
+  选 System 时 chip 的名称仍是系统时区的派生名(见上):chip 回答「选了哪个选项」,`YOU` 回答
+  「列表里哪一行是我」—— System 下两者可以不同(chip `Tokyo`,色带上 `Tsu` 标 `YOU`)。
 - **关系 —— 「这一行与基准差多少」**:卡片的 `Base`(§9.2)、色带的 `BASE` 标签(§9.3),以及
   描述基准时刻的 `your` / `yours`(`Closest — 17:30 yours`、`before your day starts`)。跟随
   `referenceTimezone`。基准为 New York 时,Boston 同样是 `Base`:两者零时差,只标其中一个会让
@@ -594,6 +596,10 @@ System 与同时区条目并不等价:System 跟随电脑的时区(出差时会�
 bug:`YOU` 是第一人称,天然唯一,出现两次只会被理解成出错。`Base` 出现两次不会:它描述的是关系,
 不是身份。所以 3.1.0 起 `YOU` 改为跟随选中项,`Base` 维持跟随时区。不要把 `Base` 改成跟随选中
 项,也不要把 chip 名称或 `YOU` 改回跟随时区。
+
+**3.1.0 选 System 时没有 `YOU`**,自己的城市显示 `BASE`。而基准默认就是 System,于是绝大多数用户
+在色带上完全看不到 `YOU` —— 它的作用是让用户在色带上找到自己,默认状态下看不到就是功能回退。
+3.1.1 起 System 下的 `YOU` 标在系统时区的第一个条目上。
 
 选定后,下方城市列表与 Core Time 轴据此立即重算(两者本来就读
 `settings.referenceTimezone`,切换后自动生效,无需额外联动代码)。chip 背景与头部其它
@@ -678,10 +684,14 @@ Base   UTC+09                            TUE | 22 SEP    ← 基准时区对应�
 
 - 重叠区用橙色框标出,只画在参与该重叠的行上:`OVERLAP` 画全员 `overlap`,`PARTIAL_OVERLAP`
   与 `PARTIAL_OFF` 画子集的 overlap。被排除的行不画
-- **`YOU` 与 `BASE` 标签**(§9.1):chip 选中的那个条目标 `YOU` —— 身份,至多一个;基准时区里的
-  其他条目标 `BASE` —— 关系,可以有多个,与卡片的 `Base` 同一个词、同一个含义。选 System 时
-  没有条目标 `YOU`,基准时区里的条目都标 `BASE`:System 不对应任何条目(chip 此时也不显示条目
-  名,§9.1)。城市名的基准蓝色跟随关系,这些行都是蓝色。结论里代替城市名的 `you`
+- **`YOU` 与 `BASE` 标签**(§9.1):代表使用者的那一个条目标 `YOU` —— 身份,至多一个;基准时区
+  里的其他条目标 `BASE` —— 关系,可以有多个,与卡片的 `Base` 同一个词、同一个含义。`YOU` 由
+  `resolveReferenceChip()` 的 `youEntryId` 给出,与头部 chip 同一份判断:
+  - 选了条目:就是那个条目(被删除时回退到同时区剩下的第一个)
+  - 选 System(默认):列表中第一个属于系统时区的条目;同时区的其他条目标 `BASE`
+  - 没有条目属于基准时区:没有 `YOU`,也没有 `BASE`
+
+  城市名的基准蓝色跟随关系,这些行都是蓝色。结论里代替城市名的 `you`
   (`All but you overlap`、`(all but you)`)与 `YOU` 标签是同一个判断,只指 `YOU` 那一行。
   曾经两行都标 `YOU`(同为 `Asia/Tokyo`),被当成 bug —— 见 §9.1
 
@@ -750,9 +760,31 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - **About**(本版新增,不在最初的分区规划内)— Share Skies(复制商店链接,
   按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Website
   (右侧灰字 `useskies.com`,打开 https://useskies.com;行文案用 "Website" 而非品牌名)/ Version
-  (读取 `package.json` 的版本号,而非写死字符串)。这里收纳的是原头部 logo 弹出
-  菜单的内容。行尾图标按动作区分:离开扩展的外链用「箭头出框」,Share 是复制到剪贴板、
+  (读取 `package.json` 的版本号,而非写死字符串)/ Recent updates(见下)。这里收纳的是原头部
+  logo 弹出菜单的内容。行尾图标按动作区分:离开扩展的外链用「箭头出框」,Share 是复制到剪贴板、
   用复制图标(复制后短暂变成勾),`›` 只留给 popup 内部的跳转(如 Edit city list)。
+
+**Recent updates**(3.1.1 起):在 About 卡片里、Version 行之下 —— 它说的就是这个版本变了什么,
+所以跟着 Version,不单独成一个分区。
+
+```
+Version                      v3.1.1
+───────────────────────────────────
+Recent updates
+· Up to 30 cities (was 10)
+· Core Time is much faster
+```
+
+写法约定。前两条是这个区块可信度的前提 —— 用户会拿它对照自己的使用,对不上一次,以后就不再读:
+
+- **只描述变了什么,不评价好坏。** 写能被验证的事实:`Up to 30 cities (was 10)`。不写「全新」
+  「更好用」「更强大」这类评价,不用 NEW 标签或感叹号
+- **只保留 2–3 条。** 发新版本时替换旧条目,不累积。它是「最近」,不是 changelog;条目一多就没人读。
+  `test/components/recentUpdates.test.ts` 把条数卡在 2–3,加第 4 条会让测试失败,逼着先删旧的
+- **纯静态。** 条目硬编码在 `src/components/recentUpdates.ts`,不从 changelog 生成;不做展开收起、
+  「已读」状态、徽章或红点
+- **视觉权重低于设置项。** 11px、次级灰(不透明度 50%,与 Version 的值相同),没有行分隔线、
+  没有悬停或点击态。它是记录,不是公告
 
 **DST alerts** 与 **Account** 两个分区仍未实现,分别等待构建顺序(§11)第 7、8 步
 (`dst.js` 检测与横幅、接入 ExtPay)完成后再加入。注意 **About ≠ Account**:About 是

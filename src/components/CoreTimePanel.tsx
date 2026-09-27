@@ -120,9 +120,10 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
   const entryOf = (entryId: string): Entry | undefined =>
     entries.find((entry) => entry.id === entryId);
   const labelOf = (entryId: string): string => entryOf(entryId)?.label ?? '';
-  // YOU is the one entry the chip has selected; BASE, any other entry in the
-  // reference zone (spec §9.3). The same chip the header shows, so the two
-  // can't disagree on who "you" is.
+  // YOU is the chip's youEntryId — the picked city, or under System the first
+  // city in the system zone; BASE, any other entry in the reference zone
+  // (spec §9.3). The same chip the header shows, so the two can't disagree on
+  // who "you" is.
   const chip = resolveReferenceChip(entries, settings, systemTimezone);
   const roleOf = (entryId: string): ReferenceRole => {
     const entry = entryOf(entryId);

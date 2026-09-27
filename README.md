@@ -72,7 +72,8 @@ It is designed for quick cross-time-zone planning:
 - Display: hour format, show seconds, `Edit city list`
 - Core time: panel mode, default work hours and work days
 - About: Share Skies (copies the store link), Rate on Chrome Store,
-  Send Feedback (Google Form), Website (`useskies.com`), Version
+  Send Feedback (Google Form), Website (`useskies.com`), Version, and a short
+  Recent updates note under it
 
 ### Core Time Panel
 
@@ -195,11 +196,12 @@ If you rebuild, reload the extension from the extensions page.
 Before publishing a new version:
 
 1. Update the version in both [public/manifest.json](public/manifest.json) and [package.json](package.json) (Settings → About reads it from `package.json`)
-2. Run `npm run lint`
-3. Run `npm test`
-4. Run `npm run build`
-5. Load the latest `dist/` build in Chrome and test the popup manually
-6. Verify search, the city panel, edit-mode reordering, hour format, Core Time, and converter behavior
+2. Replace the lines in [src/components/recentUpdates.ts](src/components/recentUpdates.ts) with this version's changes — two or three, facts not verdicts (spec §9.4)
+3. Run `npm run lint`
+4. Run `npm test`
+5. Run `npm run build`
+6. Load the latest `dist/` build in Chrome and test the popup manually
+7. Verify search, the city panel, edit-mode reordering, hour format, Core Time, and converter behavior
 
 ## Notes About APIs
 

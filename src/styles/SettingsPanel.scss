@@ -202,6 +202,38 @@
     opacity: 0.5;
   }
 
+  // About → Recent updates (spec §9.4): a record, not an announcement. One
+  // step down from the rows — 11px, the Version value's 50% grey — and no
+  // divider, hover or click state of its own. It sits after Version, which
+  // gives it Version's divider above.
+  &__updates {
+    padding: 8px 0 10px;
+    font-family: 'Poppins', serif;
+    font-size: 11px;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    color: var(--color-font-timezone);
+    opacity: 0.5;
+  }
+
+  &__updates-title {
+    margin: 0 0 2px;
+    font-size: inherit;
+    font-weight: 500;
+  }
+
+  &__updates-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li::before {
+      content: '·';
+      display: inline-block;
+      width: 10px;
+    }
+  }
+
   &__segmented {
     position: relative;
     display: flex;

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import '@styles/SettingsPanel.scss';
 import type { AppSettings } from '../core/types';
 import SegmentedControl from './SegmentedControl';
+import { RECENT_UPDATES } from './recentUpdates';
 import { version as appVersion } from '../../package.json';
 
 const SHARE_URL = 'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik';
@@ -351,6 +352,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <div className="settings-panel__row">
               <span className="settings-panel__label">Version</span>
               <span className="settings-panel__value">v{appVersion}</span>
+            </div>
+
+            {/* What this version changed — a record, not an announcement:
+                static, smaller and dimmer than the rows (spec §9.4). */}
+            <div className="settings-panel__updates">
+              <h4 className="settings-panel__updates-title" id="settings-recent-updates">
+                Recent updates
+              </h4>
+              <ul className="settings-panel__updates-list" aria-labelledby="settings-recent-updates">
+                {RECENT_UPDATES.map((update) => (
+                  <li key={update}>{update}</li>
+                ))}
+              </ul>
             </div>
           </section>
         </div>
