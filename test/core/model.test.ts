@@ -112,6 +112,7 @@ describe('resolveReferenceChip — the chip name and selected option (§9.1)', (
     expect(resolveReferenceChip(entries, pick(null), SYSTEM)).toEqual({
       label: 'Tokyo',
       selection: { kind: 'system' },
+      youEntryId: tsu.id,
     });
   });
 
@@ -119,10 +120,12 @@ describe('resolveReferenceChip — the chip name and selected option (§9.1)', (
     expect(resolveReferenceChip(entries, pick(newYork), SYSTEM)).toEqual({
       label: 'New York',
       selection: { kind: 'entry', entryId: newYork.id },
+      youEntryId: newYork.id,
     });
     expect(resolveReferenceChip(entries, pick(boston), SYSTEM)).toEqual({
       label: 'Boston',
       selection: { kind: 'entry', entryId: boston.id },
+      youEntryId: boston.id,
     });
   });
 
@@ -130,6 +133,7 @@ describe('resolveReferenceChip — the chip name and selected option (§9.1)', (
     expect(resolveReferenceChip(entries, pick(tsu), SYSTEM)).toEqual({
       label: 'Tsu',
       selection: { kind: 'entry', entryId: tsu.id },
+      youEntryId: tsu.id,
     });
   });
 
@@ -137,6 +141,7 @@ describe('resolveReferenceChip — the chip name and selected option (§9.1)', (
     expect(resolveReferenceChip([tsu, boston], pick(newYork), SYSTEM)).toEqual({
       label: 'Boston',
       selection: { kind: 'entry', entryId: boston.id },
+      youEntryId: boston.id,
     });
   });
 
@@ -144,6 +149,7 @@ describe('resolveReferenceChip — the chip name and selected option (§9.1)', (
     expect(resolveReferenceChip([tsu], pick(newYork), SYSTEM)).toEqual({
       label: 'New York',
       selection: { kind: 'none' },
+      youEntryId: null,
     });
     // Tsu picked, then removed: the chip says "Tokyo", not the gone label.
     expect(resolveReferenceChip([], pick(tsu), SYSTEM).label).toBe('Tokyo');
@@ -155,6 +161,7 @@ describe('resolveReferenceChip — the chip name and selected option (§9.1)', (
     expect(resolveReferenceChip(entries, legacy, SYSTEM)).toEqual({
       label: 'Boston',
       selection: { kind: 'entry', entryId: boston.id },
+      youEntryId: boston.id,
     });
   });
 
@@ -165,6 +172,18 @@ describe('resolveReferenceChip — the chip name and selected option (§9.1)', (
       referenceEntryId: tsu.id,
     };
     expect(resolveReferenceChip(entries, stale, SYSTEM).label).toBe('Boston');
+  });
+
+  it('System: YOU is the first entry in the system zone, while the chip keeps the zone’s name', () => {
+    const tokyo = createEntry({ id: 'tokyo', timezone: 'Asia/Tokyo', label: 'Tokyo' });
+    const chip = resolveReferenceChip([boston, tsu, tokyo], pick(null), SYSTEM);
+    expect(chip.label).toBe('Tokyo');
+    expect(chip.selection).toEqual({ kind: 'system' });
+    expect(chip.youEntryId).toBe(tsu.id);
+  });
+
+  it('System with no entry in the system zone: no YOU', () => {
+    expect(resolveReferenceChip([boston, newYork], pick(null), SYSTEM).youEntryId).toBeNull();
   });
 });
 
@@ -186,12 +205,18 @@ describe('referenceRoleOf — YOU is identity, BASE is relation (§9.3)', () => 
     expect(rolesFor(settings)).toEqual(['base', 'you', null]);
   });
 
-  it('System picks no entry: nobody is you, the system zone is base', () => {
+  it('System (the default): the first entry in the system zone is you, the rest of the zone base', () => {
     expect(rolesFor({ ...DEFAULT_SETTINGS, referenceTimezone: null, referenceEntryId: null })).toEqual([
-      'base',
+      'you',
       'base',
       null,
     ]);
+  });
+
+  it('System with nobody in the system zone: no you, no base', () => {
+    const settings = { ...DEFAULT_SETTINGS, referenceTimezone: null, referenceEntryId: null };
+    const chip = resolveReferenceChip([boston], settings, SYSTEM);
+    expect(referenceRoleOf(boston, chip, SYSTEM)).toBeNull();
   });
 
   it('the picked entry removed: you moves to the chip’s fallback, same as its name', () => {

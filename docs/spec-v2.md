@@ -581,10 +581,12 @@ System 与同时区条目并不等价:System 跟随电脑的时区(出差时会�
 
 **身份与关系跟随不同的值,这是有意设计,不是不一致**:
 
-- **身份 —— 「我选了哪个城市」**:chip 的名称、Core Time 色带的 `YOU` 标签(§9.3),以及结论里
-  代替城市名的 `you`(`All but you overlap`、`(all but you)`)。都跟随 `resolveReferenceChip()` 的
-  选中项(`referenceEntryId`,被删除时回退到同时区剩下的第一个条目)。**同一时刻至多一个**;选
-  System 时没有任何条目是 `YOU`。
+- **身份 —— 「哪一个是我」**:chip 的名称、Core Time 色带的 `YOU` 标签(§9.3),以及结论里
+  代替城市名的 `you`(`All but you overlap`、`(all but you)`)。都由 `resolveReferenceChip()` 一处
+  判定:选了条目时是那个条目(`referenceEntryId`,被删除时回退到同时区剩下的第一个条目);选
+  System 时是列表中第一个属于系统时区的条目,没有这样的条目就没有 `YOU`。**同一时刻至多一个**。
+  选 System 时 chip 的名称仍是系统时区的派生名(见上):chip 回答「选了哪个选项」,`YOU` 回答
+  「列表里哪一行是我」—— System 下两者可以不同(chip `Tokyo`,色带上 `Tsu` 标 `YOU`)。
 - **关系 —— 「这一行与基准差多少」**:卡片的 `Base`(§9.2)、色带的 `BASE` 标签(§9.3),以及
   描述基准时刻的 `your` / `yours`(`Closest — 17:30 yours`、`before your day starts`)。跟随
   `referenceTimezone`。基准为 New York 时,Boston 同样是 `Base`:两者零时差,只标其中一个会让
@@ -594,6 +596,10 @@ System 与同时区条目并不等价:System 跟随电脑的时区(出差时会�
 bug:`YOU` 是第一人称,天然唯一,出现两次只会被理解成出错。`Base` 出现两次不会:它描述的是关系,
 不是身份。所以 3.1.0 起 `YOU` 改为跟随选中项,`Base` 维持跟随时区。不要把 `Base` 改成跟随选中
 项,也不要把 chip 名称或 `YOU` 改回跟随时区。
+
+**3.1.0 选 System 时没有 `YOU`**,自己的城市显示 `BASE`。而基准默认就是 System,于是绝大多数用户
+在色带上完全看不到 `YOU` —— 它的作用是让用户在色带上找到自己,默认状态下看不到就是功能回退。
+3.1.1 起 System 下的 `YOU` 标在系统时区的第一个条目上。
 
 选定后,下方城市列表与 Core Time 轴据此立即重算(两者本来就读
 `settings.referenceTimezone`,切换后自动生效,无需额外联动代码)。chip 背景与头部其它
@@ -678,10 +684,14 @@ Base   UTC+09                            TUE | 22 SEP    ← 基准时区对应�
 
 - 重叠区用橙色框标出,只画在参与该重叠的行上:`OVERLAP` 画全员 `overlap`,`PARTIAL_OVERLAP`
   与 `PARTIAL_OFF` 画子集的 overlap。被排除的行不画
-- **`YOU` 与 `BASE` 标签**(§9.1):chip 选中的那个条目标 `YOU` —— 身份,至多一个;基准时区里的
-  其他条目标 `BASE` —— 关系,可以有多个,与卡片的 `Base` 同一个词、同一个含义。选 System 时
-  没有条目标 `YOU`,基准时区里的条目都标 `BASE`:System 不对应任何条目(chip 此时也不显示条目
-  名,§9.1)。城市名的基准蓝色跟随关系,这些行都是蓝色。结论里代替城市名的 `you`
+- **`YOU` 与 `BASE` 标签**(§9.1):代表使用者的那一个条目标 `YOU` —— 身份,至多一个;基准时区
+  里的其他条目标 `BASE` —— 关系,可以有多个,与卡片的 `Base` 同一个词、同一个含义。`YOU` 由
+  `resolveReferenceChip()` 的 `youEntryId` 给出,与头部 chip 同一份判断:
+  - 选了条目:就是那个条目(被删除时回退到同时区剩下的第一个)
+  - 选 System(默认):列表中第一个属于系统时区的条目;同时区的其他条目标 `BASE`
+  - 没有条目属于基准时区:没有 `YOU`,也没有 `BASE`
+
+  城市名的基准蓝色跟随关系,这些行都是蓝色。结论里代替城市名的 `you`
   (`All but you overlap`、`(all but you)`)与 `YOU` 标签是同一个判断,只指 `YOU` 那一行。
   曾经两行都标 `YOU`(同为 `Asia/Tokyo`),被当成 bug —— 见 §9.1
 
