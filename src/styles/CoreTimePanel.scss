@@ -111,8 +111,8 @@
     // conclusion stay outside it, so the conclusion line (PARTIAL_OVERLAP's
     // exclude button) is always on screen. +1px so rounding never makes
     // exactly ten rows scroll.
-    max-height: $band-padding-top + $band-visible-rows * ($band-row-height + $band-row-gap) +
-      $band-scale-height + 1px;
+    max-height: $band-padding-top + $band-visible-rows *
+      ($band-row-height + $band-row-gap) + $band-scale-height + 1px;
     overflow-y: auto;
     // Reaching the end doesn't carry on into the city list.
     overscroll-behavior: contain;
@@ -265,8 +265,10 @@
   }
 
   &__row-baseline-tag {
+    background: var(--color-bg-info);
+    padding: 2px 4px;
     flex-shrink: 0;
-    font-size: 10px;
+    font-size: 9px;
     font-style: italic;
     font-weight: 700;
     text-transform: uppercase;
@@ -358,7 +360,11 @@
       right: 0;
       bottom: 100%;
       height: 34px;
-      background: linear-gradient(0deg, var(--color-bg-info), var(--color-opacity) 100%);
+      background: linear-gradient(
+        0deg,
+        var(--color-bg-info),
+        var(--color-opacity) 100%
+      );
       pointer-events: none;
       opacity: 0;
       animation: core-time-band-more linear both;

@@ -202,6 +202,10 @@
     }
 
     &__divider {
+      // The menu is a height-capped flex column: once the cities overflow
+      // it, items shrink toward their content size — and an empty 1px line
+      // has none, so without this it shrinks to 0 and disappears.
+      flex-shrink: 0;
       height: 1px;
       margin: 4px 6px;
       background: var(--color-division);
