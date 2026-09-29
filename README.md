@@ -94,8 +94,8 @@ It is designed for quick cross-time-zone planning:
 
 ```text
 .
+├── manifest.config.ts     # manifest.json per build target (Chrome, Firefox)
 ├── public/
-│   ├── manifest.json
 │   ├── background.js
 │   └── icons/
 ├── src/
@@ -182,7 +182,7 @@ If you rebuild, reload the extension from the extensions page.
 
 ## Development Notes
 
-- Extension metadata lives in [public/manifest.json](public/manifest.json)
+- Extension metadata lives in [manifest.config.ts](manifest.config.ts); the build writes `dist/manifest.json` for the chosen target from it
 - Popup UI starts from [src/App.tsx](src/App.tsx), which owns the entries and settings state
 - Header interactions and converter UI live in [src/components/Header.tsx](src/components/Header.tsx)
 - Timezone card rendering lives in [src/components/Timezone.tsx](src/components/Timezone.tsx)
@@ -195,7 +195,7 @@ If you rebuild, reload the extension from the extensions page.
 
 Before publishing a new version:
 
-1. Update the version in both [public/manifest.json](public/manifest.json) and [package.json](package.json) (Settings → About reads it from `package.json`)
+1. Update the version in [package.json](package.json) — the manifests and Settings → About both read it from there
 2. Replace the lines in [src/components/recentUpdates.ts](src/components/recentUpdates.ts) with this version's changes — two or three, facts not verdicts (spec §9.4)
 3. Run `npm run lint`
 4. Run `npm test`

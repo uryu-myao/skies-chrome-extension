@@ -77,5 +77,5 @@ Every key keeps the `timemate.` prefix from before the rename to Skies; renaming
 ### Extension entry points
 
 - `index.html` → popup (`src/main.tsx` runs `migrate()` before the first render)
-- `public/manifest.json` → Manifest V3. Declares no permissions at all; keep it that way unless a feature truly needs one (spec §6.3). The version lives here **and** in `package.json` — bump both (Settings → About reads `package.json`)
-- `public/background.js` → service worker (sets uninstall URL only)
+- `manifest.config.ts` → Manifest V3, generated per target by the `skies:manifest` plugin in `vite.config.ts`: a shared part plus Firefox's overrides (`background.scripts`, `browser_specific_settings.gecko`, toolbar placement, 96px icon). The Chrome manifest must stay byte-identical to 3.1.2's. Declares no permissions at all; keep it that way unless a feature truly needs one (spec §6.3). `version` comes from `package.json` — the only place to bump it. Files in `public/` that only one target uses are listed in `TARGET_ONLY_FILES`
+- `public/background.js` → Chrome service worker / Firefox event page (sets uninstall URL only)
