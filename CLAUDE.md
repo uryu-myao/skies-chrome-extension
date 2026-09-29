@@ -9,6 +9,8 @@ npm run dev       # Vite dev server (popup UI development)
 npm run build     # tsc -b, then both targets → dist/chrome/ and dist/firefox/
 npm run build:chrome   # one target (same tsc -b first)
 npm run build:firefox
+npm run package:chrome   # build + reproducible zip → release/ (same for package:firefox)
+npm run package:source   # AMO source zip via git archive → release/ (refuses a dirty tree; --dirty for a trial run)
 npm run lint      # ESLint
 npm run preview   # Preview production build
 npm test          # Vitest, runs test/**/*.test.ts (core/ modules, plus pure UI helpers such as dayDeltaLabel)
@@ -17,7 +19,7 @@ npm run test:watch  # Vitest in watch mode
 
 `tsc -b` also type-checks `test/` (via `tsconfig.test.json`), so a test that drifts from a core module's types fails the build, not just at runtime. Load the extension by pointing Chrome to `dist/chrome/` (Firefox: `about:debugging` → `dist/firefox/manifest.json`) after building.
 
-Node is pinned to 24.x (`.nvmrc`, `engines`, and `.npmrc`'s `engine-strict`, so `npm ci` refuses other versions).
+Node is pinned to 24.x (`.nvmrc`, `engines`, and `.npmrc`'s `engine-strict`, so `npm ci` refuses other versions): AMO reviewers rebuild the Firefox package from source and must get identical files (README-AMO.md).
 
 ## Architecture
 
