@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import '@styles/Searchbar.scss';
 import type { AddTimezoneResult } from '../App';
+import { buildCityIndex, searchCities, type CityIndex } from '../core/citySearch';
 import { MAX_CITIES } from '../core/model';
 
 function getUtcOffset(zone: string): string {
@@ -36,30 +37,6 @@ interface SearchResult {
   lon?: number;
 }
 
-interface SearchApiItem {
-  city?: string;
-  timezone?: string;
-  country?: string;
-  countryCode?: string;
-  region?: string;
-  lat?: number;
-  lon?: number;
-}
-
-interface OpenMeteoResultItem {
-  name?: string;
-  country?: string;
-  country_code?: string;
-  admin1?: string;
-  timezone?: string;
-  latitude?: number;
-  longitude?: number;
-}
-
-interface OpenMeteoSearchResponse {
-  results?: OpenMeteoResultItem[];
-}
-
 const EMPTY_ZONES: string[] = [];
 
 interface SearchbarProps {
@@ -74,81 +51,52 @@ const Searchbar: React.FC<SearchbarProps> = ({
   onSelect,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [index, setIndex] = useState<CityIndex | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [showLimitTip, setShowLimitTip] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const activeRequestIdRef = useRef(0);
 
-  const fetchCityTimezones = useCallback(
-    async (query: string, signal?: AbortSignal): Promise<SearchResult[]> => {
-      try {
-        // Use free Open-Meteo geocoding directly to avoid local proxy dependency.
-        const res = await fetch(
-          `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-            query
-          )}&count=8&language=en&format=json`,
-          { signal }
-        );
-        const payload = (await res.json()) as OpenMeteoSearchResponse;
-        const data: SearchApiItem[] = Array.isArray(payload.results)
-          ? payload.results.map((item) => ({
-              city: item.name,
-              timezone: item.timezone,
-              country: item.country,
-              countryCode: item.country_code,
-              region: item.admin1,
-              lat: item.latitude,
-              lon: item.longitude,
-            }))
-          : [];
+  // The city library (GeoNames, src/data/cities.ts) is its own chunk, loaded
+  // when the search opens rather than with the popup (spec §9.6).
+  useEffect(() => {
+    let active = true;
+    import('../data/cities')
+      .then((library) => {
+        if (active) setIndex(buildCityIndex(library));
+      })
+      .catch((error) => console.error('[Skies] loading the city library failed', error));
+    return () => {
+      active = false;
+    };
+  }, []);
 
-        if (!Array.isArray(data)) return [];
-
-        const mapped = data
-          .filter(
-            (item) =>
-              item.city &&
-              item.timezone &&
-              !existingZones.includes(item.timezone)
-          )
-          .map((item) => ({
-            id: `${String(item.city)
-              .toLowerCase()
-              .replace(/[^\w]/g, '-')}-${String(item.timezone)
-              .toLowerCase()
-              .replace(/[^\w/]/g, '-')}`,
-            city: item.city as string,
-            zone: item.timezone as string,
-            country: item.country,
-            countryCode: item.countryCode,
-            region: item.region,
-            lat: item.lat,
-            lon: item.lon,
-          }));
-
-        // Open-Meteo may return duplicates with same city/timezone.
-        const unique = new Map<string, SearchResult>();
-        for (const item of mapped) {
-          if (!unique.has(item.id)) {
-            unique.set(item.id, item);
-          }
-        }
-        return Array.from(unique.values());
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          return [];
-        }
-        console.error('搜索城市时出错:', error);
-        return [];
-      }
-    },
-    [existingZones]
-  ); // ✅ 把依赖列上
+  // Searched locally on every keystroke — no request, so no debounce. Same
+  // results as before, one per city + zone, cities in a zone the list
+  // already has left out when the caller asks for it.
+  const results = useMemo<SearchResult[]>(() => {
+    if (!index || !searchTerm.trim()) return [];
+    const unique = new Map<string, SearchResult>();
+    for (const city of searchCities(index, searchTerm)) {
+      if (existingZones.includes(city.zone)) continue;
+      const id = `${city.city.toLowerCase().replace(/[^\w]/g, '-')}-${city.zone.toLowerCase().replace(/[^\w/]/g, '-')}`;
+      if (unique.has(id)) continue;
+      unique.set(id, {
+        id,
+        city: city.city,
+        zone: city.zone,
+        country: city.country,
+        countryCode: city.countryCode,
+        region: city.region,
+        lat: city.lat,
+        lon: city.lon,
+      });
+    }
+    return [...unique.values()];
+  }, [index, searchTerm, existingZones]);
+  const isLoading = !!searchTerm.trim() && index === null;
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -156,7 +104,6 @@ const Searchbar: React.FC<SearchbarProps> = ({
     setShowResults(!!value.trim());
     setShowLimitTip(false);
     setActiveIndex(-1);
-    if (value.trim()) setIsLoading(true);
   };
 
   const handleSelectCity = (result: SearchResult) => {
@@ -169,7 +116,6 @@ const Searchbar: React.FC<SearchbarProps> = ({
     setShowLimitTip(false);
     setSearchTerm('');
     setShowResults(false);
-    setResults([]);
     setActiveIndex(-1);
     onSelect?.();
   };
@@ -226,36 +172,6 @@ const Searchbar: React.FC<SearchbarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (!searchTerm.trim()) {
-      setResults((prev) => (prev.length === 0 ? prev : []));
-      setIsLoading((prev) => (prev ? false : prev));
-      return;
-    }
-
-    const requestId = activeRequestIdRef.current + 1;
-    activeRequestIdRef.current = requestId;
-    const controller = new AbortController();
-
-    const delaySearch = setTimeout(async () => {
-      const searchResults = await fetchCityTimezones(
-        searchTerm,
-        controller.signal
-      );
-      // Ignore stale responses from previous requests.
-      if (requestId !== activeRequestIdRef.current) {
-        return;
-      }
-      setResults(searchResults);
-      setIsLoading(false);
-    }, 300);
-
-    return () => {
-      controller.abort();
-      clearTimeout(delaySearch);
-    };
-  }, [searchTerm, fetchCityTimezones]); // ✅ 正确标记依赖
-
   return (
     <div className="search-inner" ref={searchRef}>
       <div
@@ -309,7 +225,9 @@ const Searchbar: React.FC<SearchbarProps> = ({
               ))}
             </ul>
           ) : (
-            <div className="search-no-results">No cities found</div>
+            <div className="search-no-results">
+              No match. Try a nearby larger city — you can rename it after adding.
+            </div>
           )}
         </div>
       )}

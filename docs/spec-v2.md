@@ -891,6 +891,26 @@ Recent updates
 | 编辑 | 点减号     | 删除 + Undo      |
 | 编辑 | 点卡片     | 无               |
 
+
+### 9.6 城市搜索
+
+- **数据在扩展里,不联网。** 城市库 `src/data/cities.ts` 由 `scripts/build-cities.mjs` 从 GeoNames 的公开数据
+  (cities15000、alternateNamesV2、admin1CodesASCII、countryInfo)生成,文件头记录数据日期与生成命令;
+  生成的文件提交进仓库,构建时不下载任何东西(AMO 的复现构建不能依赖网络)。GeoNames 为 CC BY 4.0,
+  署名见 §9.4 与 `ATTRIBUTION.md`
+- **收录**:人口 ≥ 50,000 或国家首都;排除城区(GeoNames 地物代码 `PPLX`)。显示名为 GeoNames 的英文首选名
+  (没有时用 GeoNames 名称,如 `New York` 而非 `New York City`);另收供搜索的别名:GeoNames 名称与 ASCII
+  名、中文(各地区变体)、日文,以及英文旧名(`Bangalore`、`Calcutta`、`Kiev`、`Saigon`)。**不收俗称**
+  (否则 `New York` 会搜到雅加达的 `New York Van Java`)
+- **只在打开搜索时加载**:城市库是单独的 chunk,由搜索框挂载时动态 `import()`,不进 popup 首帧;加载完成前
+  显示 `Searching…`。之后每次按键在本地查询,不防抖
+- **匹配**:不区分大小写、变音符号与标点(`Sao Paulo` = `São Paulo`,全角字母同半角)。精确匹配(任一名称
+  与输入相同)排在前缀匹配之前,同级按人口从大到小;最多 8 条(与原先 Open-Meteo 的 `count=8` 相同)。
+  同名且同时区的城市只显示一条 —— 与添加时「同名 + 同时区视为重复」一致
+- **写入条目的字段不变**:`timezone`、`label`(城市名)、`lat`、`lon`,与原先从 Open-Meteo 得到的相同;
+  条目 `id` 仍由 `createEntry()` 生成(UUID),与 GeoNames id 无关 —— 原先也从未使用 Open-Meteo 返回的 id
+- 没有结果时显示:`No match. Try a nearby larger city — you can rename it after adding.`
+
 ---
 
 ## 10. 测试用例

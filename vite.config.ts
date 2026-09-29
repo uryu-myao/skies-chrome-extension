@@ -88,6 +88,9 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: `dist/${target}`,
+      // The city library (src/data/cities.ts, ~700 kB) is a chunk of its own,
+      // loaded only when the search opens — large on purpose.
+      chunkSizeWarningLimit: 800,
     },
     resolve: {
       alias: {
