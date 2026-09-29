@@ -216,7 +216,8 @@ const Searchbar: React.FC<SearchbarProps> = ({
                   {result.countryCode && (
                     <img
                       className="country-flag"
-                      src={`https://flagcdn.com/${result.countryCode.toLowerCase()}.svg`}
+                      // Bundled 80px PNGs (public/flags/, scripts/fetch-flags.mjs), shown 32px wide.
+                      src={`/flags/${result.countryCode.toLowerCase()}.png`}
                       alt={result.country ?? result.countryCode}
                       loading="lazy"
                     />
