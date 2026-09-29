@@ -10,6 +10,8 @@ const SHARE_URL = 'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgch
 const RATE_URL = `${SHARE_URL}/reviews`;
 const FEEDBACK_URL = 'https://forms.gle/ncZLfTs8RKE59ETC9';
 const WEBSITE_URL = 'https://useskies.com';
+const GEONAMES_URL = 'https://www.geonames.org/';
+const CC_BY_URL = 'https://creativecommons.org/licenses/by/4.0/';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -352,6 +354,25 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <div className="settings-panel__row">
               <span className="settings-panel__label">Version</span>
               <span className="settings-panel__value">v{appVersion}</span>
+            </div>
+
+            {/* The city search's data is GeoNames', CC BY 4.0: the credit and
+                the license, each its own link (spec §9.4, ATTRIBUTION.md). */}
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">City data</span>
+              <span className="settings-panel__row-end">
+                <span className="settings-panel__value">
+                  <a className="settings-panel__credit-link" href={GEONAMES_URL} target="_blank" rel="noopener noreferrer">
+                    GeoNames
+                  </a>{' '}
+                  (
+                  <a className="settings-panel__credit-link" href={CC_BY_URL} target="_blank" rel="noopener noreferrer">
+                    CC BY 4.0
+                  </a>
+                  )
+                </span>
+                <ExternalIcon />
+              </span>
             </div>
 
             {/* What this version changed — a record, not an announcement:

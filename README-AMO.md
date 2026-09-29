@@ -33,6 +33,14 @@ the files in the submitted add-on package.
 and then runs `vite build --mode firefox`. The build does not read
 environment variables or `.env` files. `npm test` runs the unit tests.
 
+## Third-party data, images and fonts
+
+The city data (GeoNames, CC BY 4.0), the time-zone locations (IANA tz
+database), the flag images and the fonts (SIL OFL) are all bundled in the
+add-on, and the add-on requests none of them over the network. Each is
+produced by a script in `scripts/` whose output is committed; the build
+itself downloads nothing. `ATTRIBUTION.md` lists every source.
+
 ## Left out of this source package
 
 - **`src/server/`**: a local development server. The extension doesn't
