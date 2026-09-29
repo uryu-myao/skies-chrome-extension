@@ -1,3 +1,6 @@
+// Lato and Poppins ship with the extension (scripts/fetch-fonts.mjs).
+@use 'fonts';
+
 // The popup's size, fixed in static CSS: Firefox sizes a popup from the page
 // as soon as it loads, and the app itself only renders once storage has been
 // read (main.tsx). Without this the popup opens empty and then jumps to
