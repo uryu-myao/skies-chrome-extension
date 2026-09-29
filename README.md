@@ -106,7 +106,7 @@ It is designed for quick cross-time-zone planning:
 │   │   ├── migrate.ts     # v1 → v2, freezing the old display order
 │   │   ├── tz.ts          # offsets, relative gaps, local dates
 │   │   ├── coretime.ts    # working-hours intersection
-│   │   ├── suncache.ts    # sunrise/sunset cache keys, pruned on open
+│   │   ├── sun.ts         # sun elevation and solar noon (NOAA) → the card's sky
 │   │   └── dst.ts         # upcoming DST transitions
 │   ├── components/
 │   │   ├── Header.tsx
@@ -117,6 +117,7 @@ It is designed for quick cross-time-zone planning:
 │   │   ├── SettingsPanel.tsx
 │   │   ├── CitySettingsPanel.tsx
 │   │   └── UndoToast.tsx
+│   ├── data/              # generated data files (zoneCoordinates.ts from IANA tzdata) — see scripts/
 │   ├── platform/storage/  # KeyValueStore backends: localStorage (Chrome), storage.local (Firefox)
 │   ├── styles/
 │   ├── App.tsx
@@ -208,7 +209,7 @@ Before publishing a new version:
 ## Notes About APIs
 
 - City search currently uses a free public geocoding API
-- Sunrise/sunset for the card backgrounds comes from a free public forecast API, cached per zone per day
+- The card's sky (night / dawn / day / twilight) is computed locally from the sun's elevation (NOAA equations) — no API. Cities without coordinates use their time zone's principal location from IANA tzdata (`scripts/build-zone-coordinates.mjs` regenerates `src/data/zoneCoordinates.ts`)
 - Current timezone display is calculated on the client using JavaScript internationalization APIs
 - The extension does not require location permission for its current converter default behavior
 

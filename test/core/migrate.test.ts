@@ -6,6 +6,7 @@ import {
   migrate,
   needsOrderFreeze,
   readV1Snapshot,
+  removeLegacySunCache,
 } from '../../src/core/migrate';
 import {
   APP_DATA_STORAGE_KEY,
@@ -550,6 +551,42 @@ describe('migrate — Firefox fresh install (storage.local empty)', () => {
     expect(data.settings).toEqual(DEFAULT_SETTINGS);
     expect(fake.calls).toEqual([]);
     expect(fake.data.get(APP_DATA_STORAGE_KEY)).toBe(saved);
+    expect(error).toHaveBeenCalled();
+  });
+});
+
+// 3.1.x's sunrise/sunset cache (spec §3): the sky is computed now.
+describe('removeLegacySunCache', () => {
+  it('deletes every timemate.sun.* key and nothing else', () => {
+    const { store, data } = memoryStore({
+      'timemate.sun.Asia/Tokyo.2026-06-16': '{}',
+      'timemate.sun.America/Argentina/Buenos_Aires.2025-12-31': '{}',
+      'timemate.data.v2': '{}',
+      'timemate.backup_v1': '{}',
+      'timemate.timezones.v1': '[]',
+      'timemate.swipe-hint-shown.v1': 'true',
+      unrelated: 'x',
+    });
+
+    removeLegacySunCache(store);
+
+    expect([...data.keys()].sort()).toEqual([
+      'timemate.backup_v1',
+      'timemate.data.v2',
+      'timemate.swipe-hint-shown.v1',
+      'timemate.timezones.v1',
+      'unrelated',
+    ]);
+  });
+
+  it('logs rather than throws when storage fails — the popup still opens', () => {
+    const { store } = memoryStore({ 'timemate.sun.Asia/Tokyo.2026-06-16': '{}' });
+    store.keys = () => {
+      throw new Error('storage unavailable');
+    };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(() => removeLegacySunCache(store)).not.toThrow();
     expect(error).toHaveBeenCalled();
   });
 });

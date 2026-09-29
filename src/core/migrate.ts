@@ -8,6 +8,7 @@ const V1_PINNED_KEY = 'timemate.pinned.v1';
 const V1_SORT_MODE_KEY = 'timemate.sort-mode.v1';
 const V1_HOUR_FORMAT_KEY = 'timemate.hour-format.v1';
 export const BACKUP_V1_STORAGE_KEY = 'timemate.backup_v1';
+const LEGACY_SUN_CACHE_PREFIX = 'timemate.sun.';
 
 export interface V1TimezoneEntry {
   id: string;
@@ -240,5 +241,21 @@ export async function migrate(store: KeyValueStore, now: Date = new Date()): Pro
     // failing that, 2.1.0's older v2 data beats nothing.
     if (mapped) return mapped;
     return existing ? freezeDisplayOrder(existing, now) : createDefaultAppData();
+  }
+}
+
+// Up to 3.1.x the card fetched sunrise/sunset from Open-Meteo and cached it in
+// localStorage, one timemate.sun.<zone>.<date> key per zone per day. The sky
+// is computed now (spec §9.2), so whatever is left goes — on every open,
+// which is a no-op once they're gone. Never throws: a leftover cache is
+// harmless, a popup that fails to open isn't.
+export function removeLegacySunCache(store: KeyValueStore): void {
+  try {
+    store
+      .keys()
+      .filter((key) => key.startsWith(LEGACY_SUN_CACHE_PREFIX))
+      .forEach((key) => store.remove(key));
+  } catch (error) {
+    console.error('[Skies] removing the old sunrise/sunset cache failed', error);
   }
 }

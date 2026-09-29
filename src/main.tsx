@@ -2,9 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@styles/index.scss';
 import App from './App';
-import { migrate } from './core/migrate';
+import { migrate, removeLegacySunCache } from './core/migrate';
 import { capToCityLimit } from './core/model';
-import { pruneSunCache } from './core/suncache';
 import { initStorage } from './platform/storage';
 import { localStorageStore } from './platform/storage/localStorageStore';
 
@@ -19,9 +18,8 @@ initStorage().then(async (store) => {
   // The city limit applies to what's read, too (spec §8).
   const initialData = { ...migrated, entries: capToCityLimit(migrated.entries) };
 
-  // Sunrise/sunset keys from earlier days and from removed cities (spec §3).
-  // The cache is in localStorage on both targets, not the persistent store.
-  pruneSunCache(localStorageStore(), initialData.entries, new Date());
+  // 3.1.x's sunrise/sunset cache, in localStorage on both targets (spec §3).
+  removeLegacySunCache(localStorageStore());
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

@@ -1,16 +1,13 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import '@styles/_reset.css';
 import '@styles/Timezone.scss';
-import { sunCacheKey } from '../core/suncache';
+import { sunCoordinates, timeOfDay as computeTimeOfDay, type TimeOfDay } from '../core/sun';
 import {
   formatRelativeOffset,
   formatUtcOffset,
-  localDateKey,
   localDayDelta,
   offsetMinutes,
   relativeOffsetMinutes,
-  timeOfDay as computeTimeOfDay,
-  type TimeOfDay,
 } from '../core/tz';
 import type { ConvertPosition, HourFormat } from '../App';
 import { dayDeltaLabel } from './dayDeltaLabel';
@@ -33,14 +30,6 @@ interface TimezoneProps extends TimezoneInfo {
   // Edit mode: one row of city + time, no footer, and the card itself does
   // nothing when clicked — the row's own controls handle remove / reorder.
   isCompact?: boolean;
-}
-
-interface SunTimes {
-  sunriseMinutes: number;
-  sunsetMinutes: number;
-  sunriseStr: string;
-  sunsetStr: string;
-  date: string;
 }
 
 function hashStr(s: string): number {
@@ -93,65 +82,6 @@ const Timezone: React.FC<TimezoneProps> = ({
     dayDelta: 0,
   });
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
-  const sunTimesRef = useRef<SunTimes | null>(null);
-
-  useEffect(() => {
-    if (!lat || !lon) return;
-
-    const fetchSunTimes = async () => {
-      // Same key pruneSunCache() keeps, so the two can't disagree on "today".
-      const today = localDateKey(zone, new Date());
-      if (sunTimesRef.current?.date === today) return;
-
-      const cacheKey = sunCacheKey(zone, today);
-
-      // Hit cache first — zero network latency on repeat opens
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        try {
-          const result = JSON.parse(cached) as SunTimes;
-          sunTimesRef.current = result;
-          setTimeOfDay(computeTimeOfDay(zone, new Date(), result));
-          return;
-        } catch {
-          /* corrupt entry, fall through to fetch */
-        }
-      }
-
-      try {
-        const res = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=sunrise,sunset&timezone=${encodeURIComponent(zone)}&forecast_days=1`
-        );
-        const data = (await res.json()) as {
-          daily?: { sunrise?: string[]; sunset?: string[] };
-        };
-        const sunriseRaw = data.daily?.sunrise?.[0]?.split('T')[1] ?? '';
-        const sunsetRaw = data.daily?.sunset?.[0]?.split('T')[1] ?? '';
-        if (!sunriseRaw || !sunsetRaw) return;
-
-        const [sh, sm] = sunriseRaw.split(':').map(Number);
-        const [dh, dm] = sunsetRaw.split(':').map(Number);
-
-        const result: SunTimes = {
-          sunriseMinutes: sh * 60 + sm,
-          sunsetMinutes: dh * 60 + dm,
-          sunriseStr: sunriseRaw,
-          sunsetStr: sunsetRaw,
-          date: today,
-        };
-        sunTimesRef.current = result;
-        // Older days' keys are cleared when the popup opens (pruneSunCache).
-        localStorage.setItem(cacheKey, JSON.stringify(result));
-        setTimeOfDay(computeTimeOfDay(zone, new Date(), result));
-      } catch {
-        // silently ignore fetch errors
-      }
-    };
-
-    fetchSunTimes();
-    const interval = setInterval(fetchSunTimes, 60 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [lat, lon, zone]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -217,7 +147,10 @@ const Timezone: React.FC<TimezoneProps> = ({
         dayDelta: localDayDelta(zone, referenceTimezone, sourceDate),
       }));
 
-      setTimeOfDay(computeTimeOfDay(zone, sourceDate, sunTimesRef.current));
+      // The sky at the instant the card shows (the converter's chosen time in
+      // convert mode), from the sun's elevation there (spec §9.2).
+      const sun = sunCoordinates(zone, lat, lon, sourceDate);
+      setTimeOfDay(computeTimeOfDay(sun.lat, sun.lon, sourceDate));
     };
 
     updateTime();
@@ -227,7 +160,7 @@ const Timezone: React.FC<TimezoneProps> = ({
 
     const intervalId = setInterval(updateTime, 1000);
     return () => clearInterval(intervalId);
-  }, [zone, referenceTimezone, hourFormat, isConvertModeOpen, convertPosition]);
+  }, [zone, lat, lon, referenceTimezone, hourFormat, isConvertModeOpen, convertPosition]);
 
   return (
     <div
