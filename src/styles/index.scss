@@ -1,3 +1,13 @@
+// The popup's size, fixed in static CSS: Firefox sizes a popup from the page
+// as soon as it loads, and the app itself only renders once storage has been
+// read (main.tsx). Without this the popup opens empty and then jumps to
+// size. Same as .app (main.scss).
+html,
+body {
+  width: 420px;
+  height: 540px;
+}
+
 :root {
   --container-padding-horizontal: 18px;
   --color-opacity: rgba(255, 255, 255, 0);

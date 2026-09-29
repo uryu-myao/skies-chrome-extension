@@ -56,6 +56,10 @@ function firefoxOverrides(shared: typeof base) {
       // about:addons draws the 48px icon at 2x on HiDPI screens.
       96: 'icons/logos/logo-96.png',
     },
+    // storage.local holds the data (spec §2.3): Firefox clears an extension's
+    // localStorage when the user clears browsing data. No user-visible
+    // warning. Chrome still declares nothing.
+    permissions: ['storage'],
     browser_specific_settings: {
       gecko: {
         // Permanent: AMO ties the listing and every user's installed copy to it.

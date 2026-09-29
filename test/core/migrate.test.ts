@@ -16,7 +16,8 @@ import {
 } from '../../src/core/model';
 import type { KeyValueStore } from '../../src/core/store';
 import type { AppData, Entry, SortOrder } from '../../src/core/types';
-import { memoryStore } from '../helpers/stores';
+import { extensionStorageStore } from '../../src/platform/storage/extensionStorageStore';
+import { fakeArea, firefoxStore, memoryStore } from '../helpers/stores';
 import v1Real from '../fixtures/v1-real.json';
 import from210 from '../fixtures/v2-written-by-2.1.0.json';
 
@@ -30,7 +31,10 @@ const V1_PINNED_KEY = 'timemate.pinned.v1';
 const V1_SORT_MODE_KEY = 'timemate.sort-mode.v1';
 const V1_HOUR_FORMAT_KEY = 'timemate.hour-format.v1';
 
-// Everything that touches storage runs on each kind of backend (spec §2.3).
+// Everything that touches storage runs on both kinds of backend (spec §2.3):
+// a synchronous one, as Chrome's localStorage is, and Firefox's storage.local
+// behind its asynchronous adapter. The migration is one piece of code; every
+// starting state in §3.5 has to hold on both.
 interface Backend {
   store: KeyValueStore;
   // What storage itself holds for `key` — for Firefox, storage.local, not the
@@ -46,6 +50,13 @@ const BACKENDS: Array<[string, () => Promise<Backend>]> = [
     async () => {
       const m = memoryStore();
       return { ...m, stored: (key) => m.data.get(key) ?? null };
+    },
+  ],
+  [
+    'storage.local (Firefox)',
+    async () => {
+      const f = await firefoxStore();
+      return { ...f, stored: (key) => (f.data.get(key) as string | undefined) ?? null };
     },
   ],
 ];
@@ -497,5 +508,48 @@ describe.each(BACKENDS)('on a %s', (_name, open) => {
 
       expect(labels(await migrate(store, SEP_25))).toEqual(['Bangkok', 'Kathmandu', 'Boston']);
     });
+  });
+});
+
+// Firefox is a new listing: storage.local starts empty (spec §3.5).
+describe('migrate — Firefox fresh install (storage.local empty)', () => {
+  it('gets v2 defaults, written to storage.local and confirmed, with no v1 backup', async () => {
+    const firefox = await firefoxStore();
+
+    const data = await migrate(firefox.store, SEP_25);
+
+    expect(data.entries).toEqual([]);
+    expect(data.settings).toEqual(DEFAULT_SETTINGS);
+    expect(JSON.parse(firefox.data.get(APP_DATA_STORAGE_KEY) as string)).toEqual(data);
+    expect(firefox.data.has(BACKUP_V1_STORAGE_KEY)).toBe(false);
+    expect(firefox.calls.map((call) => call.key)).toEqual([APP_DATA_STORAGE_KEY]);
+  });
+
+  it('the next open reads it back and writes nothing — the 3.0.0 state from then on', async () => {
+    const firefox = await firefoxStore();
+    const first = await migrate(firefox.store, SEP_25);
+    const writes = firefox.calls.length;
+
+    const reopened = extensionStorageStore(firefox.area);
+    await reopened.init();
+
+    expect(await migrate(reopened, SEP_25)).toEqual(first);
+    expect(firefox.calls).toHaveLength(writes);
+  });
+
+  it('when storage.local cannot be read: defaults on screen, nothing written over the unread data', async () => {
+    const saved = JSON.stringify({ version: 2, entries: [], groups: [], settings: { ...DEFAULT_SETTINGS, hour24: false } });
+    const fake = fakeArea({ [APP_DATA_STORAGE_KEY]: saved });
+    fake.options.failRead = true;
+    const unread = extensionStorageStore(fake.area);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await unread.init();
+
+    const data = await migrate(unread, SEP_25);
+
+    expect(data.settings).toEqual(DEFAULT_SETTINGS);
+    expect(fake.calls).toEqual([]);
+    expect(fake.data.get(APP_DATA_STORAGE_KEY)).toBe(saved);
+    expect(error).toHaveBeenCalled();
   });
 });
