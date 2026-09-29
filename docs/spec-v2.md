@@ -491,6 +491,12 @@ Your 16:00 slot becomes 17:00 for Kenji.
   都应先评估必要性。
 - Firefox 版只声明 `storage`(§2.3)。它不产生用户可见的警告;Firefox 版是全新上架,也不存在
   「更新时因新增权限被禁用」的问题。
+- **扩展不发出任何网络请求。** 天色本地计算(§9.2),城市库、国旗、字体都打包在扩展里(§9.6),
+  所以不需要 `host_permissions`,Firefox 的 `data_collection_permissions` 是 `{ required: ["none"] }`。
+  `npm run check:offline`(每次构建都跑)扫描两个产物:白名单(`scripts/check-offline.mjs`:
+  用户自己点开的商店 / 网站 / 反馈表单 / GeoNames 链接、许可证文本里的链接、不会被请求的 XML 命名空间名)
+  以外出现任何 http(s) URL,或出现 Vite modulepreload polyfill 之外的 `fetch` / XHR / `sendBeacon` /
+  WebSocket,构建即失败。新功能需要联网时,先改这里
 
 ### 6.4 调度
 

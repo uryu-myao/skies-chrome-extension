@@ -66,9 +66,9 @@ function firefoxOverrides(shared: typeof base) {
         id: 'skies@useskies.com',
         // 140 is the first desktop release that reads data_collection_permissions.
         strict_min_version: '140.0',
-        // PLACEHOLDER — not the final value. The real one is settled in phase 4
-        // (Open-Meteo requests, Google Fonts, flag images). Do not submit to AMO
-        // until then; README-AMO.md says the same.
+        // Nothing is collected or sent: the extension makes no network requests
+        // at all — sky, city search, flags and fonts are all bundled — and
+        // npm run check:offline, part of every build, keeps it that way.
         data_collection_permissions: {
           required: ['none'],
         },

@@ -8,14 +8,15 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build --mode chrome && vite build --mode firefox",
-    "build:chrome": "tsc -b && vite build --mode chrome",
-    "build:firefox": "tsc -b && vite build --mode firefox",
+    "build": "tsc -b && vite build --mode chrome && vite build --mode firefox && node scripts/check-offline.mjs",
+    "build:chrome": "tsc -b && vite build --mode chrome && node scripts/check-offline.mjs chrome",
+    "build:firefox": "tsc -b && vite build --mode firefox && node scripts/check-offline.mjs firefox",
     "package:chrome": "npm run build:chrome && node scripts/package.mjs chrome",
     "package:firefox": "npm run build:firefox && node scripts/package.mjs firefox",
     "package:source": "node scripts/package.mjs source",
     "lint": "eslint .",
     "lint:firefox": "web-ext lint --source-dir dist/firefox",
+    "check:offline": "node scripts/check-offline.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"

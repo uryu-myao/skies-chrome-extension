@@ -1,10 +1,5 @@
 # Skies — source code for Firefox Add-ons review
 
-> **Not ready for submission.** `data_collection_permissions` in the Firefox
-> manifest (`manifest.config.ts`) is a placeholder (`required: ["none"]`). Its
-> final value is decided in a later step of the Firefox port. Do not submit
-> this add-on to AMO until then, and delete this note when that's done.
-
 Skies is a world-clock popup written in TypeScript and React and bundled with
 Vite. The add-on package is the content of `dist/firefox/` after the build
 below. Everything in `assets/` is generated from `src/`. `manifest.json` is
@@ -32,6 +27,20 @@ the files in the submitted add-on package.
 `build:firefox` first type-checks the whole project, tests included (`tsc -b`),
 and then runs `vite build --mode firefox`. The build does not read
 environment variables or `.env` files. `npm test` runs the unit tests.
+
+## No network access
+
+The add-on makes no network requests, so the manifest declares
+`data_collection_permissions: { required: ["none"] }`. Everything the popup
+shows is computed locally or bundled: the sky colours (the sun's position is
+calculated), the city search, the flags and the fonts. `build:firefox` ends
+with `npm run check:offline`, and the build fails if either of these turns
+up in `dist/firefox/`:
+- an http(s) URL outside a short allowlist in `scripts/check-offline.mjs`
+  (store and website links the user opens, license texts, XML namespace
+  names);
+- any network API other than Vite's modulepreload polyfill, which only
+  fetches the add-on's own chunks.
 
 ## Third-party data, images and fonts
 
