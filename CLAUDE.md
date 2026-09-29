@@ -12,6 +12,7 @@ npm run build:firefox
 npm run package:chrome   # build + reproducible zip → release/ (same for package:firefox)
 npm run package:source   # AMO source zip via git archive → release/ (refuses a dirty tree; --dirty for a trial run)
 npm run lint      # ESLint
+npm run lint:firefox   # web-ext lint on dist/firefox/
 npm run preview   # Preview production build
 npm test          # Vitest, runs test/**/*.test.ts (core/ modules, plus pure UI helpers such as dayDeltaLabel)
 npm run test:watch  # Vitest in watch mode

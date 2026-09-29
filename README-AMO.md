@@ -41,3 +41,14 @@ environment variables or `.env` files. `npm test` runs the unit tests.
   imports them.
 - Source artwork (`design/`), project documentation, and editor/lint
   configuration. The build doesn't use any of them.
+
+## Linter warnings
+
+`npm run lint:firefox` runs `web-ext lint` on `dist/firefox/`. It reports no
+errors and three warnings:
+
+- `KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION`: Skies is desktop-only
+  and is not offered for Firefox for Android.
+- `UNSAFE_VAR_ASSIGNMENT` (×2, `assets/index-*.js`): both come from
+  react-dom's internal `setInnerHTML`. React only calls it for
+  `dangerouslySetInnerHTML`, which Skies' source never uses.
