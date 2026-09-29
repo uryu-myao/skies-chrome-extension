@@ -6,7 +6,9 @@ export default defineConfig((env) =>
     viteConfig(env),
     defineConfig({
       test: {
-        environment: 'jsdom',
+        // No DOM: core reaches storage only through an injected store (spec §12),
+        // so no test can lean on a browser global by accident.
+        environment: 'node',
         include: ['test/**/*.test.ts'],
       },
     })

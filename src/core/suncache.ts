@@ -1,3 +1,4 @@
+import type { KeyValueStore } from './store';
 import { localDateKey } from './tz';
 import type { Entry } from './types';
 
@@ -15,16 +16,14 @@ export function sunCacheKey(zone: string, dateKey: string): string {
 // list (spec §3). A card only ever writes its own zone's key for today, so
 // anything else is left over: a day the popup wasn't opened, or a city
 // that's since been removed. Only keys under the sun prefix are touched.
-export function pruneSunCache(entries: Entry[], now: Date): void {
+// `store` is wherever the cache lives — localStorage on both targets, not
+// the persistent store (spec §2.3).
+export function pruneSunCache(store: KeyValueStore, entries: Entry[], now: Date): void {
   try {
     const keep = new Set(entries.map((entry) => sunCacheKey(entry.timezone, localDateKey(entry.timezone, now))));
-    const stale: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(SUN_CACHE_PREFIX) && !keep.has(key)) stale.push(key);
-    }
-    // Collected first: removing while walking by index would skip keys.
-    stale.forEach((key) => localStorage.removeItem(key));
+    // keys() is a snapshot, so removing while going through it skips nothing.
+    const stale = store.keys().filter((key) => key.startsWith(SUN_CACHE_PREFIX) && !keep.has(key));
+    stale.forEach((key) => store.remove(key));
   } catch (error) {
     // A cache that isn't tidied is harmless; a popup that fails to open isn't.
     console.error('pruneSunCache failed', error);

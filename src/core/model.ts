@@ -1,3 +1,4 @@
+import type { KeyValueStore } from './store';
 import { friendlyZoneName } from './tz';
 import type { AppData, AppSettings, Entry, WorkDays, WorkHours } from './types';
 
@@ -180,9 +181,9 @@ export function resolveWorkDays(entry: Entry, settings: AppSettings): ResolvedWo
   return { days: entry.workDays, isDefault: false };
 }
 
-export function loadAppData(): AppData | null {
+export function loadAppData(store: KeyValueStore): AppData | null {
   try {
-    const raw = localStorage.getItem(APP_DATA_STORAGE_KEY);
+    const raw = store.get(APP_DATA_STORAGE_KEY);
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as AppData;
@@ -201,7 +202,7 @@ export function loadAppData(): AppData | null {
   }
 }
 
-export function saveAppData(data: AppData): void {
+export function saveAppData(store: KeyValueStore, data: AppData): void {
   const entries = data.entries.map((entry, order) => ({ ...entry, order }));
-  localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify({ ...data, entries }));
+  store.set(APP_DATA_STORAGE_KEY, JSON.stringify({ ...data, entries }));
 }

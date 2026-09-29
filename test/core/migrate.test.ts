@@ -14,7 +14,9 @@ import {
   loadAppData,
   saveAppData,
 } from '../../src/core/model';
+import type { KeyValueStore } from '../../src/core/store';
 import type { AppData, Entry, SortOrder } from '../../src/core/types';
+import { memoryStore } from '../helpers/stores';
 import v1Real from '../fixtures/v1-real.json';
 import from210 from '../fixtures/v2-written-by-2.1.0.json';
 
@@ -28,38 +30,38 @@ const V1_PINNED_KEY = 'timemate.pinned.v1';
 const V1_SORT_MODE_KEY = 'timemate.sort-mode.v1';
 const V1_HOUR_FORMAT_KEY = 'timemate.hour-format.v1';
 
+// Everything that touches storage runs on each kind of backend (spec §2.3).
+interface Backend {
+  store: KeyValueStore;
+  // What storage itself holds for `key` — for Firefox, storage.local, not the
+  // adapter's memory.
+  stored(key: string): string | null;
+  failWritesTo(key: string): void;
+  restoreWrites(): void;
+}
+
+const BACKENDS: Array<[string, () => Promise<Backend>]> = [
+  [
+    'synchronous store (Chrome)',
+    async () => {
+      const m = memoryStore();
+      return { ...m, stored: (key) => m.data.get(key) ?? null };
+    },
+  ],
+];
+
+let backend: Backend;
+let store: KeyValueStore;
+
 function seedV1Storage(fixture: typeof v1Real): void {
-  localStorage.setItem(V1_TIMEZONES_KEY, JSON.stringify(fixture.timezones));
-  localStorage.setItem(V1_PINNED_KEY, JSON.stringify(fixture.pinned));
-  localStorage.setItem(V1_SORT_MODE_KEY, fixture.sortMode);
-  localStorage.setItem(V1_HOUR_FORMAT_KEY, fixture.hourFormat);
+  store.set(V1_TIMEZONES_KEY, JSON.stringify(fixture.timezones));
+  store.set(V1_PINNED_KEY, JSON.stringify(fixture.pinned));
+  store.set(V1_SORT_MODE_KEY, fixture.sortMode);
+  store.set(V1_HOUR_FORMAT_KEY, fixture.hourFormat);
 }
 
 beforeEach(() => {
-  localStorage.clear();
   vi.restoreAllMocks();
-});
-
-describe('readV1Snapshot', () => {
-  it('returns empty/null defaults when nothing is stored', () => {
-    expect(readV1Snapshot()).toEqual({
-      timezones: [],
-      pinnedIds: [],
-      sortMode: null,
-      hourFormat: null,
-    });
-  });
-
-  it('parses a real v1 export and drops malformed entries', () => {
-    seedV1Storage(v1Real);
-    localStorage.setItem(V1_TIMEZONES_KEY, JSON.stringify([...v1Real.timezones, { id: 'bad' }]));
-
-    const snapshot = readV1Snapshot();
-    expect(snapshot.timezones).toHaveLength(v1Real.timezones.length);
-    expect(snapshot.pinnedIds).toEqual(v1Real.pinned);
-    expect(snapshot.sortMode).toBe('newest');
-    expect(snapshot.hourFormat).toBe('12');
-  });
 });
 
 describe('mapV1ToV2', () => {
@@ -87,51 +89,6 @@ describe('mapV1ToV2', () => {
     const data = mapV1ToV2(snapshot);
     const oldIds = new Set(v1Real.timezones.map((t) => t.id));
     data.entries.forEach((entry) => expect(oldIds.has(entry.id)).toBe(false));
-  });
-});
-
-describe('migrate', () => {
-  it('backs up v1 data and writes v2 data on first run', () => {
-    seedV1Storage(v1Real);
-    const data = migrate();
-
-    expect(data.entries).toHaveLength(v1Real.timezones.length);
-    expect(localStorage.getItem(BACKUP_V1_STORAGE_KEY)).not.toBeNull();
-    expect(localStorage.getItem(APP_DATA_STORAGE_KEY)).not.toBeNull();
-    // v1 keys are left untouched
-    expect(JSON.parse(localStorage.getItem(V1_TIMEZONES_KEY)!)).toEqual(v1Real.timezones);
-  });
-
-  it('is idempotent: re-running is a no-op that returns the same data', () => {
-    seedV1Storage(v1Real);
-    const first = migrate();
-    const backupAfterFirst = localStorage.getItem(BACKUP_V1_STORAGE_KEY);
-
-    const second = migrate();
-
-    expect(second).toEqual(first);
-    expect(localStorage.getItem(BACKUP_V1_STORAGE_KEY)).toBe(backupAfterFirst);
-  });
-
-  it('never produces an empty-list result when v1 has entries, even if the v2 write fails', () => {
-    seedV1Storage(v1Real);
-    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key) => {
-      if (key === APP_DATA_STORAGE_KEY) {
-        throw new Error('quota exceeded');
-      }
-    });
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const data = migrate();
-
-    expect(data.entries.length).toBeGreaterThan(0);
-    expect(errorSpy).toHaveBeenCalled();
-    setItemSpy.mockRestore();
-  });
-
-  it('produces an empty-but-valid AppData when there is no v1 data at all', () => {
-    const data = migrate();
-    expect(data).toEqual(expect.objectContaining({ version: 2, entries: [] }));
   });
 });
 
@@ -206,98 +163,6 @@ describe('freezeDisplayOrder', () => {
   });
 });
 
-describe('migrate — freezing the pre-manual-order display order', () => {
-  // v2 data without `order` and no v1 keys existed only in pre-release dev
-  // builds; every real user with order-less v2 data came from 2.1.0 and still
-  // has v1 keys (see "upgrading from 2.1.0" below).
-  it('freezes and persists existing v2 data that has no order yet (no v1 keys)', () => {
-    const data = legacyData(
-      [
-        createEntry({ timezone: 'Asia/Tokyo', label: 'A' }),
-        createEntry({ timezone: 'Asia/Tokyo', label: 'B', pinned: true }),
-        createEntry({ timezone: 'Asia/Tokyo', label: 'C' }),
-      ],
-      'manual'
-    );
-    localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify(data));
-    expect(needsOrderFreeze(data)).toBe(true);
-
-    const migrated = migrate(FREEZE_AT);
-
-    expect(labels(migrated)).toEqual(['B', 'C', 'A']);
-    const stored = loadAppData()!;
-    expect(labels(stored)).toEqual(['B', 'C', 'A']);
-    expect(needsOrderFreeze(stored)).toBe(false);
-  });
-
-  it('runs once: a later manual reorder is not overridden by the old pinned/sort rules', () => {
-    const data = legacyData(
-      [
-        createEntry({ timezone: 'Asia/Tokyo', label: 'A' }),
-        createEntry({ timezone: 'Asia/Tokyo', label: 'B', pinned: true }),
-      ],
-      'manual'
-    );
-    localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify(data));
-    const frozen = migrate(FREEZE_AT);
-    expect(labels(frozen)).toEqual(['B', 'A']);
-
-    // The user drags A above the (still pinned: true) B
-    saveAppData({ ...frozen, entries: [frozen.entries[1], frozen.entries[0]] });
-
-    expect(labels(migrate(FREEZE_AT))).toEqual(['A', 'B']);
-  });
-
-  it('v1 → v2 lands in the order the v1 list showed (real export: pinned Tokyo, then Xuzhou)', () => {
-    seedV1Storage(v1Real);
-    const data = migrate(FREEZE_AT);
-    expect(labels(data)).toEqual(['Tokyo', 'Xuzhou']);
-    expect(orders(data)).toEqual([0, 1]);
-  });
-
-  it('v1 → v2 with no pins and the newest-first default shows the stored v1 array reversed', () => {
-    seedV1Storage({ ...v1Real, pinned: [] });
-    expect(labels(migrate(FREEZE_AT))).toEqual(['Xuzhou', 'Tokyo']);
-  });
-});
-
-describe('readV1Snapshot — v1 stored sort mode and hour format as plain strings', () => {
-  it('reads the plain strings every published v1 wrote, without warning', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    localStorage.setItem(V1_SORT_MODE_KEY, 'alphabet');
-    localStorage.setItem(V1_HOUR_FORMAT_KEY, '24');
-
-    expect(readV1Snapshot()).toMatchObject({ sortMode: 'alphabet', hourFormat: '24' });
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it('an unrecognised sort mode warns, with the raw value — never a silent fallback', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    // JSON-encoded is not a v1 format: v1 never wrote '"alphabet"'.
-    localStorage.setItem(V1_SORT_MODE_KEY, JSON.stringify('alphabet'));
-
-    expect(readV1Snapshot().sortMode).toBeNull();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain(V1_SORT_MODE_KEY);
-    expect(warn.mock.calls[0][0]).toContain(JSON.stringify('"alphabet"'));
-  });
-
-  it('an unrecognised hour format warns too', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    localStorage.setItem(V1_HOUR_FORMAT_KEY, 'h24');
-
-    expect(readV1Snapshot().hourFormat).toBeNull();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain(V1_HOUR_FORMAT_KEY);
-  });
-
-  it('a missing key is normal, not a warning', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    readV1Snapshot();
-    expect(warn).not.toHaveBeenCalled();
-  });
-});
-
 describe('mapV1ToV2 — without a value, what v1 showed, not v2 defaults', () => {
   it('no sort mode → newest (manual); no hour format → 12-hour', () => {
     const data = mapV1ToV2({ timezones: [], pinnedIds: [], sortMode: null, hourFormat: null });
@@ -318,121 +183,319 @@ const FIVE_CITIES = [
 const SEP_25 = new Date('2026-09-25T07:00:00Z');
 
 function seedFiveCities(sortMode: string): void {
-  localStorage.setItem(V1_TIMEZONES_KEY, JSON.stringify(FIVE_CITIES));
-  localStorage.setItem(V1_PINNED_KEY, JSON.stringify(['c2', 'c4']));
-  localStorage.setItem(V1_SORT_MODE_KEY, sortMode);
+  store.set(V1_TIMEZONES_KEY, JSON.stringify(FIVE_CITIES));
+  store.set(V1_PINNED_KEY, JSON.stringify(['c2', 'c4']));
+  store.set(V1_SORT_MODE_KEY, sortMode);
 }
-
-describe('migrate — pure v1, end to end through every sort mode', () => {
-  it('alphabet: pinned first, each group by name', () => {
-    seedFiveCities('alphabet');
-    const data = migrate(SEP_25);
-    expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Bangkok', 'Kathmandu', 'Tokyo']);
-    expect(data.settings.sortOrder).toBe('name');
-  });
-
-  it('time: pinned first, each group furthest behind first (v1 sorted by local time)', () => {
-    seedFiveCities('time');
-    const data = migrate(SEP_25);
-    expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Kathmandu', 'Bangkok', 'Tokyo']);
-    expect(data.settings.sortOrder).toBe('offset');
-  });
-
-  it('newest: pinned first, each group newest first (stored array reversed)', () => {
-    seedFiveCities('newest');
-    expect(labels(migrate(SEP_25))).toEqual(['Shanghai', 'Boston', 'Tokyo', 'Kathmandu', 'Bangkok']);
-  });
-});
-
-describe('migrate — fresh install (nothing stored)', () => {
-  it('gets v2 defaults — 24-hour, not v1’s 12-hour fallback — and no v1 backup', () => {
-    const data = migrate(SEP_25);
-    expect(data.entries).toEqual([]);
-    expect(data.settings).toEqual(DEFAULT_SETTINGS);
-    expect(localStorage.getItem(BACKUP_V1_STORAGE_KEY)).toBeNull();
-  });
-});
 
 // A browser that ran 2.1.0: its first popup open wrote timemate.data.v2 and
 // timemate.backup_v1 (the fixture, generated by 2.1.0's own code: Bangkok,
 // Boston pinned, Kathmandu; newest; 12-hour). After that 2.1.0's UI kept
 // writing only the v1 keys — `v1Changes` is what the user did afterwards.
 function seedAfter210(v1Changes: Record<string, string> = {}): void {
-  localStorage.setItem(APP_DATA_STORAGE_KEY, from210['timemate.data.v2']);
-  localStorage.setItem(BACKUP_V1_STORAGE_KEY, from210['timemate.backup_v1']);
+  store.set(APP_DATA_STORAGE_KEY, from210['timemate.data.v2']);
+  store.set(BACKUP_V1_STORAGE_KEY, from210['timemate.backup_v1']);
   for (const [key, value] of Object.entries({ ...from210.v1Keys, ...v1Changes })) {
-    localStorage.setItem(key, value);
+    store.set(key, value);
   }
 }
 
 const DAY_ONE = JSON.parse(from210.v1Keys['timemate.timezones.v1']) as typeof FIVE_CITIES;
 
-describe('migrate — upgrading from 2.1.0 (v2 without order, v1 keys still there)', () => {
-  it('the fixture really is what 2.1.0 wrote: no order on any entry', () => {
-    const stale = JSON.parse(from210['timemate.data.v2']) as AppData;
-    expect(needsOrderFreeze(stale)).toBe(true);
+describe.each(BACKENDS)('on a %s', (_name, open) => {
+  beforeEach(async () => {
+    backend = await open();
+    store = backend.store;
   });
 
-  it('nothing changed since the first open (the common case): same cities, same order', () => {
-    seedAfter210();
-    const data = migrate(SEP_25);
-    expect(labels(data)).toEqual(['Boston', 'Kathmandu', 'Bangkok']);
-    expect(needsOrderFreeze(loadAppData()!)).toBe(false);
-  });
-
-  it('added a city since: it is there', () => {
-    seedAfter210({
-      [V1_TIMEZONES_KEY]: JSON.stringify([...DAY_ONE, { id: 'c4', city: 'Shanghai', zone: 'Asia/Shanghai' }]),
+  describe('readV1Snapshot', () => {
+    it('returns empty/null defaults when nothing is stored', () => {
+      expect(readV1Snapshot(store)).toEqual({
+        timezones: [],
+        pinnedIds: [],
+        sortMode: null,
+        hourFormat: null,
+      });
     });
-    expect(labels(migrate(SEP_25))).toEqual(['Boston', 'Shanghai', 'Kathmandu', 'Bangkok']);
-  });
 
-  it('removed a city since: it stays removed', () => {
-    seedAfter210({
-      [V1_TIMEZONES_KEY]: JSON.stringify(DAY_ONE.filter((city) => city.city !== 'Kathmandu')),
+    it('parses a real v1 export and drops malformed entries', () => {
+      seedV1Storage(v1Real);
+      store.set(V1_TIMEZONES_KEY, JSON.stringify([...v1Real.timezones, { id: 'bad' }]));
+
+      const snapshot = readV1Snapshot(store);
+      expect(snapshot.timezones).toHaveLength(v1Real.timezones.length);
+      expect(snapshot.pinnedIds).toEqual(v1Real.pinned);
+      expect(snapshot.sortMode).toBe('newest');
+      expect(snapshot.hourFormat).toBe('12');
     });
-    expect(labels(migrate(SEP_25))).toEqual(['Boston', 'Bangkok']);
   });
 
-  it('changed the sort mode since: the new one is used', () => {
-    seedAfter210({ [V1_SORT_MODE_KEY]: 'alphabet' });
-    const data = migrate(SEP_25);
-    expect(labels(data)).toEqual(['Boston', 'Bangkok', 'Kathmandu']);
-    expect(data.settings.sortOrder).toBe('name');
-  });
+  describe('migrate', () => {
+    it('backs up v1 data and writes v2 data on first run', async () => {
+      seedV1Storage(v1Real);
+      const data = await migrate(store);
 
-  it('changed 12/24 since: the new one is used', () => {
-    seedAfter210({ [V1_HOUR_FORMAT_KEY]: '24' });
-    expect(migrate(SEP_25).settings.hour24).toBe(true);
-  });
-
-  it('emptied the list since: it is empty, not the three cities from the first open', () => {
-    seedAfter210({ [V1_TIMEZONES_KEY]: '[]' });
-    expect(migrate(SEP_25).entries).toEqual([]);
-  });
-
-  it('never replaces the backup 2.1.0 took on its first open', () => {
-    seedAfter210({
-      [V1_TIMEZONES_KEY]: JSON.stringify([...DAY_ONE, { id: 'c4', city: 'Shanghai', zone: 'Asia/Shanghai' }]),
+      expect(data.entries).toHaveLength(v1Real.timezones.length);
+      expect(store.get(BACKUP_V1_STORAGE_KEY)).not.toBeNull();
+      expect(store.get(APP_DATA_STORAGE_KEY)).not.toBeNull();
+      // v1 keys are left untouched
+      expect(JSON.parse(store.get(V1_TIMEZONES_KEY)!)).toEqual(v1Real.timezones);
     });
-    migrate(SEP_25);
-    expect(localStorage.getItem(BACKUP_V1_STORAGE_KEY)).toBe(from210['timemate.backup_v1']);
+
+    it('is idempotent: re-running is a no-op that returns the same data', async () => {
+      seedV1Storage(v1Real);
+      const first = await migrate(store);
+      const backupAfterFirst = store.get(BACKUP_V1_STORAGE_KEY);
+
+      const second = await migrate(store);
+
+      expect(second).toEqual(first);
+      expect(store.get(BACKUP_V1_STORAGE_KEY)).toBe(backupAfterFirst);
+    });
+
+    it('never produces an empty-list result when v1 has entries, even if the v2 write fails', async () => {
+      seedV1Storage(v1Real);
+      backend.failWritesTo(APP_DATA_STORAGE_KEY);
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const data = await migrate(store);
+
+      expect(data.entries.length).toBeGreaterThan(0);
+      expect(errorSpy).toHaveBeenCalled();
+    });
+
+    // spec §3.1: the backup is stored before v2 is written.
+    it('writes no v2 when the backup write fails, so the next open migrates again', async () => {
+      seedV1Storage(v1Real);
+      backend.failWritesTo(BACKUP_V1_STORAGE_KEY);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const data = await migrate(store);
+
+      expect(labels(data)).toEqual(['Tokyo', 'Xuzhou']);
+      for (const key of [BACKUP_V1_STORAGE_KEY, APP_DATA_STORAGE_KEY]) {
+        expect(backend.stored(key)).toBeNull();
+        expect(store.get(key)).toBeNull();
+      }
+
+      backend.restoreWrites();
+      expect(labels(await migrate(store))).toEqual(['Tokyo', 'Xuzhou']);
+      expect(backend.stored(BACKUP_V1_STORAGE_KEY)).not.toBeNull();
+      expect(backend.stored(APP_DATA_STORAGE_KEY)).not.toBeNull();
+    });
+
+    it('leaves no half-written v2 when the v2 write fails, in storage or in memory', async () => {
+      seedV1Storage(v1Real);
+      backend.failWritesTo(APP_DATA_STORAGE_KEY);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await migrate(store);
+
+      expect(backend.stored(APP_DATA_STORAGE_KEY)).toBeNull();
+      expect(store.get(APP_DATA_STORAGE_KEY)).toBeNull();
+      // The backup made it, and is the only thing that did: still pure v1 +
+      // backup, so the next open migrates again.
+      expect(backend.stored(BACKUP_V1_STORAGE_KEY)).not.toBeNull();
+      backend.restoreWrites();
+      expect(labels(await migrate(store))).toEqual(['Tokyo', 'Xuzhou']);
+      expect(backend.stored(APP_DATA_STORAGE_KEY)).not.toBeNull();
+    });
+
+    it('produces an empty-but-valid AppData when there is no v1 data at all', async () => {
+      const data = await migrate(store);
+      expect(data).toEqual(expect.objectContaining({ version: 2, entries: [] }));
+    });
   });
 
-  it('leaves the v1 keys untouched', () => {
-    seedAfter210({ [V1_SORT_MODE_KEY]: 'time' });
-    migrate(SEP_25);
-    for (const [key, value] of Object.entries({ ...from210.v1Keys, [V1_SORT_MODE_KEY]: 'time' })) {
-      expect(localStorage.getItem(key)).toBe(value);
-    }
+  describe('migrate — freezing the pre-manual-order display order', () => {
+    // v2 data without `order` and no v1 keys existed only in pre-release dev
+    // builds; every real user with order-less v2 data came from 2.1.0 and still
+    // has v1 keys (see "upgrading from 2.1.0" below).
+    it('freezes and persists existing v2 data that has no order yet (no v1 keys)', async () => {
+      const data = legacyData(
+        [
+          createEntry({ timezone: 'Asia/Tokyo', label: 'A' }),
+          createEntry({ timezone: 'Asia/Tokyo', label: 'B', pinned: true }),
+          createEntry({ timezone: 'Asia/Tokyo', label: 'C' }),
+        ],
+        'manual'
+      );
+      store.set(APP_DATA_STORAGE_KEY, JSON.stringify(data));
+      expect(needsOrderFreeze(data)).toBe(true);
+
+      const migrated = await migrate(store, FREEZE_AT);
+
+      expect(labels(migrated)).toEqual(['B', 'C', 'A']);
+      const stored = loadAppData(store)!;
+      expect(labels(stored)).toEqual(['B', 'C', 'A']);
+      expect(needsOrderFreeze(stored)).toBe(false);
+    });
+
+    it('runs once: a later manual reorder is not overridden by the old pinned/sort rules', async () => {
+      const data = legacyData(
+        [
+          createEntry({ timezone: 'Asia/Tokyo', label: 'A' }),
+          createEntry({ timezone: 'Asia/Tokyo', label: 'B', pinned: true }),
+        ],
+        'manual'
+      );
+      store.set(APP_DATA_STORAGE_KEY, JSON.stringify(data));
+      const frozen = await migrate(store, FREEZE_AT);
+      expect(labels(frozen)).toEqual(['B', 'A']);
+
+      // The user drags A above the (still pinned: true) B
+      saveAppData(store, { ...frozen, entries: [frozen.entries[1], frozen.entries[0]] });
+
+      expect(labels(await migrate(store, FREEZE_AT))).toEqual(['A', 'B']);
+    });
+
+    it('v1 → v2 lands in the order the v1 list showed (real export: pinned Tokyo, then Xuzhou)', async () => {
+      seedV1Storage(v1Real);
+      const data = await migrate(store, FREEZE_AT);
+      expect(labels(data)).toEqual(['Tokyo', 'Xuzhou']);
+      expect(orders(data)).toEqual([0, 1]);
+    });
+
+    it('v1 → v2 with no pins and the newest-first default shows the stored v1 array reversed', async () => {
+      seedV1Storage({ ...v1Real, pinned: [] });
+      expect(labels(await migrate(store, FREEZE_AT))).toEqual(['Xuzhou', 'Tokyo']);
+    });
   });
 
-  it('rebuilds once: afterwards v2 written by 3.0.0 is read as is, v1 keys or not', () => {
-    seedAfter210();
-    const rebuilt = migrate(SEP_25);
-    // The user reorders in 3.0.0; the v1 keys (still there) say otherwise.
-    saveAppData({ ...rebuilt, entries: [...rebuilt.entries].reverse() });
+  describe('readV1Snapshot — v1 stored sort mode and hour format as plain strings', () => {
+    it('reads the plain strings every published v1 wrote, without warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      store.set(V1_SORT_MODE_KEY, 'alphabet');
+      store.set(V1_HOUR_FORMAT_KEY, '24');
 
-    expect(labels(migrate(SEP_25))).toEqual(['Bangkok', 'Kathmandu', 'Boston']);
+      expect(readV1Snapshot(store)).toMatchObject({ sortMode: 'alphabet', hourFormat: '24' });
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('an unrecognised sort mode warns, with the raw value — never a silent fallback', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      // JSON-encoded is not a v1 format: v1 never wrote '"alphabet"'.
+      store.set(V1_SORT_MODE_KEY, JSON.stringify('alphabet'));
+
+      expect(readV1Snapshot(store).sortMode).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain(V1_SORT_MODE_KEY);
+      expect(warn.mock.calls[0][0]).toContain(JSON.stringify('"alphabet"'));
+    });
+
+    it('an unrecognised hour format warns too', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      store.set(V1_HOUR_FORMAT_KEY, 'h24');
+
+      expect(readV1Snapshot(store).hourFormat).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain(V1_HOUR_FORMAT_KEY);
+    });
+
+    it('a missing key is normal, not a warning', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      readV1Snapshot(store);
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('migrate — pure v1, end to end through every sort mode', () => {
+    it('alphabet: pinned first, each group by name', async () => {
+      seedFiveCities('alphabet');
+      const data = await migrate(store, SEP_25);
+      expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Bangkok', 'Kathmandu', 'Tokyo']);
+      expect(data.settings.sortOrder).toBe('name');
+    });
+
+    it('time: pinned first, each group furthest behind first (v1 sorted by local time)', async () => {
+      seedFiveCities('time');
+      const data = await migrate(store, SEP_25);
+      expect(labels(data)).toEqual(['Boston', 'Shanghai', 'Kathmandu', 'Bangkok', 'Tokyo']);
+      expect(data.settings.sortOrder).toBe('offset');
+    });
+
+    it('newest: pinned first, each group newest first (stored array reversed)', async () => {
+      seedFiveCities('newest');
+      expect(labels(await migrate(store, SEP_25))).toEqual(['Shanghai', 'Boston', 'Tokyo', 'Kathmandu', 'Bangkok']);
+    });
+  });
+
+  describe('migrate — fresh install (nothing stored)', () => {
+    it('gets v2 defaults — 24-hour, not v1’s 12-hour fallback — and no v1 backup', async () => {
+      const data = await migrate(store, SEP_25);
+      expect(data.entries).toEqual([]);
+      expect(data.settings).toEqual(DEFAULT_SETTINGS);
+      expect(store.get(BACKUP_V1_STORAGE_KEY)).toBeNull();
+    });
+  });
+
+  describe('migrate — upgrading from 2.1.0 (v2 without order, v1 keys still there)', () => {
+    it('the fixture really is what 2.1.0 wrote: no order on any entry', () => {
+      const stale = JSON.parse(from210['timemate.data.v2']) as AppData;
+      expect(needsOrderFreeze(stale)).toBe(true);
+    });
+
+    it('nothing changed since the first open (the common case): same cities, same order', async () => {
+      seedAfter210();
+      const data = await migrate(store, SEP_25);
+      expect(labels(data)).toEqual(['Boston', 'Kathmandu', 'Bangkok']);
+      expect(needsOrderFreeze(loadAppData(store)!)).toBe(false);
+    });
+
+    it('added a city since: it is there', async () => {
+      seedAfter210({
+        [V1_TIMEZONES_KEY]: JSON.stringify([...DAY_ONE, { id: 'c4', city: 'Shanghai', zone: 'Asia/Shanghai' }]),
+      });
+      expect(labels(await migrate(store, SEP_25))).toEqual(['Boston', 'Shanghai', 'Kathmandu', 'Bangkok']);
+    });
+
+    it('removed a city since: it stays removed', async () => {
+      seedAfter210({
+        [V1_TIMEZONES_KEY]: JSON.stringify(DAY_ONE.filter((city) => city.city !== 'Kathmandu')),
+      });
+      expect(labels(await migrate(store, SEP_25))).toEqual(['Boston', 'Bangkok']);
+    });
+
+    it('changed the sort mode since: the new one is used', async () => {
+      seedAfter210({ [V1_SORT_MODE_KEY]: 'alphabet' });
+      const data = await migrate(store, SEP_25);
+      expect(labels(data)).toEqual(['Boston', 'Bangkok', 'Kathmandu']);
+      expect(data.settings.sortOrder).toBe('name');
+    });
+
+    it('changed 12/24 since: the new one is used', async () => {
+      seedAfter210({ [V1_HOUR_FORMAT_KEY]: '24' });
+      expect((await migrate(store, SEP_25)).settings.hour24).toBe(true);
+    });
+
+    it('emptied the list since: it is empty, not the three cities from the first open', async () => {
+      seedAfter210({ [V1_TIMEZONES_KEY]: '[]' });
+      expect((await migrate(store, SEP_25)).entries).toEqual([]);
+    });
+
+    it('never replaces the backup 2.1.0 took on its first open', async () => {
+      seedAfter210({
+        [V1_TIMEZONES_KEY]: JSON.stringify([...DAY_ONE, { id: 'c4', city: 'Shanghai', zone: 'Asia/Shanghai' }]),
+      });
+      await migrate(store, SEP_25);
+      expect(store.get(BACKUP_V1_STORAGE_KEY)).toBe(from210['timemate.backup_v1']);
+    });
+
+    it('leaves the v1 keys untouched', async () => {
+      seedAfter210({ [V1_SORT_MODE_KEY]: 'time' });
+      await migrate(store, SEP_25);
+      for (const [key, value] of Object.entries({ ...from210.v1Keys, [V1_SORT_MODE_KEY]: 'time' })) {
+        expect(store.get(key)).toBe(value);
+      }
+    });
+
+    it('rebuilds once: afterwards v2 written by 3.0.0 is read as is, v1 keys or not', async () => {
+      seedAfter210();
+      const rebuilt = await migrate(store, SEP_25);
+      // The user reorders in 3.0.0; the v1 keys (still there) say otherwise.
+      saveAppData(store, { ...rebuilt, entries: [...rebuilt.entries].reverse() });
+
+      expect(labels(await migrate(store, SEP_25))).toEqual(['Bangkok', 'Kathmandu', 'Boston']);
+    });
   });
 });
