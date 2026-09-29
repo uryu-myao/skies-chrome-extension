@@ -14,7 +14,7 @@ npm run package:source   # AMO source zip via git archive → release/ (refuses 
 npm run lint      # ESLint
 npm run lint:firefox   # web-ext lint on dist/firefox/
 npm run preview   # Preview production build
-npm test          # Vitest, runs test/**/*.test.ts (core/ modules, plus pure UI helpers such as dayDeltaLabel)
+npm test          # Vitest in a node environment (no DOM), runs test/**/*.test.ts: core/ modules on in-memory stores, the storage backends (test/platform/), pure UI helpers such as dayDeltaLabel
 npm run test:watch  # Vitest in watch mode
 ```
 
@@ -26,12 +26,12 @@ Node is pinned to 24.x (`.nvmrc`, `engines`, and `.npmrc`'s `engine-strict`, so 
 
 Skies is a **Chrome Manifest V3 popup extension** built with React + TypeScript + Vite. The popup is a single-page React app; there is no content script or injected UI.
 
-`docs/spec-v2.md` is the feature spec and the source of truth — update it before changing behaviour. Modules in `src/core/` are pure: no `chrome.*`, no DOM.
+`docs/spec-v2.md` is the feature spec and the source of truth — update it before changing behaviour. Modules in `src/core/` are pure: they reach storage only through an injected `KeyValueStore` (`src/core/store.ts`) and never reference `localStorage`, `chrome.*`, `browser.*` or any DOM API (spec §12).
 
 ### Component tree and state ownership
 
 ```
-App.tsx              ← global state: entries (v2 Entry[] — array order IS the list order), settings (v2 AppSettings), isConvertModeOpen + convertPosition, isSearchOpen, isSettingsOpen + settingsFocus (a section to scroll to), isEditMode, the open city panel, and the last removed entry (for Undo); seeded from migrate()'s return value, persists entries+settings to localStorage on every change
+App.tsx              ← global state: entries (v2 Entry[] — array order IS the list order), settings (v2 AppSettings), isConvertModeOpen + convertPosition, isSearchOpen, isSettingsOpen + settingsFocus (a section to scroll to), isEditMode, the open city panel, and the last removed entry (for Undo); seeded from migrate()'s return value, persists entries+settings through the injected store on every change
 ├── Header.tsx       ← reference-timezone chip (logo, city, live time) + 3 actions: search toggle, converter, open-settings. The chip's menu lists System and every city (no dedupe) and stores referenceTimezone + referenceEntryId; the chip's name and selected option come from core's resolveReferenceChip(). Identity follows the picked city — the chip's name and the Core Time band's single YOU tag (resolveReferenceChip().youEntryId; under System, the chip reads the system zone's name and YOU is the first entry in the system zone); relation follows the zone — the card's Base and the band's BASE tag, which can repeat. On purpose (spec §9.1); core's referenceRoleOf() holds the rule
 │   ├── Searchbar.tsx  ← city search via Open-Meteo Geocoding API; passes selected city up via callback
 │   └── Converter panel (inline in Header)
@@ -47,16 +47,21 @@ Shared: SegmentedControl.tsx (Settings' toggles), ResetButton.tsx (converter res
 
 State flows down as props; children communicate upward via callbacks. There is no global store.
 
-### Persistence (localStorage keys)
+### Persistence (storage keys)
 
-Everything is in the popup page's `localStorage` — no `chrome.storage`. `localStorage` is scoped to the extension's origin (`chrome-extension://<ID>/`), so a changed extension ID orphans it just like a renamed key.
+Persistent data goes through the storage adapter (spec §2.3). `src/platform/storage/` holds the two backends; `__TARGET__` picks one at compile time, so each package carries only its own:
+
+- **Chrome → the popup page's `localStorage`**, exactly as in 3.1.2. Writes are synchronous and throw synchronously, as before.
+- **Firefox → `browser.storage.local`** (Firefox clears extension `localStorage` along with browsing data). `init()` reads it all into memory before the first render; `get` reads memory; `set`/`remove` update memory and write out immediately — no debounce (the popup can close any moment), strictly in call order. A failed write is logged and the key reverts in memory to its last stored value; `flush()` resolves once everything issued so far is stored and rejects if any of it failed — migrate() awaits it instead of relying on a synchronous throw. If `init()` itself fails the store runs read-only, so default data never overwrites a profile it couldn't read.
+
+Same keys and same string values on both backends. Storage is scoped to the extension's identity — Chrome's origin (`chrome-extension://<ID>/`), Firefox's add-on ID (`skies@useskies.com`) — so a changed ID orphans it just like a renamed key. The sun cache is the exception: it stays in `localStorage` on both targets and doesn't go through the adapter.
 
 | Key                       | Content                                |
 | ------------------------- | -------------------------------------- |
 | `timemate.data.v2`        | `AppData` — `{version, entries, groups, settings}` (see `src/core/types.ts`). Each entry's `order` is its list position (written by `saveAppData`, sorted on by `loadAppData`). `entry.pinned` and `settings.sortOrder` are deprecated — read only once, by `freezeDisplayOrder()`, to carry the old pinned-first/sorted order into `order` |
 | `timemate.backup_v1`      | One-time pre-migration snapshot of the v1 data, written before v2 and never overwritten (`src/core/migrate.ts`) |
-| `timemate.timezones.v1`, `.pinned.v1`, `.sort-mode.v1`, `.hour-format.v1` | v1 data — read by `migrate()` when there is no v2 data, **or when the v2 data is what 2.1.0 left behind** (entries without `order`: 2.1.0 wrote v2 once on first open, then kept using these keys — so they are newer). Sort mode and 12/24 are plain strings, not JSON. Never modified or deleted. Any migration change must be checked against all four starting states in spec §3.5 (fresh install / pure v1 / 2.1.0 v2 / 3.0.0 v2), not only a cleared profile |
-| `timemate.sun.<zone>.<date>` | Sunrise/sunset cache for the card's sky colours, one per zone per day (written by `Timezone.tsx`). `pruneSunCache()` (`src/core/suncache.ts`, run from `main.tsx` on every open) keeps only today's key for zones still in the list; earlier days and removed cities' keys are deleted |
+| `timemate.timezones.v1`, `.pinned.v1`, `.sort-mode.v1`, `.hour-format.v1` | v1 data — read by `migrate()` when there is no v2 data, **or when the v2 data is what 2.1.0 left behind** (entries without `order`: 2.1.0 wrote v2 once on first open, then kept using these keys — so they are newer). Sort mode and 12/24 are plain strings, not JSON. Never modified or deleted. Any migration change must be checked against every starting state in spec §3.5 (fresh install / pure v1 / 2.1.0 v2 / 3.0.0 v2 / Firefox fresh install), not only a cleared profile |
+| `timemate.sun.<zone>.<date>` | Sunrise/sunset cache for the card's sky colours, one per zone per day (written by `Timezone.tsx`). `pruneSunCache()` (`src/core/suncache.ts`, run from `main.tsx` on every open) keeps only today's key for zones still in the list; earlier days and removed cities' keys are deleted. `localStorage` on both targets, outside the adapter; goes away when sunrise/sunset is computed locally |
 | `timemate.swipe-hint-shown.v1` | Legacy — set by the removed swipe-hint animation; no longer read or written, left in place |
 
 Every key keeps the `timemate.` prefix from before the rename to Skies; renaming one would orphan existing users' data.
@@ -81,7 +86,7 @@ Every key keeps the `timemate.` prefix from before the rename to Skies; renaming
 
 ### Extension entry points
 
-- `index.html` → popup (`src/main.tsx` runs `migrate()` before the first render)
-- `manifest.config.ts` → Manifest V3, generated per target by the `skies:manifest` plugin in `vite.config.ts`: a shared part plus Firefox's overrides (`background.scripts`, `browser_specific_settings.gecko`, toolbar placement, 96px icon). The Chrome manifest must stay byte-identical to 3.1.2's. Declares no permissions at all; keep it that way unless a feature truly needs one (spec §6.3). `version` comes from `package.json` — the only place to bump it. Files in `public/` that only one target uses are listed in `TARGET_ONLY_FILES`
+- `index.html` → popup. `src/main.tsx` is `initStorage().then(migrate).then(render)` — no top-level await (the build target doesn't allow it). Static CSS fixes `html`/`body` at 420×540 so Firefox opens the popup at its final size before anything renders
+- `manifest.config.ts` → Manifest V3, generated per target by the `skies:manifest` plugin in `vite.config.ts`: a shared part plus Firefox's overrides (`background.scripts`, `browser_specific_settings.gecko`, toolbar placement, 96px icon). The Chrome manifest must stay byte-identical to 3.1.2's. Chrome declares no permissions at all; Firefox only `storage` (spec §6.3). Keep it that way unless a feature truly needs one. `version` comes from `package.json` — the only place to bump it. Files in `public/` that only one target uses are listed in `TARGET_ONLY_FILES`
 - `public/background.js` → Chrome service worker / Firefox event page (sets uninstall URL only)
 - Target-specific code branches on the compile-time constant `__TARGET__` (`'chrome' | 'firefox'`), never on the user agent

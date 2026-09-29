@@ -99,7 +99,8 @@ It is designed for quick cross-time-zone planning:
 │   ├── background.js
 │   └── icons/
 ├── src/
-│   ├── core/              # pure logic, no DOM or chrome.* — unit tested
+│   ├── core/              # pure logic: no DOM, chrome.* or browser.*; storage only via store.ts — unit tested
+│   │   ├── store.ts       # KeyValueStore, the interface core reads and writes through
 │   │   ├── types.ts       # v2 schema
 │   │   ├── model.ts       # defaults, load/save, entry helpers
 │   │   ├── migrate.ts     # v1 → v2, freezing the old display order
@@ -116,6 +117,7 @@ It is designed for quick cross-time-zone planning:
 │   │   ├── SettingsPanel.tsx
 │   │   ├── CitySettingsPanel.tsx
 │   │   └── UndoToast.tsx
+│   ├── platform/storage/  # KeyValueStore backends: localStorage (Chrome), storage.local (Firefox)
 │   ├── styles/
 │   ├── App.tsx
 │   └── main.tsx
@@ -167,7 +169,7 @@ npm run lint
 npm test
 ```
 
-Vitest covers `src/core/`: time zone maths, the Core Time algorithm, DST detection, and the v1 → v2 migration.
+Vitest covers `src/core/`: time zone maths, the Core Time algorithm, DST detection, and the v1 → v2 migration (run on both storage backends). It also covers the storage backends in `src/platform/storage/`, and checks that Chrome's stored data is byte-identical to what 3.1.2 wrote.
 
 ## Load the Extension in Chrome
 

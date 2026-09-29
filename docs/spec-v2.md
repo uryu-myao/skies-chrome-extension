@@ -72,15 +72,43 @@
 
 **`person` 为 `null` 时,条目渲染为普通城市卡片**,不占用头像列。
 
+### 2.3 存储
+
+所有读写都经过存储适配层。`core/` 只认注入的 `KeyValueStore`(`core/store.ts`,见 §12),
+不知道底下是哪种存储。后端在 `src/platform/storage/`,按构建目标在编译期选定(`__TARGET__`),
+一个包里只带自己那一种:
+
+| 构建目标 | 后端 | 说明 |
+| -------- | ---- | ---- |
+| Chrome | popup 页的 `localStorage` | 与 3.1.2 相同。Chrome 用户的数据不搬家、不换位置 |
+| Firefox | `browser.storage.local` | 用户清除浏览数据(Cookie 与网站数据)时,Firefox 会清掉扩展的 `localStorage`,`storage.local` 不受影响。需要 `storage` 权限,它不产生用户可见的警告(§6.3) |
+
+- **两个后端的 key 名与值的格式完全相同**:同样的 `timemate.*` key,值同样是字符串(JSON,
+  或 v1 的纯字符串,§3.2)。`storage.local` 里也存字符串,不存对象,两边的数据可以原样互搬。
+- 对上层是同步的。Firefox 后端在第一次渲染前用 `init()` 把 `storage.local` 一次性读进内存,
+  之后 `get` 只读内存;`set` / `remove` 先改内存,再**立即**发起写入:
+  - **不防抖、不合并**:popup 随时可能被关掉,留在防抖窗口里的写入会丢。
+  - 写入**按调用顺序串行**执行,不会乱序。
+  - 写入失败:`console.error`,并把该 key 在内存里退回到存储中已确认的值 —— 内存与存储保持
+    一致,不留下写了一半的状态。需要确认结果的调用方(迁移,§3.1)用 `flush()`:此前发起的写入
+    全部完成后 resolve,其中任何一次失败则 reject。Chrome 后端的写入是同步的,失败照旧同步抛错,
+    `flush()` 立即 resolve。
+  - `init()` 读取失败时,**不得当作全新安装** —— 那样会用默认数据覆盖用户真实的存储。此时只读
+    运行:本次打开显示默认数据,所有写入被拒绝并 `console.error`,存储里的原数据不动。
+- 只有持久数据(`timemate.data.v2`、`timemate.backup_v1`、v1 的 key)经过适配层。日出日落缓存
+  `timemate.sun.*` 在两个浏览器上都留在 `localStorage`:它可以丢,清掉只会重新请求一次;它会随
+  Open-Meteo 一起移除(日出日落改为本地计算)。
+
 ---
 
 ## 3. 迁移 v1 → v2
 
 **所有 storage key 保留 `timemate.` 前缀,改名后不得变更**(产品已从 TimeMate 两次改名,现为 Skies)。
-key 是老用户数据所在的位置,改一个字就等于让所有老用户的城市消失。扩展 ID 同理:`localStorage`
-按扩展的 origin(`chrome-extension://<ID>/`)隔离,ID 变了,旧数据同样读不到。
+key 是老用户数据所在的位置,改一个字就等于让所有老用户的城市消失。扩展 ID 同理:Chrome 的
+`localStorage` 按扩展的 origin(`chrome-extension://<ID>/`)隔离,Firefox 的 `storage.local` 按
+add-on ID(`skies@useskies.com`)隔离,ID 变了,旧数据同样读不到。
 
-存储全部在 popup 页的 `localStorage`,不使用 `chrome.storage`:
+存储位置见 §2.3(Chrome 为 `localStorage`,Firefox 为 `storage.local`)。key 如下,两个后端相同:
 
 | key                         | 内容                                             |
 | --------------------------- | ------------------------------------------------ |
@@ -90,21 +118,25 @@ key 是老用户数据所在的位置,改一个字就等于让所有老用户的
 | `timemate.pinned.v1`        | v1 置顶 id 列表(同上)                          |
 | `timemate.sort-mode.v1`     | v1 排序模式(同上)                              |
 | `timemate.hour-format.v1`   | v1 12/24 小时制(同上)                          |
-| `timemate.sun.<zone>.<日期>` | 卡片天色用的日出日落缓存,每个时区每天一条。每次打开 popup 时清理:只保留现有条目所在时区、该时区当天的那一条,往日的与已删除城市的全部删除 |
+| `timemate.sun.<zone>.<日期>` | 卡片天色用的日出日落缓存,每个时区每天一条。每次打开 popup 时清理:只保留现有条目所在时区、该时区当天的那一条,往日的与已删除城市的全部删除。两个浏览器都在 `localStorage`,不经过适配层(§2.3) |
 
 ### 3.1 要求
 
-- 入口:`src/main.tsx` 在 `createRoot().render()` 之前同步调用 `migrate()`,每次打开 popup 都执行;
-  应用以 `migrate()` 的返回值作为初始数据渲染
+- 入口:`src/main.tsx` 先完成存储初始化(§2.3 的 `init()`),再调用 `migrate()`,等它完成才
+  `createRoot().render()`;每次打开 popup 都执行;应用以 `migrate()` 的返回值作为初始数据渲染。
+  写成 `init().then(…)`,不用顶层 `await`
 - 判定按起始状态区分,见 §3.5:v1 数据从 v1 的 key 迁移;**2.1.0 留下的 v2 数据(条目无 `order`、
   v1 的 key 仍在)从 v1 的 key 重建**;3.0.0 起写入的 v2 数据(有 `order`)只读取
-- 写入 v2 之前**必须**把读到的 v1 数据完整备份到 `localStorage` 的 `timemate.backup_v1` 键
+- 写入 v2 之前**必须**把读到的 v1 数据完整备份到 `timemate.backup_v1` 键
   (附 `migratedAt` 时间戳);**该键已存在时不覆盖** —— 包括从 2.1.0 重建时:备份必须保持第一次
   迁移时的 v1 快照
 - v1 的 key 只读不删、不改
 - 迁移必须幂等:重复执行不产生副作用
 - 迁移失败时,保留 v1 数据、不写入、`console.error` 记录,不能让用户看到空列表:返回已映射的
   内存数据(若已算出),否则返回默认数据
+- 迁移的每次写入都要确认结果(`flush()`,§2.3),不能只看 `set` 有没有同步抛错 —— Firefox 的写入
+  失败是异步的。备份**确认落盘之后**才写 v2:备份写失败则不写 v2,下次打开重新迁移。v2 写失败时,
+  适配层已把内存退回原状,存储里不留下写了一半的状态,照样返回已映射的内存数据
 
 ### 3.2 映射
 
@@ -164,7 +196,7 @@ entry.id 新生成(v1 的 id 只用于匹配置顶列表)
 ### 3.5 升级路径
 
 `migrate()` 面对的不是「从零开始」一种情况。**每次改迁移逻辑,都要对照下表逐一测试**(`test/core/migrate.test.ts`
-按状态分组),不能只测清空 localStorage 后的全新迁移 —— 清空本身就抹掉了真实用户会有的状态,
+按状态分组),不能只测清空存储后的全新迁移 —— 清空本身就抹掉了真实用户会有的状态,
 2.1.0 的问题正是这样漏掉的。
 
 | 起始状态 | 怎么认出来 | 处理 |
@@ -173,6 +205,7 @@ entry.id 新生成(v1 的 id 只用于匹配置顶列表)
 | **纯 v1**(从未打开过 2.1.0) | 没有 `timemate.data.v2`,有 v1 的 key | 从 v1 的 key 迁移(§3.2),写 `backup_v1`,固化顺序(§3.4) |
 | **2.1.0 产生的 v2** | 有 `timemate.data.v2` 但条目**没有 `order`**,且 v1 的 key 仍在 | **从 v1 的 key 重建**,覆盖这份 v2;`backup_v1` 已存在,不覆盖 |
 | **3.0.0 起产生的 v2** | 有 `timemate.data.v2`,条目有 `order` | 只读取,不再碰 v1 的 key |
+| **Firefox 全新安装** | `storage.local` 为空 | 同全新安装,默认数据写入 `storage.local` 并确认落盘 |
 
 **为什么 2.1.0 的 v2 必须重建,不能直接用。** 2.1.0 在用户**第一次**打开 popup 时静默跑了一遍迁移,
 写下 `timemate.data.v2`;此后 v2 已存在,迁移每次直接返回,v2 再也没有更新过。而 2.1.0 的界面仍是
@@ -183,6 +216,10 @@ v1,只读写 v1 的 key。所以用户在 2.1.0 里第一次打开之后做的�
 认法依赖一个事实:`order` 字段在 2.1.0 发布之后才加入,所以任何发布版都不会写出「有 v1 的 key、
 v2 却没有 `order`」以外的无 `order` 数据。重建后的 v2 带 `order`,之后就按第 4 种状态只读取 ——
 重建只发生一次,用户在 3.0.0 里的改动不会被 v1 的 key 覆盖。
+
+Firefox 版是新上架,之前没有发布过任何 Firefox 版本,所以 `storage.local` 里只会出现「Firefox 全新
+安装」和它之后的「3.0.0 起产生的 v2」,不会有 v1 的 key 或 2.1.0 的数据。但迁移逻辑对两个后端是同
+一份,前四种状态在 Firefox 后端上同样成立。
 
 测试用的 2.1.0 数据(`test/fixtures/v2-written-by-2.1.0.json`)是用 2.1.0 那个提交(`92aafc3`)自己的
 迁移代码生成的,不是手写的;需要新的历史状态时也照此办理。
@@ -445,9 +482,11 @@ Your 16:00 slot becomes 17:00 for Kenji.
   通过 `chrome.permissions.request()` 运行时申请。
 - **不得**加入 `permissions` 字段。新增必需权限会让 Chrome 在更新时禁用扩展、要求全体用户
   重新授权,而该功能默认关闭、多数用户不会使用,为它让所有人承担被禁用(进而卸载)的风险不划算。
-- 当前版本的 manifest 不声明任何权限(`permissions` / `optional_permissions` /
+- Chrome 版的 manifest 不声明任何权限(`permissions` / `optional_permissions` /
   `host_permissions` 均无)。这是商店页面上的信任优势 —— 新增任何权限(包括可选权限)前,
   都应先评估必要性。
+- Firefox 版只声明 `storage`(§2.3)。它不产生用户可见的警告;Firefox 版是全新上架,也不存在
+  「更新时因新增权限被禁用」的问题。
 
 ### 6.4 调度
 
@@ -461,8 +500,8 @@ Your 16:00 slot becomes 17:00 for Kenji.
   重建(与 `background.js` 现在设置卸载问卷链接的方式相同)。
 - `chrome.alarms` 需要 `alarms` 权限。它不产生用户可见的警告,不会触发更新时的重新授权,但会结束
   「manifest 不声明任何权限」的现状 —— 按 §6.3 先评估。
-- service worker 读不到 `localStorage`,后台检测拿不到城市列表。前提是存储先迁到
-  `chrome.storage`,见 §13。
+- Chrome 的 service worker 读不到 `localStorage`,后台检测拿不到城市列表;前提是 Chrome 后端先换成
+  `chrome.storage.local`,见 §13。Firefox 的数据已在 `storage.local`(§2.3),后台可以直接读。
 
 ---
 
@@ -892,6 +931,16 @@ Recent updates
   写下的原样;v1 的 key 不被修改
 - 3.0.0 产生的 v2 → 只读取;重建之后用户在 3.0.0 里的改动,不会被仍然存在的 v1 key 覆盖
 - 无法识别的排序模式 / 12/24 值 → `console.warn` 带原始值,回退到 v1 的默认
+- Firefox 全新安装(`storage.local` 为空)→ v2 默认值,经 Firefox 后端写入并确认落盘
+- 写入失败:备份写失败 → 不写 v2;v2 写失败 → 存储里没有半成品,仍返回已映射的列表
+
+### 10.6 存储适配层
+
+- Firefox 后端:写入按调用顺序完成;写入失败时 `console.error`、`flush()` reject、内存退回存储里
+  已确认的值;`init()` 读入 `storage.local` 的全部内容;任何一串操作之后内存与存储一致;`init()`
+  失败时只读,存储不被改动
+- Chrome 回归:同一份 v2 数据经新代码读取、修改、保存,写出的字符串与 3.1.2 逐字节一致。比较基准
+  用 3.1.2(`d5ff25d`)自己的代码生成,不是手写的(同 §3.5 的 2.1.0 数据)
 
 ---
 
@@ -920,11 +969,14 @@ Recent updates
 ```
 src/
   core/
+    store.js        KeyValueStore 接口(core 访问存储的唯一方式)
     model.js        v2 schema、默认值、resolveWorkHours
     migrate.js      v1 → v2
     tz.js           偏移、本地时刻、本地星期
     coretime.js     交集与 closest
     dst.js          切换检测
+  platform/
+    storage/        KeyValueStore 的后端:localStorage(Chrome)、storage.local(Firefox),§2.3
   ui/
     popup.js
     card.js
@@ -937,7 +989,7 @@ test/
     v1-real.json    真实 v1 导出数据
 ```
 
-`core/` 下所有模块不得引用 `chrome.*` 或 DOM。
+`core/` 只能通过注入的 `KeyValueStore` 访问存储,不得直接引用 `localStorage`、`chrome.*`、`browser.*` 或任何 DOM API。平台相关的实现放在 `platform/`,由入口(`main.tsx`)注入。
 
 ---
 
@@ -950,7 +1002,7 @@ test/
 | 人物模式 + 分组 | 下一版 | 改动列表主体结构(头像列、分组层级),不适合和 Core Time 同版上线。数据字段已在 §2.1 保留,不需要再迁移 |
 | Core Time 周视图 | 随付费通道 | Pro 功能(§8),没有购买通道前不做 |
 | 多语言 EN / JA / ZH | 界面文案稳定后 | 文案还在改,现在抽 JSON 只会反复改两遍。注意:`chrome.i18n` 按浏览器语言读 `_locales`,**无法在运行时切换**;要在应用内切换语言,需要自建一层 |
-| `localStorage` → `chrome.storage` | 与 DST 版本一起 | service worker 读不到 `localStorage`,DST 后台检测(§6.4)需要它。`storage` 权限不产生用户可见的警告,但换存储意味着又一次数据迁移(备份、幂等、失败不写入,同 §3.1),和 DST 一起做只迁一次。那次迁移同样要对照 §3.5 的全部起始状态,外加「已在 chrome.storage」这一种 |
+| Chrome 后端 `localStorage` → `chrome.storage.local` | 与 DST 版本一起 | service worker 读不到 `localStorage`,DST 后台检测(§6.4)需要它。适配层已经就位(§2.3),届时只需换 Chrome 的后端,再做一次数据搬迁(备份、幂等、失败不写入,同 §3.1),和 DST 一起做只迁一次。那次迁移同样要对照 §3.5 的全部起始状态,外加「已在 chrome.storage」这一种。Firefox 从第一版起就在 `storage.local`,不需要搬 |
 | ExtPay 接入 | 付费通道上线时 | §8.1 约定 `isPro()` 为唯一入口,但**它目前还不存在**:代码里没有任何 Pro 判断,Pro 功能(按城市自定义工时 / 工作日)只以只读 + "coming in the next update" 呈现。接入时先按 §8.1 建立 `isPro()`,再在它内部接 ExtPay,调用点只认 `isPro()` |
 | closest:基准时区不在城市列表里时 | 下一版 | 并列取最早是刻意保留的(§5.3),但它依赖使用者自己作为条目参与计算。基准时区不是任何条目时(例如用系统时区而没添加自己的城市),没有任何东西惩罚使用者的深夜,closest 可能给出凌晨的建议;基准 chip 可以自由切换后,这种情况更容易出现。**修法方向**:把基准时区的默认工时也纳入偏离计算,无论它是否作为条目存在 —— 开会的人总是在场的。本版不改 |
 
