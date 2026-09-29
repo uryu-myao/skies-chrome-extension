@@ -176,13 +176,13 @@ After building:
 1. Open `chrome://extensions`
 2. Enable `Developer mode`
 3. Click `Load unpacked`
-4. Select the project `dist/` directory
+4. Select the project `dist/chrome/` directory
 
 If you rebuild, reload the extension from the extensions page.
 
 ## Development Notes
 
-- Extension metadata lives in [manifest.config.ts](manifest.config.ts); the build writes `dist/manifest.json` for the chosen target from it
+- Extension metadata lives in [manifest.config.ts](manifest.config.ts); the build writes `dist/chrome/manifest.json` and `dist/firefox/manifest.json` from it
 - Popup UI starts from [src/App.tsx](src/App.tsx), which owns the entries and settings state
 - Header interactions and converter UI live in [src/components/Header.tsx](src/components/Header.tsx)
 - Timezone card rendering lives in [src/components/Timezone.tsx](src/components/Timezone.tsx)
@@ -200,7 +200,7 @@ Before publishing a new version:
 3. Run `npm run lint`
 4. Run `npm test`
 5. Run `npm run build`
-6. Load the latest `dist/` build in Chrome and test the popup manually
+6. Load the latest `dist/chrome/` build in Chrome and test the popup manually
 7. Verify search, the city panel, edit-mode reordering, hour format, Core Time, and converter behavior
 
 ## Notes About APIs

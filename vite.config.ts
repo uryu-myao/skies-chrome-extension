@@ -81,6 +81,14 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), extensionManifest(target), dropMacMetadata()],
     envPrefix: 'VITE_',
+    // Target-specific code branches on this compile-time constant, never on
+    // the user agent at runtime, so each package only carries its own branch.
+    define: {
+      __TARGET__: JSON.stringify(target),
+    },
+    build: {
+      outDir: `dist/${target}`,
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src'),

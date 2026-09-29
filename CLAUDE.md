@@ -6,14 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev       # Vite dev server (popup UI development)
-npm run build     # tsc -b && vite build → outputs to dist/
+npm run build     # tsc -b, then both targets → dist/chrome/ and dist/firefox/
+npm run build:chrome   # one target (same tsc -b first)
+npm run build:firefox
 npm run lint      # ESLint
 npm run preview   # Preview production build
 npm test          # Vitest, runs test/**/*.test.ts (core/ modules, plus pure UI helpers such as dayDeltaLabel)
 npm run test:watch  # Vitest in watch mode
 ```
 
-`tsc -b` also type-checks `test/` (via `tsconfig.test.json`), so a test that drifts from a core module's types fails the build, not just at runtime. Load the extension by pointing Chrome to `dist/` after building.
+`tsc -b` also type-checks `test/` (via `tsconfig.test.json`), so a test that drifts from a core module's types fails the build, not just at runtime. Load the extension by pointing Chrome to `dist/chrome/` (Firefox: `about:debugging` → `dist/firefox/manifest.json`) after building.
 
 Node is pinned to 24.x (`.nvmrc`, `engines`, and `.npmrc`'s `engine-strict`, so `npm ci` refuses other versions).
 
@@ -79,3 +81,4 @@ Every key keeps the `timemate.` prefix from before the rename to Skies; renaming
 - `index.html` → popup (`src/main.tsx` runs `migrate()` before the first render)
 - `manifest.config.ts` → Manifest V3, generated per target by the `skies:manifest` plugin in `vite.config.ts`: a shared part plus Firefox's overrides (`background.scripts`, `browser_specific_settings.gecko`, toolbar placement, 96px icon). The Chrome manifest must stay byte-identical to 3.1.2's. Declares no permissions at all; keep it that way unless a feature truly needs one (spec §6.3). `version` comes from `package.json` — the only place to bump it. Files in `public/` that only one target uses are listed in `TARGET_ONLY_FILES`
 - `public/background.js` → Chrome service worker / Firefox event page (sets uninstall URL only)
+- Target-specific code branches on the compile-time constant `__TARGET__` (`'chrome' | 'firefox'`), never on the user agent
