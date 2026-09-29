@@ -15,6 +15,8 @@ npm run test:watch  # Vitest in watch mode
 
 `tsc -b` also type-checks `test/` (via `tsconfig.test.json`), so a test that drifts from a core module's types fails the build, not just at runtime. Load the extension by pointing Chrome to `dist/` after building.
 
+Node is pinned to 24.x (`.nvmrc`, `engines`, and `.npmrc`'s `engine-strict`, so `npm ci` refuses other versions).
+
 ## Architecture
 
 Skies is a **Chrome Manifest V3 popup extension** built with React + TypeScript + Vite. The popup is a single-page React app; there is no content script or injected UI.
