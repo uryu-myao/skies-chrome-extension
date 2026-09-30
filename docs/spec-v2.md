@@ -843,8 +843,9 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - **Display** — Hour format / Show seconds / Edit city list(进入编辑模式,§9.5;
   原 Sort order 已移除,不提供一次性排序按钮)
 - **Core time** — Core Time panel 显示模式 / Default work hours / Default work days
-- **About**(本版新增,不在最初的分区规划内)— Share Skies(复制**本浏览器**的商店链接,
-  按钮文案短暂变为 "Copied!")/ Rate(Chrome 版 `Rate on Chrome Web Store`,打开商店的 reviews 页;
+- **About**(本版新增,不在最初的分区规划内)— Share Skies(复制**本浏览器**的商店链接。
+  剪贴板确认写入成功后,按钮文案才短暂变为 "Copied!";写入失败(没有剪贴板、被拒绝等)时同样时长显示
+  "Couldn't copy" —— 不显示没有发生的复制)/ Rate(Chrome 版 `Rate on Chrome Web Store`,打开商店的 reviews 页;
   Firefox 版 `Rate on Firefox Add-ons`,打开 https://addons.mozilla.org/firefox/addon/skies-world-clock/ ,
   AMO 在商品页本身打分。两个版本的链接与文案按 `__TARGET__` 在编译期选定,各自的包里只有自己的)/
   Send Feedback / Website

@@ -105,7 +105,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   canEditList,
   onEditList,
 }) => {
-  const [shareCopied, setShareCopied] = useState(false);
+  // Share's label for a moment after a click: whether the copy worked.
+  const [shareResult, setShareResult] = useState<'copied' | 'failed' | null>(null);
+  const shareResultTimer = useRef<ReturnType<typeof setTimeout>>();
   const bodyRef = useRef<HTMLDivElement>(null);
   const coreTimeRef = useRef<HTMLHeadingElement>(null);
   const [flashCoreTime, setFlashCoreTime] = useState(false);
@@ -138,11 +140,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const update = (patch: Partial<AppSettings>) =>
     setSettings((prev) => ({ ...prev, ...patch }));
 
+  // "Copied!" only once the clipboard has taken the link; if it refuses (no
+  // clipboard, permission denied, the popup lost focus), "Couldn't copy" for
+  // the same 2 seconds — never a false "Copied!".
   const handleShare = () => {
-    navigator.clipboard.writeText(STORE.shareUrl);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
+    const show = (result: 'copied' | 'failed') => {
+      clearTimeout(shareResultTimer.current);
+      setShareResult(result);
+      shareResultTimer.current = setTimeout(() => setShareResult(null), 2000);
+    };
+    // Called right in the click, where the browser counts it as the user's
+    // doing; a missing navigator.clipboard throws here and ends up in the
+    // same failure branch as a rejected write.
+    let write: Promise<void>;
+    try {
+      write = navigator.clipboard.writeText(STORE.shareUrl);
+    } catch (error) {
+      write = Promise.reject(error);
+    }
+    write.then(
+      () => show('copied'),
+      () => show('failed')
+    );
   };
+
+  useEffect(() => () => clearTimeout(shareResultTimer.current), []);
 
   const setStartHour = (start: number) => {
     setSettings((prev) => ({
@@ -323,9 +345,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="settings-panel__row settings-panel__row--link"
               onClick={handleShare}>
               <span className="settings-panel__label">
-                {shareCopied ? 'Copied!' : 'Share Skies'}
+                {shareResult === 'copied' ? 'Copied!' : shareResult === 'failed' ? "Couldn't copy" : 'Share Skies'}
               </span>
-              <CopyIcon copied={shareCopied} />
+              <CopyIcon copied={shareResult === 'copied'} />
             </button>
 
             <a
