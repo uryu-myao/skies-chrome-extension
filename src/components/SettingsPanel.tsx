@@ -6,8 +6,15 @@ import SegmentedControl from './SegmentedControl';
 import { RECENT_UPDATES } from './recentUpdates';
 import { version as appVersion } from '../../package.json';
 
-const SHARE_URL = 'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik';
-const RATE_URL = `${SHARE_URL}/reviews`;
+// Each build points at its own store, fixed at compile time (spec §9.4): Share
+// copies the listing, Rate opens where reviews are written. AMO rates on the
+// listing itself; the Chrome Web Store has a separate reviews page.
+const CHROME_WEB_STORE_URL = 'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik';
+const FIREFOX_ADD_ONS_URL = 'https://addons.mozilla.org/firefox/addon/skies-world-clock/';
+const STORE =
+  __TARGET__ === 'firefox'
+    ? { shareUrl: FIREFOX_ADD_ONS_URL, rateUrl: FIREFOX_ADD_ONS_URL, rateLabel: 'Rate on Firefox Add-ons' }
+    : { shareUrl: CHROME_WEB_STORE_URL, rateUrl: `${CHROME_WEB_STORE_URL}/reviews`, rateLabel: 'Rate on Chrome Web Store' };
 const FEEDBACK_URL = 'https://forms.gle/ncZLfTs8RKE59ETC9';
 const WEBSITE_URL = 'https://useskies.com';
 const GEONAMES_URL = 'https://www.geonames.org/';
@@ -132,7 +139,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     setSettings((prev) => ({ ...prev, ...patch }));
 
   const handleShare = () => {
-    navigator.clipboard.writeText(SHARE_URL);
+    navigator.clipboard.writeText(STORE.shareUrl);
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2000);
   };
@@ -323,10 +330,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <a
               className="settings-panel__row settings-panel__row--link"
-              href={RATE_URL}
+              href={STORE.rateUrl}
               target="_blank"
               rel="noopener noreferrer">
-              <span className="settings-panel__label">Rate on Chrome Store</span>
+              <span className="settings-panel__label">{STORE.rateLabel}</span>
               <ExternalIcon />
             </a>
 

@@ -843,8 +843,11 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - **Display** — Hour format / Show seconds / Edit city list(进入编辑模式,§9.5;
   原 Sort order 已移除,不提供一次性排序按钮)
 - **Core time** — Core Time panel 显示模式 / Default work hours / Default work days
-- **About**(本版新增,不在最初的分区规划内)— Share Skies(复制商店链接,
-  按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Website
+- **About**(本版新增,不在最初的分区规划内)— Share Skies(复制**本浏览器**的商店链接,
+  按钮文案短暂变为 "Copied!")/ Rate(Chrome 版 `Rate on Chrome Web Store`,打开商店的 reviews 页;
+  Firefox 版 `Rate on Firefox Add-ons`,打开 https://addons.mozilla.org/firefox/addon/skies-world-clock/ ,
+  AMO 在商品页本身打分。两个版本的链接与文案按 `__TARGET__` 在编译期选定,各自的包里只有自己的)/
+  Send Feedback / Website
   (右侧灰字 `useskies.com`,打开 https://useskies.com;行文案用 "Website" 而非品牌名)/ Version
   (读取 `package.json` 的版本号,而非写死字符串)/ Recent updates(见下)/ City data(About 分区的
   最后一行:`GeoNames (CC BY 4.0)`,`GeoNames` 链接到 https://www.geonames.org/,`CC BY 4.0` 链接到

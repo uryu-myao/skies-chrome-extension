@@ -71,9 +71,9 @@ It is designed for quick cross-time-zone planning:
 - Opened from the header; slides in over the popup
 - Display: hour format, show seconds, `Edit city list`
 - Core time: panel mode, default work hours and work days
-- About: Share Skies (copies the store link), Rate on Chrome Store,
-  Send Feedback (Google Form), Website (`useskies.com`), Version, and a short
-  Recent updates note under it
+- About: Share Skies (copies this browser's store link), Rate on Chrome Web Store / Firefox Add-ons,
+  Send Feedback (Google Form), Website (`useskies.com`), Version, a short
+  Recent updates note under it, and the City data credit (GeoNames, CC BY 4.0)
 
 ### Core Time Panel
 
