@@ -17,6 +17,11 @@
     // reorders on the vertical axis only (TimezoneList's lockToVerticalAxis).
     overflow-y: auto;
     overflow-x: hidden;
+    // The vertical scrollbar's space is always kept, scrolling or not, so the
+    // cards stay the same width when the list grows past the popup and the
+    // scrollbar appears. Only where scrollbars take up space; overlay
+    // scrollbars (macOS's default) are unaffected.
+    scrollbar-gutter: stable;
     transition:
       transform 0.24s ease,
       padding-top 0.24s ease;
