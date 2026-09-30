@@ -829,23 +829,23 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - **About**(本版新增,不在最初的分区规划内)— Share Skies(复制商店链接,
   按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Website
   (右侧灰字 `useskies.com`,打开 https://useskies.com;行文案用 "Website" 而非品牌名)/ Version
-  (读取 `package.json` 的版本号,而非写死字符串)/ City data(`GeoNames (CC BY 4.0)`:`GeoNames`
-  链接到 https://www.geonames.org/,`CC BY 4.0` 链接到许可证,行尾箭头出框图标;这是城市库的 CC BY 4.0
-  署名,见 §9.6 与 `ATTRIBUTION.md`)/ Recent updates(见下)。这里收纳的是原头部
+  (读取 `package.json` 的版本号,而非写死字符串)/ Recent updates(见下)/ City data(About 分区的
+  最后一行:`GeoNames (CC BY 4.0)`,`GeoNames` 链接到 https://www.geonames.org/,`CC BY 4.0` 链接到
+  许可证,行尾箭头出框图标;这是城市库的 CC BY 4.0 署名,见 §9.6 与 `ATTRIBUTION.md`)。这里收纳的是原头部
   logo 弹出菜单的内容。行尾图标按动作区分:离开扩展的外链用「箭头出框」,Share 是复制到剪贴板、
   用复制图标(复制后短暂变成勾),`›` 只留给 popup 内部的跳转(如 Edit city list)。
 
-**Recent updates**(3.1.1 起):在 About 卡片里、Version 行之下(中间只隔着 City data 署名行)——
-它说的就是这个版本变了什么,所以跟着 Version,不单独成一个分区。
+**Recent updates**(3.1.1 起):在 About 卡片里、紧接 Version 行之下 —— 它说的就是这个版本变了什么,
+所以跟着 Version,不单独成一个分区。City data 在它之后,是 About 的最后一行,上方有一条分隔线。
 
 ```
 Version                      v3.1.1
 ───────────────────────────────────
-City data       GeoNames (CC BY 4.0) ↗
-───────────────────────────────────
 Recent updates
 · Up to 30 cities (was 10)
 · Core Time is much faster
+───────────────────────────────────
+City data       GeoNames (CC BY 4.0) ↗
 ```
 
 写法约定。前两条是这个区块可信度的前提 —— 用户会拿它对照自己的使用,对不上一次,以后就不再读:

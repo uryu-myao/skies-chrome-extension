@@ -216,8 +216,9 @@
 
   // About → Recent updates (spec §9.4): a record, not an announcement. One
   // step down from the rows — 11px, the Version value's 50% grey — and no
-  // divider, hover or click state of its own. It sits after the City data row
-  // (right under Version), which gives it that row's divider above.
+  // divider, hover or click state of its own. It sits right after Version,
+  // which gives it Version's divider above; the City data row after it brings
+  // its own divider (below).
   &__updates {
     padding: 12px 0px;
     font-family: 'Poppins', serif;
@@ -229,6 +230,12 @@
     letter-spacing: 0.02em;
     color: var(--color-font-timezone);
     opacity: 0.5;
+  }
+
+  // About → City data, the last row: it follows Recent updates, which has no
+  // divider of its own, so it draws the one between them.
+  &__updates + &__row {
+    border-top: 1px solid var(--color-division);
   }
 
   &__updates-title {

@@ -356,8 +356,22 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <span className="settings-panel__value">v{appVersion}</span>
             </div>
 
+            {/* What this version changed — a record, not an announcement:
+                static, smaller and dimmer than the rows (spec §9.4). */}
+            <div className="settings-panel__updates">
+              <h4 className="settings-panel__updates-title" id="settings-recent-updates">
+                Recent updates
+              </h4>
+              <ul className="settings-panel__updates-list" aria-labelledby="settings-recent-updates">
+                {RECENT_UPDATES.map((update) => (
+                  <li key={update}>{update}</li>
+                ))}
+              </ul>
+            </div>
+
             {/* The city search's data is GeoNames', CC BY 4.0: the credit and
-                the license, each its own link (spec §9.4, ATTRIBUTION.md). */}
+                the license, each its own link — the section's last row
+                (spec §9.4, ATTRIBUTION.md). */}
             <div className="settings-panel__row">
               <span className="settings-panel__label">City data</span>
               <span className="settings-panel__row-end">
@@ -373,19 +387,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </span>
                 <ExternalIcon />
               </span>
-            </div>
-
-            {/* What this version changed — a record, not an announcement:
-                static, smaller and dimmer than the rows (spec §9.4). */}
-            <div className="settings-panel__updates">
-              <h4 className="settings-panel__updates-title" id="settings-recent-updates">
-                Recent updates
-              </h4>
-              <ul className="settings-panel__updates-list" aria-labelledby="settings-recent-updates">
-                {RECENT_UPDATES.map((update) => (
-                  <li key={update}>{update}</li>
-                ))}
-              </ul>
             </div>
           </section>
         </div>
