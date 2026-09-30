@@ -11,7 +11,12 @@
     flex: 1;
     min-height: 0;
     padding: 8px 18px 20px;
-    overflow: scroll;
+    // Vertical only. `overflow: scroll` kept both scrollbars' tracks showing
+    // wherever scrollbars aren't overlays (Windows, some Linux, macOS set to
+    // always show them) — a horizontal one with nothing to scroll: the list
+    // reorders on the vertical axis only (TimezoneList's lockToVerticalAxis).
+    overflow-y: auto;
+    overflow-x: hidden;
     transition:
       transform 0.24s ease,
       padding-top 0.24s ease;
