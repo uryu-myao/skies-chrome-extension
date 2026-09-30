@@ -75,9 +75,9 @@ describe('timeOfDay — the sky 3.1.2 showed, from elevation alone (spec §9.2)'
     expect([NIGHT_BELOW, DAY_ABOVE]).toEqual([-9, 7]);
   });
 
-  // Every boundary within one 15-minute sample of where 3.1.2 put it, except
-  // London at the solstices: two samples — a fixed band of elevation takes
-  // longer to cross far from the equator (spec §9.2).
+  // Every boundary within one 15-minute sample of where 3.1.2 put it. London's
+  // solstice dawns and dusks are two samples longer: the new model is closer
+  // to the real sky there, not off (spec §9.2).
   const cases = ['Tokyo', 'London', 'New York', 'Sydney', 'Singapore'].flatMap((name) =>
     Object.keys(CITIES[name].days).map((date) => [name, date] as const)
   );

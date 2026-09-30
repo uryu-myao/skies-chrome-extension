@@ -72,10 +72,12 @@ export type TimeOfDay = 'night' | 'dawn' | 'day' | 'twilight';
 // before solar noon and twilight after. The thresholds are the old
 // sunrise/sunset ±45-minute windows turned into elevations: fitted on Tokyo,
 // London, New York, Sydney and Singapore at both equinoxes and solstices, the
-// phases match the old ones to within 15 minutes at every boundary, except
-// London at the solstices (30 minutes — a fixed band of elevation takes
-// longer to cross far from the equator, as real twilight does). Polar day and
-// night need no special case: the sun just never crosses a threshold.
+// phases match the old ones to within 15 minutes at every boundary. London's
+// solstice dawns and dusks run about 30 minutes longer — not an error: the
+// farther from the equator, the shallower the sun's path, so it takes longer
+// to cross the same band of elevation, just as real twilight lasts longer
+// there. 3.1.2's fixed ±45 minutes was the approximation. Polar day and night
+// need no special case: the sun just never crosses a threshold.
 export const NIGHT_BELOW = -9;
 export const DAY_ABOVE = 7;
 
