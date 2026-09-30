@@ -30,13 +30,15 @@ it on on the same terms.
 The extension shows this credit, with links to GeoNames and the license, in
 **Settings → About → City data**.
 
-## Time zone locations — IANA tz database
+## Time zone locations and names — IANA tz database
 
 `src/data/zoneCoordinates.ts` holds the coordinates of each time zone's
-principal location, taken from `zone.tab` and `backward` in the
-[IANA time zone database](https://www.iana.org/time-zones). The database is
-in the public domain. `scripts/build-zone-coordinates.mjs` generates the
-file, and its header records the tzdata version used.
+principal location, taken from `zone.tab` in the
+[IANA time zone database](https://www.iana.org/time-zones).
+`src/data/zoneLinks.ts` maps old zone names to current ones, taken from its
+`backward` file. The database is in the public domain.
+`scripts/build-zone-data.mjs` generates both files from the same release,
+and their headers record which tzdata version was used.
 
 ## Flags — flagcdn.com
 

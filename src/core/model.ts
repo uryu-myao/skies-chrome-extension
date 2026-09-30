@@ -1,5 +1,5 @@
 import type { KeyValueStore } from './store';
-import { friendlyZoneName } from './tz';
+import { friendlyZoneName, sameZone } from './tz';
 import type { AppData, AppSettings, Entry, WorkDays, WorkHours } from './types';
 
 // The `timemate.` prefix predates the rename to Skies and must stay —
@@ -119,7 +119,9 @@ export function resolveReferenceChip(
   settings: AppSettings,
   systemTimezone: string
 ): ReferenceChip {
-  const firstIn = (zone: string) => entries.find((entry) => entry.timezone === zone);
+  // Same zone, whatever it's called: Chrome reports India's zone as
+  // Asia/Calcutta, a Kolkata entry says Asia/Kolkata (spec §4.2).
+  const firstIn = (zone: string) => entries.find((entry) => sameZone(entry.timezone, zone));
 
   const zone = settings.referenceTimezone;
   if (zone === null) {
@@ -131,7 +133,7 @@ export function resolveReferenceChip(
   }
 
   const picked = entries.find(
-    (entry) => entry.id === settings.referenceEntryId && entry.timezone === zone
+    (entry) => entry.id === settings.referenceEntryId && sameZone(entry.timezone, zone)
   );
   const entry = picked ?? firstIn(zone);
   if (!entry) {
@@ -152,7 +154,7 @@ export function referenceRoleOf(
   referenceTimezone: string
 ): ReferenceRole {
   if (chip.youEntryId === entry.id) return 'you';
-  return entry.timezone === referenceTimezone ? 'base' : null;
+  return sameZone(entry.timezone, referenceTimezone) ? 'base' : null;
 }
 
 export interface ResolvedWorkHours extends WorkHours {

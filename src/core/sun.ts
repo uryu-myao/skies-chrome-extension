@@ -1,5 +1,5 @@
 import { ZONE_COORDINATES } from '../data/zoneCoordinates';
-import { offsetMinutes } from './tz';
+import { canonicalZone, offsetMinutes } from './tz';
 
 // Where the sun is, from the equations of NOAA's Solar Calculator (after
 // Meeus, Astronomical Algorithms) — no network, no tables. Good to a small
@@ -97,13 +97,13 @@ const isCoordinate = (value: unknown): value is number => typeof value === 'numb
 
 // Where to put the sun for a card: the city's own coordinates when it has
 // them (0 is a coordinate, not a missing one); else the principal location
-// of its time zone from tzdata's zone.tab (cities added before 2.0.0 have
-// none); else — a zone with no location, like Etc/GMT-9 — the equator at the
+// of its time zone from tzdata's zone.tab, found by its current name (cities
+// added before 2.0.0 have none); else — a zone with no location, like Etc/GMT-9 — the equator at the
 // longitude its UTC offset stands for. Derived each time, never written back
 // to the entry.
 export function sunCoordinates(timezone: string, lat: number | undefined, lon: number | undefined, date: Date): Coordinates {
   if (isCoordinate(lat) && isCoordinate(lon)) return { lat, lon };
-  const zone = ZONE_COORDINATES[timezone];
+  const zone = ZONE_COORDINATES[canonicalZone(timezone)];
   if (zone) return { lat: zone[0], lon: zone[1] };
   return { lat: 0, lon: offsetMinutes(timezone, date) / 4 };
 }

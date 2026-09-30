@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import '@styles/CoreTimePanel.scss';
 import { coreTime } from '../core/coretime';
 import type { CoreTimeNextOverlap, CoreTimeOverlapRange } from '../core/coretime';
-import { getSystemTimezone, SLOTS_PER_DAY } from '../core/tz';
+import { getSystemTimezone, sameZone, SLOTS_PER_DAY } from '../core/tz';
 import { referenceRoleOf, resolveReferenceChip, type ReferenceRole } from '../core/model';
 import type { AppSettings, Entry } from '../core/types';
 
@@ -192,7 +192,7 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
           const [bottleneckId] = closest.bottleneckEntryIds;
           const bottleneck = closest.perEntry.find((p) => p.entryId === bottleneckId);
           const whose =
-            entryOf(bottleneckId)?.timezone === referenceTimezone ? 'your' : `${labelOf(bottleneckId)}'s`;
+            sameZone(entryOf(bottleneckId)?.timezone ?? '', referenceTimezone) ? 'your' : `${labelOf(bottleneckId)}'s`;
           if (bottleneck?.direction === 'BEFORE_START') {
             directionText = `${gap} before ${whose} day starts`;
           } else if (bottleneck?.direction === 'AFTER_END') {

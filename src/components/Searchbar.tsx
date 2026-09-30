@@ -3,10 +3,11 @@ import '@styles/Searchbar.scss';
 import type { AddTimezoneResult } from '../App';
 import { buildCityIndex, searchCities, type CityIndex } from '../core/citySearch';
 import { MAX_CITIES } from '../core/model';
+import { sameZone, toIntlZone } from '../core/tz';
 
 function getUtcOffset(zone: string): string {
   const parts = new Intl.DateTimeFormat('en', {
-    timeZone: zone,
+    timeZone: toIntlZone(zone),
     timeZoneName: 'shortOffset',
   }).formatToParts(new Date());
   const offset = parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
@@ -80,7 +81,7 @@ const Searchbar: React.FC<SearchbarProps> = ({
     if (!index || !searchTerm.trim()) return [];
     const unique = new Map<string, SearchResult>();
     for (const city of searchCities(index, searchTerm)) {
-      if (existingZones.includes(city.zone)) continue;
+      if (existingZones.some((zone) => sameZone(zone, city.zone))) continue;
       const id = `${city.city.toLowerCase().replace(/[^\w]/g, '-')}-${city.zone.toLowerCase().replace(/[^\w/]/g, '-')}`;
       if (unique.has(id)) continue;
       unique.set(id, {

@@ -268,10 +268,22 @@ function offsetMinutes(timezone, date) {
   (Chrome 实测),而一次 `coreTime()` 要调用数千次(30 个城市、需要往后找 7 天时约 2.5 万次)。
   **不要把复用 formatter 当成违反上一条而改回每次新建。**
 - **不得硬编码任何偏移值。** 不写 `{ 'Asia/Tokyo': 9 }` 这类表。
-  - **边界:`src/data/zoneCoordinates.ts` 不属于这类表。** 它是由 `scripts/build-zone-coordinates.mjs`
-    从 IANA tzdata 的 `zone.tab`(及 `backward` 中的旧名链接)**生成**的数据文件,只含每个时区代表城市
-    的**经纬度**,不含任何偏移;只用于给没有自身坐标的卡片定太阳位置(§9.2)。文件头记录 tzdata
-    版本与生成命令,不手改;更新就重新生成。偏移仍然一律由 `Intl` 按具体日期计算。
+  - **边界:`src/data/zoneCoordinates.ts` 与 `src/data/zoneLinks.ts` 不属于这类表。** 两者由
+    `scripts/build-zone-data.mjs` 从同一版 IANA tzdata **生成**:前者取自 `zone.tab`,只含每个时区代表城市的
+    **经纬度**,只用于给没有自身坐标的卡片定太阳位置(§9.2);后者取自 `backward`,只含**名字到名字**的
+    映射(见下一条)。都不含任何偏移。文件头记录 tzdata 版本与生成命令,不手改;更新就重新生成。偏移仍然
+    一律由 `Intl` 按具体日期计算。
+- **时区名:存什么就是什么,比较与交给 `Intl` 时再解析。** 存储的时区名一律不改写 —— 新添加的城市照旧存
+  GeoNames 给出的名字(都是 IANA 当前名),已有数据保持原样。同一个时区可能以不同的名字出现:Chrome 把印度的
+  系统时区报告为旧名 `Asia/Calcutta`,列表里的城市却是 `Asia/Kolkata`。`core/tz.ts` 的三个函数负责解析:
+  - `canonicalZone(tz)`:旧名与合并名 → IANA 当前名(`zoneLinks.ts`)。**`zone.tab` 仍然列出的名字就是当前名,
+    不映射** —— `backward` 把 `Africa/Accra`、`Europe/Oslo` 链接到规则相同的 `Africa/Abidjan`、`Europe/Berlin`,
+    但那是合并,不是改名,加纳用户的 System chip 应当显示 Accra
+  - `sameZone(a, b)`:`canonicalZone(a) === canonicalZone(b)`。**比较两个时区名一律用它,不得用 `===`**
+  - `toIntlZone(tz)`:**交给 `Intl` 的时区名一律经过它。** 当前引擎不认新名时(改名晚于引擎的数据,如 2022 年的
+    `Europe/Kyiv`),换用它认得的同一时区的旧名 —— 同一时区自 1970 年起规则相同,时刻一样。「名字 → 引擎认得的
+    名字」按名字缓存:这是名字解析,与日期无关、在一次会话里不会变,**不是上一条禁止缓存的偏移或本地日期**
+  - 显示用的派生名(`friendlyZoneName`)先经 `canonicalZone`:`Asia/Calcutta` 显示为 `Kolkata`
 - **粒度为 30 分钟。** 存在 +5:30(印度)、+5:45(尼泊尔)、−3:30(纽芬兰)、+12:45(查塔姆)。所有轴与算法按 48 格处理,不用 24 格。
 - **每个条目的本地日期独立计算。** 判断工作日时使用该条目自己的本地 `getDay()`,不能用参考时区的星期。
 - **不使用时区缩写。** 界面任何位置都不显示 JST / EST / CST 这类缩写,也不用硬编码映射表补齐。理由有两条:
@@ -608,7 +620,8 @@ export async function isPro() { ... }
 **城市名的优先级**:
 
 - **选了 System(`referenceTimezone` 为 `null`)时,一律用系统时区 IANA id 派生的名称**
-  (取 `/` 后半段,`_` 替换为空格:`Asia/Tokyo` → `Tokyo`),**不匹配任何条目的 label** ——
+  (先换成 IANA 当前名,再取 `/` 后半段,`_` 替换为空格:`Asia/Tokyo` → `Tokyo`,Chrome 报告的
+  `Asia/Calcutta` → `Kolkata`,§4.2),**不匹配任何条目的 label** ——
   即使列表里有同一时区的条目。否则列表里有 Tsu(`Asia/Tokyo`)时,选 System 后 chip 仍显示
   `Tsu`,和选 Tsu 看起来完全一样,用户得不到选择已生效的反馈。
 - **只有用户选了某个条目时,才显示该条目的 `label`**:按 `settings.referenceEntryId` 找到用户选的
@@ -619,6 +632,10 @@ export async function isPro() { ... }
   同样按时区取第一个条目,与改动前一致。
 
 判定写在 `core/model.ts` 的 `resolveReferenceChip()`(纯函数,有单测),返回名称与选中项。
+
+**本节与 §9.2、§9.3 里的「同一时区」「属于系统时区」一律按 `sameZone()` 判定**(§4.2):旧名与当前名是同一个
+时区。系统时区报告为 `Asia/Calcutta`、列表里是 Kolkata(`Asia/Kolkata`)时,Kolkata 就是系统时区的条目 ——
+标 `YOU`、卡片显示 `Base`。添加城市时「同名 + 同时区视为重复」同样按 `sameZone()`。
 
 System 与同时区条目并不等价:System 跟随电脑的时区(出差时会变),选条目则固定在该时区。
 

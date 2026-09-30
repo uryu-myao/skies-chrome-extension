@@ -1,3 +1,5 @@
+import { ZONE_LINKS } from '../data/zoneLinks';
+
 export const SLOTS_PER_DAY = 48;
 export const MINUTES_PER_SLOT = 30;
 
@@ -21,6 +23,74 @@ const DATE_FIELDS: Intl.DateTimeFormatOptions = {
   day: '2-digit',
 };
 
+// ---- Zone names (spec §4.2) ------------------------------------------------
+// Stored names stay as they are: an entry keeps the name it was added with
+// (GeoNames gives current ones), and old data is never rewritten. These three
+// decide what a name means when it's compared or handed to Intl.
+
+// The current IANA name for `timezone`: an old or merged name
+// (Asia/Calcutta, as Chrome reports India's zone) becomes the name it links
+// to (Asia/Kolkata). A name zone.tab still lists is current and stays itself.
+// The table is generated from tzdata's `backward` (src/data/zoneLinks.ts).
+export function canonicalZone(timezone: string): string {
+  return ZONE_LINKS[timezone] ?? timezone;
+}
+
+// Whether two names are the same zone. Every comparison of zone names goes
+// through this, never === — the system zone can come as Asia/Calcutta while
+// the entry says Asia/Kolkata.
+export function sameZone(a: string, b: string): boolean {
+  return canonicalZone(a) === canonicalZone(b);
+}
+
+let namesByCanonical: Map<string, string[]> | null = null;
+
+// Every spelling of `timezone`'s zone: the name itself, the current name,
+// then the old names that link to it.
+function spellingsOf(timezone: string): string[] {
+  if (!namesByCanonical) {
+    namesByCanonical = new Map();
+    for (const [name, current] of Object.entries(ZONE_LINKS)) {
+      namesByCanonical.set(current, [...(namesByCanonical.get(current) ?? []), name]);
+    }
+  }
+  const canonical = canonicalZone(timezone);
+  return [...new Set([timezone, canonical, ...(namesByCanonical.get(canonical) ?? [])])];
+}
+
+// The first spelling of `timezone` that `accepts` takes, or the name itself
+// if none does. Pure, for tests; toIntlZone() asks the real Intl.
+export function resolveIntlZone(timezone: string, accepts: (name: string) => boolean): string {
+  return spellingsOf(timezone).find(accepts) ?? timezone;
+}
+
+function intlAccepts(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const intlNames = new Map<string, string>();
+
+// The name to hand Intl for `timezone`. An engine that predates a rename
+// (Europe/Kyiv is 2022) rejects the new name; then an old spelling of the same
+// zone it does know is used instead — same rules since 1970, same times.
+// Every Intl call with a zone goes through this. The answer is cached per
+// name: it's which spelling this engine understands, fixed for the session
+// and independent of any date — not an offset or a local date, which §4.2
+// forbids caching.
+export function toIntlZone(timezone: string): string {
+  let name = intlNames.get(timezone);
+  if (name === undefined) {
+    name = resolveIntlZone(timezone, intlAccepts);
+    intlNames.set(timezone, name);
+  }
+  return name;
+}
+
 const formatters = new Map<Intl.DateTimeFormatOptions, Map<string, Intl.DateTimeFormat>>();
 
 // One formatter per (fields, zone), reused. A formatter holds only the zone
@@ -36,7 +106,7 @@ function formatterFor(fields: Intl.DateTimeFormatOptions, timezone: string): Int
   }
   let dtf = byZone.get(timezone);
   if (!dtf) {
-    dtf = new Intl.DateTimeFormat('en-US', { ...fields, timeZone: timezone });
+    dtf = new Intl.DateTimeFormat('en-US', { ...fields, timeZone: toIntlZone(timezone) });
     byZone.set(timezone, dtf);
   }
   return dtf;
@@ -134,15 +204,19 @@ export function localDayDelta(timezone: string, referenceTimezone: string, date:
   return epochDay(localDateParts(timezone, date)) - epochDay(localDateParts(referenceTimezone, date));
 }
 
+// The engine's name for the machine's zone, as is — Chrome says Asia/Calcutta
+// where GeoNames says Asia/Kolkata. Compare it with sameZone(), and name it
+// with friendlyZoneName(), which goes through canonicalZone().
 export function getSystemTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-// A readable name from an IANA id — the last segment, underscores as
-// spaces: "Asia/Tokyo" → "Tokyo", "America/Argentina/Buenos_Aires" →
-// "Buenos Aires". Same convention as an entry's default label.
+// A readable name from an IANA id — the last segment of its current name,
+// underscores as spaces: "Asia/Tokyo" → "Tokyo", "America/Argentina/
+// Buenos_Aires" → "Buenos Aires", and "Asia/Calcutta" → "Kolkata". Same
+// convention as an entry's default label.
 export function friendlyZoneName(zone: string): string {
-  const last = zone.split('/').pop() ?? zone;
+  const last = canonicalZone(zone).split('/').pop() ?? zone;
   return last.replace(/_/g, ' ');
 }
 

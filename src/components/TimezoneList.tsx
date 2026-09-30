@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import Timezone, { TimezoneInfo } from './Timezone';
 import { createEntry, hasRoomForCity } from '../core/model';
+import { sameZone } from '../core/tz';
 import type { Entry } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition, HourFormat } from '../App';
 import '@styles/EditList.scss';
@@ -114,7 +115,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
       if (
         prev.some(
           (entry) =>
-            entry.timezone === newTimezone.zone &&
+            sameZone(entry.timezone, newTimezone.zone) &&
             entry.label.toLowerCase() === newTimezone.city.toLowerCase()
         )
       ) {

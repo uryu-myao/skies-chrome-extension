@@ -8,6 +8,8 @@ import {
   localDayDelta,
   offsetMinutes,
   relativeOffsetMinutes,
+  sameZone,
+  toIntlZone,
 } from '../core/tz';
 import type { ConvertPosition, HourFormat } from '../App';
 import { dayDeltaLabel } from './dayDeltaLabel';
@@ -85,7 +87,8 @@ const Timezone: React.FC<TimezoneProps> = ({
 
   useEffect(() => {
     const updateTime = () => {
-      const getTargetDateParts = (date: Date, timeZone: string) => {
+      const getTargetDateParts = (date: Date, zoneName: string) => {
+        const timeZone = toIntlZone(zoneName);
         const parts = new Intl.DateTimeFormat('en-US', {
           timeZone,
           year: 'numeric',
@@ -208,7 +211,7 @@ const Timezone: React.FC<TimezoneProps> = ({
           <div className="timezone-footer">
             <p>
               <span className="timezone-data__relative">
-                {zone === referenceTimezone ? 'Base' : timeData.relativeOffset}
+                {sameZone(zone, referenceTimezone) ? 'Base' : timeData.relativeOffset}
               </span>
               <span className="timezone-data__offset">{timeData.utcOffset}</span>
             </p>
