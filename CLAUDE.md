@@ -25,7 +25,9 @@ Node is pinned to 24.x (`.nvmrc`, `engines`, and `.npmrc`'s `engine-strict`, so 
 
 ## Architecture
 
-Skies is a **Chrome Manifest V3 popup extension** built with React + TypeScript + Vite. The popup is a single-page React app; there is no content script or injected UI.
+Skies is a **Manifest V3 popup extension for Chrome and Firefox** built with React + TypeScript + Vite: one source tree, two build targets (`__TARGET__`). The popup is a single-page React app; there is no content script or injected UI.
+
+**3.2.0 (tag `v3.2.0`) is the first version released to both stores**: the Chrome Web Store, and Firefox Add-ons, where it is also Skies' first version (AMO slug `skies-world-clock`). Both stores' packages come from the same commit.
 
 `docs/spec-v2.md` is the feature spec and the source of truth — update it before changing behaviour. Modules in `src/core/` are pure: they reach storage only through an injected `KeyValueStore` (`src/core/store.ts`) and never reference `localStorage`, `chrome.*`, `browser.*` or any DOM API (spec §12).
 
