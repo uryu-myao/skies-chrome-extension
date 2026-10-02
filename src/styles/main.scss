@@ -22,9 +22,9 @@
     // scrollbar appears. Only where scrollbars take up space; overlay
     // scrollbars (macOS's default) are unaffected.
     scrollbar-gutter: stable;
-    transition:
-      transform 0.24s ease,
-      padding-top 0.24s ease;
+    // Not padding-top: it changes as search opens and closes, together with
+    // the header's height, and must not lag behind it.
+    transition: transform 0.24s ease;
 
     &::before {
       content: '';
@@ -47,6 +47,15 @@
   &--convert-open {
     .app-content {
       min-height: 0;
+    }
+  }
+
+  // The list's 8px top padding moves below the search bar (Searchbar.scss):
+  // unscrolled, the list stays where it was; scrolled, it stops 8px short of
+  // the search bar instead of running into it (spec §9.6).
+  &--search-open {
+    .app-content {
+      padding-top: 0;
     }
   }
 }

@@ -948,6 +948,8 @@ City data       GeoNames (CC BY 4.0) ↗
 - **写入条目的字段不变**:`timezone`、`label`(城市名)、`lat`、`lon`,与原先从 Open-Meteo 得到的相同;
   条目 `id` 仍由 `createEntry()` 生成(UUID),与 GeoNames id 无关 —— 原先也从未使用 Open-Meteo 返回的 id
 - 没有结果时显示:`No match. Try a nearby larger city — you can rename it after adding.`
+- **搜索栏(及结果框)下方留 8px**,城市列表滚动时止于这条间隔,不贴住搜索栏;未滚动时列表位置与关闭
+  搜索时相同(列表顶部的 8px 移到搜索区)
 - **国旗也在扩展里**:flagcdn.com 的 80px 宽 PNG(全部国家代码,`public/flags/<代码>.png`,由
   `scripts/fetch-flags.mjs` 更新),以 32px 宽、高度按比例显示,与原先加载 flagcdn 的 SVG 同尺寸
 
