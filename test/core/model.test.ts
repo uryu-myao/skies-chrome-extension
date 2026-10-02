@@ -16,10 +16,14 @@ import {
   saveAppData,
   toggleIncludeInCoreTime,
 } from '../../src/core/model';
+import type { KeyValueStore } from '../../src/core/store';
 import type { AppSettings, Entry } from '../../src/core/types';
+import { memoryStore } from '../helpers/stores';
+
+let store: KeyValueStore;
 
 beforeEach(() => {
-  localStorage.clear();
+  store = memoryStore().store;
 });
 
 describe('resolveWorkHours', () => {
@@ -263,47 +267,47 @@ describe('toggleIncludeInCoreTime', () => {
 
   it('survives a save/load round trip', () => {
     const entry = toggleIncludeInCoreTime(createEntry({ timezone: 'America/New_York' }));
-    saveAppData({ version: 2, entries: [entry], groups: [], settings: DEFAULT_SETTINGS });
-    expect(loadAppData()?.entries[0].includeInCoreTime).toBe(false);
+    saveAppData(store, { version: 2, entries: [entry], groups: [], settings: DEFAULT_SETTINGS });
+    expect(loadAppData(store)?.entries[0].includeInCoreTime).toBe(false);
   });
 });
 
 describe('loadAppData / saveAppData', () => {
   it('returns null when nothing is stored', () => {
-    expect(loadAppData()).toBeNull();
+    expect(loadAppData(store)).toBeNull();
   });
 
   it('returns null on corrupt JSON rather than throwing', () => {
-    localStorage.setItem('timemate.data.v2', '{not json');
-    expect(loadAppData()).toBeNull();
+    store.set('timemate.data.v2', '{not json');
+    expect(loadAppData(store)).toBeNull();
   });
 
   it('writes each entry\'s array position into order, and loads back sorted by it', () => {
     const settings: AppSettings = { ...DEFAULT_SETTINGS };
     const a = createEntry({ timezone: 'Asia/Tokyo', label: 'A', order: 7 });
     const b = createEntry({ timezone: 'Asia/Tokyo', label: 'B', order: 3 });
-    saveAppData({ version: 2, entries: [a, b], groups: [], settings });
+    saveAppData(store, { version: 2, entries: [a, b], groups: [], settings });
 
-    const stored = JSON.parse(localStorage.getItem('timemate.data.v2')!);
+    const stored = JSON.parse(store.get('timemate.data.v2')!);
     expect(stored.entries.map((e: { order: number }) => e.order)).toEqual([0, 1]);
 
     // Stored out of array order: load follows `order`, not array position
     stored.entries.reverse();
-    localStorage.setItem('timemate.data.v2', JSON.stringify(stored));
-    expect(loadAppData()!.entries.map((e) => e.label)).toEqual(['A', 'B']);
+    store.set('timemate.data.v2', JSON.stringify(stored));
+    expect(loadAppData(store)!.entries.map((e) => e.label)).toEqual(['A', 'B']);
   });
 
   it('leaves data without order exactly as stored (migrate() freezes it)', () => {
     const settings: AppSettings = { ...DEFAULT_SETTINGS };
     const raw = { version: 2, entries: [{ id: 'x', label: 'X' }, { id: 'y', label: 'Y' }], groups: [], settings };
-    localStorage.setItem('timemate.data.v2', JSON.stringify(raw));
-    expect(loadAppData()!.entries.map((e) => e.label)).toEqual(['X', 'Y']);
+    store.set('timemate.data.v2', JSON.stringify(raw));
+    expect(loadAppData(store)!.entries.map((e) => e.label)).toEqual(['X', 'Y']);
   });
 
   it('round-trips a saved AppData blob', () => {
     const settings: AppSettings = { ...DEFAULT_SETTINGS };
     const data = { version: 2 as const, entries: [createEntry({ timezone: 'Asia/Tokyo' })], groups: [], settings };
-    saveAppData(data);
-    expect(loadAppData()).toEqual(data);
+    saveAppData(store, data);
+    expect(loadAppData(store)).toEqual(data);
   });
 });

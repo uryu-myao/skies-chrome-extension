@@ -2,8 +2,6 @@ import { useEffect, useCallback, type ReactNode } from 'react';
 import {
   closestCenter,
   DndContext,
-  KeyboardSensor,
-  PointerSensor,
   useSensor,
   useSensors,
   type Announcements,
@@ -21,9 +19,11 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import Timezone, { TimezoneInfo } from './Timezone';
 import { createEntry, hasRoomForCity } from '../core/model';
+import { sameZone } from '../core/tz';
 import type { Entry } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition, HourFormat } from '../App';
 import '@styles/EditList.scss';
+import { PopupSafeKeyboardSensor, PopupSafePointerSensor } from './dragSensors';
 
 // A reorder only ever moves a row up or down.
 const lockToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
@@ -114,7 +114,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
       if (
         prev.some(
           (entry) =>
-            entry.timezone === newTimezone.zone &&
+            sameZone(entry.timezone, newTimezone.zone) &&
             entry.label.toLowerCase() === newTimezone.city.toLowerCase()
         )
       ) {
@@ -151,9 +151,11 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
     }
   }, [onAddTimezone, addTimezone]); // 正确添加所有依赖项
 
+  // dnd-kit's own sensors, except that a resize which changes nothing doesn't
+  // cancel the drag — Firefox's popup fires those (dragSensors.ts).
   const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(PopupSafePointerSensor),
+    useSensor(PopupSafeKeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   // The new order is written to entries right away; App persists it.

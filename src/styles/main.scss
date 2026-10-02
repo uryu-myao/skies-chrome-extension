@@ -11,10 +11,20 @@
     flex: 1;
     min-height: 0;
     padding: 8px 18px 20px;
-    overflow: scroll;
-    transition:
-      transform 0.24s ease,
-      padding-top 0.24s ease;
+    // Vertical only. `overflow: scroll` kept both scrollbars' tracks showing
+    // wherever scrollbars aren't overlays (Windows, some Linux, macOS set to
+    // always show them) — a horizontal one with nothing to scroll: the list
+    // reorders on the vertical axis only (TimezoneList's lockToVerticalAxis).
+    overflow-y: auto;
+    overflow-x: hidden;
+    // The vertical scrollbar's space is always kept, scrolling or not, so the
+    // cards stay the same width when the list grows past the popup and the
+    // scrollbar appears. Only where scrollbars take up space; overlay
+    // scrollbars (macOS's default) are unaffected.
+    scrollbar-gutter: stable;
+    // Not padding-top: it changes as search opens and closes, together with
+    // the header's height, and must not lag behind it.
+    transition: transform 0.24s ease;
 
     &::before {
       content: '';
@@ -37,6 +47,15 @@
   &--convert-open {
     .app-content {
       min-height: 0;
+    }
+  }
+
+  // The list's 8px top padding moves below the search bar (Searchbar.scss):
+  // unscrolled, the list stays where it was; scrolled, it stops 8px short of
+  // the search bar instead of running into it (spec §9.6).
+  &--search-open {
+    .app-content {
+      padding-top: 0;
     }
   }
 }

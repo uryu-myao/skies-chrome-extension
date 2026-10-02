@@ -452,6 +452,8 @@ body {
 body {
   font-smooth: always;
   -webkit-font-smoothing: antialiased;
+  /* The same thin rendering in Firefox on macOS; other browsers ignore it. */
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Remove `iframe` element border in all browsers.

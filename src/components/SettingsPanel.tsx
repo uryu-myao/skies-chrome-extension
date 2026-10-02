@@ -6,10 +6,19 @@ import SegmentedControl from './SegmentedControl';
 import { RECENT_UPDATES } from './recentUpdates';
 import { version as appVersion } from '../../package.json';
 
-const SHARE_URL = 'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik';
-const RATE_URL = `${SHARE_URL}/reviews`;
+// Each build points at its own store, fixed at compile time (spec §9.4): Share
+// copies the listing, Rate opens where reviews are written. AMO rates on the
+// listing itself; the Chrome Web Store has a separate reviews page.
+const CHROME_WEB_STORE_URL = 'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik';
+const FIREFOX_ADD_ONS_URL = 'https://addons.mozilla.org/firefox/addon/skies-world-clock/';
+const STORE =
+  __TARGET__ === 'firefox'
+    ? { shareUrl: FIREFOX_ADD_ONS_URL, rateUrl: FIREFOX_ADD_ONS_URL, rateLabel: 'Rate on Firefox Add-ons' }
+    : { shareUrl: CHROME_WEB_STORE_URL, rateUrl: `${CHROME_WEB_STORE_URL}/reviews`, rateLabel: 'Rate on Chrome Web Store' };
 const FEEDBACK_URL = 'https://forms.gle/ncZLfTs8RKE59ETC9';
 const WEBSITE_URL = 'https://useskies.com';
+const GEONAMES_URL = 'https://www.geonames.org/';
+const CC_BY_URL = 'https://creativecommons.org/licenses/by/4.0/';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -96,7 +105,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   canEditList,
   onEditList,
 }) => {
-  const [shareCopied, setShareCopied] = useState(false);
+  // Share's label for a moment after a click: whether the copy worked.
+  const [shareResult, setShareResult] = useState<'copied' | 'failed' | null>(null);
+  const shareResultTimer = useRef<ReturnType<typeof setTimeout>>();
   const bodyRef = useRef<HTMLDivElement>(null);
   const coreTimeRef = useRef<HTMLHeadingElement>(null);
   const [flashCoreTime, setFlashCoreTime] = useState(false);
@@ -129,11 +140,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const update = (patch: Partial<AppSettings>) =>
     setSettings((prev) => ({ ...prev, ...patch }));
 
+  // "Copied!" only once the clipboard has taken the link; if it refuses (no
+  // clipboard, permission denied, the popup lost focus), "Couldn't copy" for
+  // the same 2 seconds — never a false "Copied!".
   const handleShare = () => {
-    navigator.clipboard.writeText(SHARE_URL);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
+    const show = (result: 'copied' | 'failed') => {
+      clearTimeout(shareResultTimer.current);
+      setShareResult(result);
+      shareResultTimer.current = setTimeout(() => setShareResult(null), 2000);
+    };
+    // Called right in the click, where the browser counts it as the user's
+    // doing; a missing navigator.clipboard throws here and ends up in the
+    // same failure branch as a rejected write.
+    let write: Promise<void>;
+    try {
+      write = navigator.clipboard.writeText(STORE.shareUrl);
+    } catch (error) {
+      write = Promise.reject(error);
+    }
+    write.then(
+      () => show('copied'),
+      () => show('failed')
+    );
   };
+
+  useEffect(() => () => clearTimeout(shareResultTimer.current), []);
 
   const setStartHour = (start: number) => {
     setSettings((prev) => ({
@@ -314,17 +345,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               className="settings-panel__row settings-panel__row--link"
               onClick={handleShare}>
               <span className="settings-panel__label">
-                {shareCopied ? 'Copied!' : 'Share Skies'}
+                {shareResult === 'copied' ? 'Copied!' : shareResult === 'failed' ? "Couldn't copy" : 'Share Skies'}
               </span>
-              <CopyIcon copied={shareCopied} />
+              <CopyIcon copied={shareResult === 'copied'} />
             </button>
 
             <a
               className="settings-panel__row settings-panel__row--link"
-              href={RATE_URL}
+              href={STORE.rateUrl}
               target="_blank"
               rel="noopener noreferrer">
-              <span className="settings-panel__label">Rate on Chrome Store</span>
+              <span className="settings-panel__label">{STORE.rateLabel}</span>
               <ExternalIcon />
             </a>
 
@@ -365,6 +396,26 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <li key={update}>{update}</li>
                 ))}
               </ul>
+            </div>
+
+            {/* The city search's data is GeoNames', CC BY 4.0: the credit and
+                the license, each its own link — the section's last row
+                (spec §9.4, ATTRIBUTION.md). */}
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">City data</span>
+              <span className="settings-panel__row-end">
+                <span className="settings-panel__value">
+                  <a className="settings-panel__credit-link" href={GEONAMES_URL} target="_blank" rel="noopener noreferrer">
+                    GeoNames
+                  </a>{' '}
+                  (
+                  <a className="settings-panel__credit-link" href={CC_BY_URL} target="_blank" rel="noopener noreferrer">
+                    CC BY 4.0
+                  </a>
+                  )
+                </span>
+                <ExternalIcon />
+              </span>
             </div>
           </section>
         </div>

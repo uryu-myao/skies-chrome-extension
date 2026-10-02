@@ -2,7 +2,9 @@
   &-inner {
     position: relative;
     width: 100%;
-    padding: 0;
+    // The list's own 8px top padding, moved here while search is open
+    // (main.scss), so the list scrolls up to a gap, not to the search bar.
+    padding: 0 0 8px;
   }
 
   &-input {

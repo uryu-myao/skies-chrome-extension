@@ -1,4 +1,5 @@
 import { createDefaultAppData, createEntry, DEFAULT_SETTINGS, loadAppData, saveAppData } from './model';
+import type { KeyValueStore } from './store';
 import { getSystemTimezone, relativeOffsetMinutes } from './tz';
 import type { AppData, AppSettings, Entry, SortOrder } from './types';
 
@@ -7,6 +8,7 @@ const V1_PINNED_KEY = 'timemate.pinned.v1';
 const V1_SORT_MODE_KEY = 'timemate.sort-mode.v1';
 const V1_HOUR_FORMAT_KEY = 'timemate.hour-format.v1';
 export const BACKUP_V1_STORAGE_KEY = 'timemate.backup_v1';
+const LEGACY_SUN_CACHE_PREFIX = 'timemate.sun.';
 
 export interface V1TimezoneEntry {
   id: string;
@@ -56,9 +58,9 @@ function safeParseArray<T>(raw: string | null): T[] {
   }
 }
 
-export function readV1Snapshot(): V1Snapshot {
+export function readV1Snapshot(store: KeyValueStore): V1Snapshot {
   const timezones = safeParseArray<V1TimezoneEntry>(
-    localStorage.getItem(V1_TIMEZONES_KEY)
+    store.get(V1_TIMEZONES_KEY)
   ).filter(
     (item): item is V1TimezoneEntry =>
       !!item &&
@@ -68,14 +70,14 @@ export function readV1Snapshot(): V1Snapshot {
   );
 
   const pinnedIds = safeParseArray<string>(
-    localStorage.getItem(V1_PINNED_KEY)
+    store.get(V1_PINNED_KEY)
   ).filter((id) => typeof id === 'string');
 
   // Every published v1 (1.0.2–2.1.0) wrote these two as plain strings —
   // localStorage.setItem(key, 'alphabet'), not JSON — and read them back the
   // same way, so they're compared as stored. A JSON-encoded '"alphabet"' was
   // never a v1 value. A missing key is normal (null); anything else warns.
-  const sortModeRaw = localStorage.getItem(V1_SORT_MODE_KEY);
+  const sortModeRaw = store.get(V1_SORT_MODE_KEY);
   const sortMode: V1SortMode | null =
     sortModeRaw === 'newest' || sortModeRaw === 'time' || sortModeRaw === 'alphabet'
       ? sortModeRaw
@@ -84,7 +86,7 @@ export function readV1Snapshot(): V1Snapshot {
     warnUnrecognised(V1_SORT_MODE_KEY, sortModeRaw, `"${V1_DEFAULT_SORT_MODE}"`);
   }
 
-  const hourFormatRaw = localStorage.getItem(V1_HOUR_FORMAT_KEY);
+  const hourFormatRaw = store.get(V1_HOUR_FORMAT_KEY);
   const hourFormat: V1HourFormat | null =
     hourFormatRaw === '12' || hourFormatRaw === '24' ? hourFormatRaw : null;
   if (hourFormatRaw !== null && hourFormat === null) {
@@ -151,20 +153,21 @@ export function freezeDisplayOrder(data: AppData, now: Date): AppData {
 // Freezes and persists the old display order the first time data without
 // `order` is seen; a no-op afterwards. If the write fails the frozen data is
 // still returned, so this session renders the right order either way.
-function freezeOrderOnce(data: AppData, now: Date): AppData {
+async function freezeOrderOnce(store: KeyValueStore, data: AppData, now: Date): Promise<AppData> {
   if (!needsOrderFreeze(data)) return data;
   const frozen = freezeDisplayOrder(data, now);
   try {
-    saveAppData(frozen);
+    saveAppData(store, frozen);
+    await store.flush();
   } catch (err) {
     console.error('[Skies] failed to persist the frozen list order:', err);
   }
   return frozen;
 }
 
-function backupV1Once(snapshot: V1Snapshot): void {
-  if (localStorage.getItem(BACKUP_V1_STORAGE_KEY)) return;
-  localStorage.setItem(
+function backupV1Once(store: KeyValueStore, snapshot: V1Snapshot): void {
+  if (store.get(BACKUP_V1_STORAGE_KEY)) return;
+  store.set(
     BACKUP_V1_STORAGE_KEY,
     JSON.stringify({ ...snapshot, migratedAt: new Date().toISOString() })
   );
@@ -172,8 +175,8 @@ function backupV1Once(snapshot: V1Snapshot): void {
 
 // Every v1 build wrote the city list on first mount, so its key — even as
 // "[]" — means this browser ran v1. A fresh install has none of the v1 keys.
-function hasV1Data(): boolean {
-  return localStorage.getItem(V1_TIMEZONES_KEY) !== null;
+function hasV1Data(store: KeyValueStore): boolean {
+  return store.get(V1_TIMEZONES_KEY) !== null;
 }
 
 // v2 data 2.1.0 left behind. 2.1.0 ran this migration silently on its first
@@ -183,8 +186,8 @@ function hasV1Data(): boolean {
 // `order` (added after 2.1.0 shipped), and the v1 keys are still there. It
 // was never shown or edited by a v2 UI, so rebuilding it from the v1 keys
 // loses nothing.
-function isLeftBy210(data: AppData): boolean {
-  return needsOrderFreeze(data) && hasV1Data();
+function isLeftBy210(store: KeyValueStore, data: AppData): boolean {
+  return needsOrderFreeze(data) && hasV1Data(store);
 }
 
 // Entry point: run at startup, before any rendering; the caller renders from
@@ -200,14 +203,20 @@ function isLeftBy210(data: AppData): boolean {
 // modified, and timemate.backup_v1 is written once — a rebuild doesn't
 // replace the snapshot 2.1.0 took on its first open. On failure nothing is
 // written and the caller still never renders an empty list.
-export function migrate(now: Date = new Date()): AppData {
-  const existing = loadAppData();
-  if (existing && !isLeftBy210(existing)) return freezeOrderOnce(existing, now);
+//
+// Every write is confirmed with store.flush() rather than trusted because
+// set() didn't throw: Firefox's storage.local fails asynchronously, and a
+// failed write is rolled back in memory, so storage never holds half a
+// migration (spec §2.3, §3.1).
+export async function migrate(store: KeyValueStore, now: Date = new Date()): Promise<AppData> {
+  const existing = loadAppData(store);
+  if (existing && !isLeftBy210(store, existing)) return freezeOrderOnce(store, existing, now);
 
-  if (!existing && !hasV1Data()) {
+  if (!existing && !hasV1Data(store)) {
     const fresh = createDefaultAppData();
     try {
-      saveAppData(fresh);
+      saveAppData(store, fresh);
+      await store.flush();
     } catch (err) {
       console.error('[Skies] failed to save the initial data:', err);
     }
@@ -216,10 +225,14 @@ export function migrate(now: Date = new Date()): AppData {
 
   let mapped: AppData | null = null;
   try {
-    const snapshot = readV1Snapshot();
+    const snapshot = readV1Snapshot(store);
     mapped = freezeDisplayOrder(mapV1ToV2(snapshot), now);
-    backupV1Once(snapshot);
-    saveAppData(mapped);
+    // The backup is stored before v2 is written: if it didn't make it, v2
+    // isn't written either, and the next open migrates again.
+    backupV1Once(store, snapshot);
+    await store.flush();
+    saveAppData(store, mapped);
+    await store.flush();
     return mapped;
   } catch (err) {
     console.error('[Skies] v1→v2 migration failed, v1 data left untouched:', err);
@@ -228,5 +241,21 @@ export function migrate(now: Date = new Date()): AppData {
     // failing that, 2.1.0's older v2 data beats nothing.
     if (mapped) return mapped;
     return existing ? freezeDisplayOrder(existing, now) : createDefaultAppData();
+  }
+}
+
+// Up to 3.1.x the card fetched sunrise/sunset from Open-Meteo and cached it in
+// localStorage, one timemate.sun.<zone>.<date> key per zone per day. The sky
+// is computed now (spec §9.2), so whatever is left goes — on every open,
+// which is a no-op once they're gone. Never throws: a leftover cache is
+// harmless, a popup that fails to open isn't.
+export function removeLegacySunCache(store: KeyValueStore): void {
+  try {
+    store
+      .keys()
+      .filter((key) => key.startsWith(LEGACY_SUN_CACHE_PREFIX))
+      .forEach((key) => store.remove(key));
+  } catch (error) {
+    console.error('[Skies] removing the old sunrise/sunset cache failed', error);
   }
 }

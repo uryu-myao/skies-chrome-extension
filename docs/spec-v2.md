@@ -72,15 +72,43 @@
 
 **`person` 为 `null` 时,条目渲染为普通城市卡片**,不占用头像列。
 
+### 2.3 存储
+
+所有读写都经过存储适配层。`core/` 只认注入的 `KeyValueStore`(`core/store.ts`,见 §12),
+不知道底下是哪种存储。后端在 `src/platform/storage/`,按构建目标在编译期选定(`__TARGET__`),
+一个包里只带自己那一种:
+
+| 构建目标 | 后端 | 说明 |
+| -------- | ---- | ---- |
+| Chrome | popup 页的 `localStorage` | 与 3.1.2 相同。Chrome 用户的数据不搬家、不换位置 |
+| Firefox | `browser.storage.local` | 用户清除浏览数据(Cookie 与网站数据)时,Firefox 会清掉扩展的 `localStorage`,`storage.local` 不受影响。需要 `storage` 权限,它不产生用户可见的警告(§6.3) |
+
+- **两个后端的 key 名与值的格式完全相同**:同样的 `timemate.*` key,值同样是字符串(JSON,
+  或 v1 的纯字符串,§3.2)。`storage.local` 里也存字符串,不存对象,两边的数据可以原样互搬。
+- 对上层是同步的。Firefox 后端在第一次渲染前用 `init()` 把 `storage.local` 一次性读进内存,
+  之后 `get` 只读内存;`set` / `remove` 先改内存,再**立即**发起写入:
+  - **不防抖、不合并**:popup 随时可能被关掉,留在防抖窗口里的写入会丢。
+  - 写入**按调用顺序串行**执行,不会乱序。
+  - 写入失败:`console.error`,并把该 key 在内存里退回到存储中已确认的值 —— 内存与存储保持
+    一致,不留下写了一半的状态。需要确认结果的调用方(迁移,§3.1)用 `flush()`:此前发起的写入
+    全部完成后 resolve,其中任何一次失败则 reject。Chrome 后端的写入是同步的,失败照旧同步抛错,
+    `flush()` 立即 resolve。
+  - `init()` 读取失败时,**不得当作全新安装** —— 那样会用默认数据覆盖用户真实的存储。此时只读
+    运行:本次打开显示默认数据,所有写入被拒绝并 `console.error`,存储里的原数据不动。
+- 只有持久数据(`timemate.data.v2`、`timemate.backup_v1`、v1 的 key)经过适配层。3.1.x 在
+  `localStorage` 里留下的日出日落缓存 `timemate.sun.*` 已不再使用(天色改为本地计算,§9.2),每次打开
+  popup 从 `localStorage` 删除残留,不经过适配层。
+
 ---
 
 ## 3. 迁移 v1 → v2
 
 **所有 storage key 保留 `timemate.` 前缀,改名后不得变更**(产品已从 TimeMate 两次改名,现为 Skies)。
-key 是老用户数据所在的位置,改一个字就等于让所有老用户的城市消失。扩展 ID 同理:`localStorage`
-按扩展的 origin(`chrome-extension://<ID>/`)隔离,ID 变了,旧数据同样读不到。
+key 是老用户数据所在的位置,改一个字就等于让所有老用户的城市消失。扩展 ID 同理:Chrome 的
+`localStorage` 按扩展的 origin(`chrome-extension://<ID>/`)隔离,Firefox 的 `storage.local` 按
+add-on ID(`skies@useskies.com`)隔离,ID 变了,旧数据同样读不到。
 
-存储全部在 popup 页的 `localStorage`,不使用 `chrome.storage`:
+存储位置见 §2.3(Chrome 为 `localStorage`,Firefox 为 `storage.local`)。key 如下,两个后端相同:
 
 | key                         | 内容                                             |
 | --------------------------- | ------------------------------------------------ |
@@ -90,21 +118,25 @@ key 是老用户数据所在的位置,改一个字就等于让所有老用户的
 | `timemate.pinned.v1`        | v1 置顶 id 列表(同上)                          |
 | `timemate.sort-mode.v1`     | v1 排序模式(同上)                              |
 | `timemate.hour-format.v1`   | v1 12/24 小时制(同上)                          |
-| `timemate.sun.<zone>.<日期>` | 卡片天色用的日出日落缓存,每个时区每天一条。每次打开 popup 时清理:只保留现有条目所在时区、该时区当天的那一条,往日的与已删除城市的全部删除 |
+| `timemate.sun.<zone>.<日期>` | **遗留。** 3.1.x 卡片天色用的日出日落缓存(来自 Open-Meteo),每个时区每天一条。天色改为本地计算(§9.2)后不再读写;每次打开 popup 删除全部残留(没有残留时什么也不做)。在 `localStorage`,不经过适配层(§2.3) |
 
 ### 3.1 要求
 
-- 入口:`src/main.tsx` 在 `createRoot().render()` 之前同步调用 `migrate()`,每次打开 popup 都执行;
-  应用以 `migrate()` 的返回值作为初始数据渲染
+- 入口:`src/main.tsx` 先完成存储初始化(§2.3 的 `init()`),再调用 `migrate()`,等它完成才
+  `createRoot().render()`;每次打开 popup 都执行;应用以 `migrate()` 的返回值作为初始数据渲染。
+  写成 `init().then(…)`,不用顶层 `await`
 - 判定按起始状态区分,见 §3.5:v1 数据从 v1 的 key 迁移;**2.1.0 留下的 v2 数据(条目无 `order`、
   v1 的 key 仍在)从 v1 的 key 重建**;3.0.0 起写入的 v2 数据(有 `order`)只读取
-- 写入 v2 之前**必须**把读到的 v1 数据完整备份到 `localStorage` 的 `timemate.backup_v1` 键
+- 写入 v2 之前**必须**把读到的 v1 数据完整备份到 `timemate.backup_v1` 键
   (附 `migratedAt` 时间戳);**该键已存在时不覆盖** —— 包括从 2.1.0 重建时:备份必须保持第一次
   迁移时的 v1 快照
 - v1 的 key 只读不删、不改
 - 迁移必须幂等:重复执行不产生副作用
 - 迁移失败时,保留 v1 数据、不写入、`console.error` 记录,不能让用户看到空列表:返回已映射的
   内存数据(若已算出),否则返回默认数据
+- 迁移的每次写入都要确认结果(`flush()`,§2.3),不能只看 `set` 有没有同步抛错 —— Firefox 的写入
+  失败是异步的。备份**确认落盘之后**才写 v2:备份写失败则不写 v2,下次打开重新迁移。v2 写失败时,
+  适配层已把内存退回原状,存储里不留下写了一半的状态,照样返回已映射的内存数据
 
 ### 3.2 映射
 
@@ -164,7 +196,7 @@ entry.id 新生成(v1 的 id 只用于匹配置顶列表)
 ### 3.5 升级路径
 
 `migrate()` 面对的不是「从零开始」一种情况。**每次改迁移逻辑,都要对照下表逐一测试**(`test/core/migrate.test.ts`
-按状态分组),不能只测清空 localStorage 后的全新迁移 —— 清空本身就抹掉了真实用户会有的状态,
+按状态分组),不能只测清空存储后的全新迁移 —— 清空本身就抹掉了真实用户会有的状态,
 2.1.0 的问题正是这样漏掉的。
 
 | 起始状态 | 怎么认出来 | 处理 |
@@ -173,6 +205,7 @@ entry.id 新生成(v1 的 id 只用于匹配置顶列表)
 | **纯 v1**(从未打开过 2.1.0) | 没有 `timemate.data.v2`,有 v1 的 key | 从 v1 的 key 迁移(§3.2),写 `backup_v1`,固化顺序(§3.4) |
 | **2.1.0 产生的 v2** | 有 `timemate.data.v2` 但条目**没有 `order`**,且 v1 的 key 仍在 | **从 v1 的 key 重建**,覆盖这份 v2;`backup_v1` 已存在,不覆盖 |
 | **3.0.0 起产生的 v2** | 有 `timemate.data.v2`,条目有 `order` | 只读取,不再碰 v1 的 key |
+| **Firefox 全新安装** | `storage.local` 为空 | 同全新安装,默认数据写入 `storage.local` 并确认落盘 |
 
 **为什么 2.1.0 的 v2 必须重建,不能直接用。** 2.1.0 在用户**第一次**打开 popup 时静默跑了一遍迁移,
 写下 `timemate.data.v2`;此后 v2 已存在,迁移每次直接返回,v2 再也没有更新过。而 2.1.0 的界面仍是
@@ -183,6 +216,10 @@ v1,只读写 v1 的 key。所以用户在 2.1.0 里第一次打开之后做的�
 认法依赖一个事实:`order` 字段在 2.1.0 发布之后才加入,所以任何发布版都不会写出「有 v1 的 key、
 v2 却没有 `order`」以外的无 `order` 数据。重建后的 v2 带 `order`,之后就按第 4 种状态只读取 ——
 重建只发生一次,用户在 3.0.0 里的改动不会被 v1 的 key 覆盖。
+
+Firefox 版是新上架,之前没有发布过任何 Firefox 版本,所以 `storage.local` 里只会出现「Firefox 全新
+安装」和它之后的「3.0.0 起产生的 v2」,不会有 v1 的 key 或 2.1.0 的数据。但迁移逻辑对两个后端是同
+一份,前四种状态在 Firefox 后端上同样成立。
 
 测试用的 2.1.0 数据(`test/fixtures/v2-written-by-2.1.0.json`)是用 2.1.0 那个提交(`92aafc3`)自己的
 迁移代码生成的,不是手写的;需要新的历史状态时也照此办理。
@@ -231,6 +268,22 @@ function offsetMinutes(timezone, date) {
   (Chrome 实测),而一次 `coreTime()` 要调用数千次(30 个城市、需要往后找 7 天时约 2.5 万次)。
   **不要把复用 formatter 当成违反上一条而改回每次新建。**
 - **不得硬编码任何偏移值。** 不写 `{ 'Asia/Tokyo': 9 }` 这类表。
+  - **边界:`src/data/zoneCoordinates.ts` 与 `src/data/zoneLinks.ts` 不属于这类表。** 两者由
+    `scripts/build-zone-data.mjs` 从同一版 IANA tzdata **生成**:前者取自 `zone.tab`,只含每个时区代表城市的
+    **经纬度**,只用于给没有自身坐标的卡片定太阳位置(§9.2);后者取自 `backward`,只含**名字到名字**的
+    映射(见下一条)。都不含任何偏移。文件头记录 tzdata 版本与生成命令,不手改;更新就重新生成。偏移仍然
+    一律由 `Intl` 按具体日期计算。
+- **时区名:存什么就是什么,比较与交给 `Intl` 时再解析。** 存储的时区名一律不改写 —— 新添加的城市照旧存
+  GeoNames 给出的名字(都是 IANA 当前名),已有数据保持原样。同一个时区可能以不同的名字出现:Chrome 把印度的
+  系统时区报告为旧名 `Asia/Calcutta`,列表里的城市却是 `Asia/Kolkata`。`core/tz.ts` 的三个函数负责解析:
+  - `canonicalZone(tz)`:旧名与合并名 → IANA 当前名(`zoneLinks.ts`)。**`zone.tab` 仍然列出的名字就是当前名,
+    不映射** —— `backward` 把 `Africa/Accra`、`Europe/Oslo` 链接到规则相同的 `Africa/Abidjan`、`Europe/Berlin`,
+    但那是合并,不是改名,加纳用户的 System chip 应当显示 Accra
+  - `sameZone(a, b)`:`canonicalZone(a) === canonicalZone(b)`。**比较两个时区名一律用它,不得用 `===`**
+  - `toIntlZone(tz)`:**交给 `Intl` 的时区名一律经过它。** 当前引擎不认新名时(改名晚于引擎的数据,如 2022 年的
+    `Europe/Kyiv`),换用它认得的同一时区的旧名 —— 同一时区自 1970 年起规则相同,时刻一样。「名字 → 引擎认得的
+    名字」按名字缓存:这是名字解析,与日期无关、在一次会话里不会变,**不是上一条禁止缓存的偏移或本地日期**
+  - 显示用的派生名(`friendlyZoneName`)先经 `canonicalZone`:`Asia/Calcutta` 显示为 `Kolkata`
 - **粒度为 30 分钟。** 存在 +5:30(印度)、+5:45(尼泊尔)、−3:30(纽芬兰)、+12:45(查塔姆)。所有轴与算法按 48 格处理,不用 24 格。
 - **每个条目的本地日期独立计算。** 判断工作日时使用该条目自己的本地 `getDay()`,不能用参考时区的星期。
 - **不使用时区缩写。** 界面任何位置都不显示 JST / EST / CST 这类缩写,也不用硬编码映射表补齐。理由有两条:
@@ -445,9 +498,17 @@ Your 16:00 slot becomes 17:00 for Kenji.
   通过 `chrome.permissions.request()` 运行时申请。
 - **不得**加入 `permissions` 字段。新增必需权限会让 Chrome 在更新时禁用扩展、要求全体用户
   重新授权,而该功能默认关闭、多数用户不会使用,为它让所有人承担被禁用(进而卸载)的风险不划算。
-- 当前版本的 manifest 不声明任何权限(`permissions` / `optional_permissions` /
+- Chrome 版的 manifest 不声明任何权限(`permissions` / `optional_permissions` /
   `host_permissions` 均无)。这是商店页面上的信任优势 —— 新增任何权限(包括可选权限)前,
   都应先评估必要性。
+- Firefox 版只声明 `storage`(§2.3)。它不产生用户可见的警告;Firefox 版是全新上架,也不存在
+  「更新时因新增权限被禁用」的问题。
+- **扩展不发出任何网络请求。** 天色本地计算(§9.2),城市库、国旗、字体都打包在扩展里(§9.6),
+  所以不需要 `host_permissions`,Firefox 的 `data_collection_permissions` 是 `{ required: ["none"] }`。
+  `npm run check:offline`(每次构建都跑)扫描两个产物:白名单(`scripts/check-offline.mjs`:
+  用户自己点开的商店 / 网站 / 反馈表单 / GeoNames 链接、许可证文本里的链接、不会被请求的 XML 命名空间名)
+  以外出现任何 http(s) URL,或出现 Vite modulepreload polyfill 之外的 `fetch` / XHR / `sendBeacon` /
+  WebSocket,构建即失败。新功能需要联网时,先改这里
 
 ### 6.4 调度
 
@@ -461,8 +522,8 @@ Your 16:00 slot becomes 17:00 for Kenji.
   重建(与 `background.js` 现在设置卸载问卷链接的方式相同)。
 - `chrome.alarms` 需要 `alarms` 权限。它不产生用户可见的警告,不会触发更新时的重新授权,但会结束
   「manifest 不声明任何权限」的现状 —— 按 §6.3 先评估。
-- service worker 读不到 `localStorage`,后台检测拿不到城市列表。前提是存储先迁到
-  `chrome.storage`,见 §13。
+- Chrome 的 service worker 读不到 `localStorage`,后台检测拿不到城市列表;前提是 Chrome 后端先换成
+  `chrome.storage.local`,见 §13。Firefox 的数据已在 `storage.local`(§2.3),后台可以直接读。
 
 ---
 
@@ -559,7 +620,8 @@ export async function isPro() { ... }
 **城市名的优先级**:
 
 - **选了 System(`referenceTimezone` 为 `null`)时,一律用系统时区 IANA id 派生的名称**
-  (取 `/` 后半段,`_` 替换为空格:`Asia/Tokyo` → `Tokyo`),**不匹配任何条目的 label** ——
+  (先换成 IANA 当前名,再取 `/` 后半段,`_` 替换为空格:`Asia/Tokyo` → `Tokyo`,Chrome 报告的
+  `Asia/Calcutta` → `Kolkata`,§4.2),**不匹配任何条目的 label** ——
   即使列表里有同一时区的条目。否则列表里有 Tsu(`Asia/Tokyo`)时,选 System 后 chip 仍显示
   `Tsu`,和选 Tsu 看起来完全一样,用户得不到选择已生效的反馈。
 - **只有用户选了某个条目时,才显示该条目的 `label`**:按 `settings.referenceEntryId` 找到用户选的
@@ -570,6 +632,10 @@ export async function isPro() { ... }
   同样按时区取第一个条目,与改动前一致。
 
 判定写在 `core/model.ts` 的 `resolveReferenceChip()`(纯函数,有单测),返回名称与选中项。
+
+**本节与 §9.2、§9.3 里的「同一时区」「属于系统时区」一律按 `sameZone()` 判定**(§4.2):旧名与当前名是同一个
+时区。系统时区报告为 `Asia/Calcutta`、列表里是 Kolkata(`Asia/Kolkata`)时,Kolkata 就是系统时区的条目 ——
+标 `YOU`、卡片显示 `Base`。添加城市时「同名 + 同时区视为重复」同样按 `sameZone()`。
 
 System 与同时区条目并不等价:System 跟随电脑的时区(出差时会变),选条目则固定在该时区。
 
@@ -620,6 +686,23 @@ bug:`YOU` 是第一人称,天然唯一,出现两次只会被理解成出错。`B
 - 高度压缩至 60–64px(当前约 86px)。底部面板会占去约 140px,不压缩则 540px 高度下仅能露出 4 张卡片
 - 本版不实现头像列。但卡片内部布局请预留左侧插入一列的余地,避免下一版重写
 - 保留天空渐变背景 —— 这是产品的核心视觉资产
+- **圆角**:`border-radius: 22px` + `corner-shape: squircle`(编辑模式的单行卡片是 16px + squircle)。
+  浏览器不支持 `corner-shape` 时(Firefox;Chrome 139 之前)**不模拟 squircle**,两种卡片统一退化为
+  普通圆角 `border-radius: 12px`:同样大小的普通圆弧比 squircle 圆得多。只用
+  `@supports not (corner-shape: squircle)` 实现,支持的浏览器渲染完全不变
+- **天色由卡片所示时刻、该城市的太阳高度角决定**(`core/sun.ts`,NOAA 算法,本地计算,不联网):
+  高度角低于 **−9°** 为 `night`,高于 **+7°** 为 `day`,介于两者之间时,太阳正午之前为 `dawn`、之后为
+  `twilight`(太阳正午按经度逐日计算)。这两个阈值由 3.1.2 的「日出/日落 ±45 分钟」窗口换算而来:
+  在 Tokyo、London、New York、Sydney、Singapore 的二分二至日、每 15 分钟一个采样上,每个分界都落在
+  3.1.2 的一个采样之内;London 的两个至日,黎明与黄昏比 3.1.2 各长约 30 分钟(两个采样)。**这不是误差,
+  是新模型更接近真实**:纬度越高,太阳升落的角度越斜,穿过同一段高度角要更久,真实的曙暮光本来就更长;
+  3.1.2 的 ±45 分钟在任何纬度都一样长,那才是近似。极昼、极夜不需要特殊处理:太阳只是一直不越过某个阈值(极昼没有 `night`,极夜没有
+  `day`,正午前后的微光是 `dawn` / `twilight`)
+  - 转换模式下按转换器选定的时刻计算
+  - 坐标:条目自己的 `lat`/`lon`(0 是合法坐标,不是缺失);没有时(2.0.0 之前添加的城市)用 tzdata
+    `zone.tab` 中该时区代表城市的坐标(§4.2);时区没有地理位置(如 `Etc/GMT-9`)时取赤道、按其 UTC
+    偏移对应的经度。推导出的坐标只在运行时使用,不写回用户数据
+  - 四种天色之间的切换沿用 CSS 的颜色过渡(`@property` 注册的 `--tz-c0/1/2`,0.6s),没有按高度角插值
 - 秒数默认关闭
 - **点击卡片打开该城市的设置面板**(城市名可编辑,改过名时输入框左侧出现重置按钮,恢复为添加时的
   名字 `defaultLabel`;工作时间 / 工作日只读,标 `default`,
@@ -764,15 +847,21 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - **Display** — Hour format / Show seconds / Edit city list(进入编辑模式,§9.5;
   原 Sort order 已移除,不提供一次性排序按钮)
 - **Core time** — Core Time panel 显示模式 / Default work hours / Default work days
-- **About**(本版新增,不在最初的分区规划内)— Share Skies(复制商店链接,
-  按钮文案短暂变为 "Copied!")/ Rate on Chrome Store / Send Feedback / Website
+- **About**(本版新增,不在最初的分区规划内)— Share Skies(复制**本浏览器**的商店链接。
+  剪贴板确认写入成功后,按钮文案才短暂变为 "Copied!";写入失败(没有剪贴板、被拒绝等)时同样时长显示
+  "Couldn't copy" —— 不显示没有发生的复制)/ Rate(Chrome 版 `Rate on Chrome Web Store`,打开商店的 reviews 页;
+  Firefox 版 `Rate on Firefox Add-ons`,打开 https://addons.mozilla.org/firefox/addon/skies-world-clock/ ,
+  AMO 在商品页本身打分。两个版本的链接与文案按 `__TARGET__` 在编译期选定,各自的包里只有自己的)/
+  Send Feedback / Website
   (右侧灰字 `useskies.com`,打开 https://useskies.com;行文案用 "Website" 而非品牌名)/ Version
-  (读取 `package.json` 的版本号,而非写死字符串)/ Recent updates(见下)。这里收纳的是原头部
+  (读取 `package.json` 的版本号,而非写死字符串)/ Recent updates(见下)/ City data(About 分区的
+  最后一行:`GeoNames (CC BY 4.0)`,`GeoNames` 链接到 https://www.geonames.org/,`CC BY 4.0` 链接到
+  许可证,行尾箭头出框图标;这是城市库的 CC BY 4.0 署名,见 §9.6 与 `ATTRIBUTION.md`)。这里收纳的是原头部
   logo 弹出菜单的内容。行尾图标按动作区分:离开扩展的外链用「箭头出框」,Share 是复制到剪贴板、
   用复制图标(复制后短暂变成勾),`›` 只留给 popup 内部的跳转(如 Edit city list)。
 
-**Recent updates**(3.1.1 起):在 About 卡片里、Version 行之下 —— 它说的就是这个版本变了什么,
-所以跟着 Version,不单独成一个分区。
+**Recent updates**(3.1.1 起):在 About 卡片里、紧接 Version 行之下 —— 它说的就是这个版本变了什么,
+所以跟着 Version,不单独成一个分区。City data 在它之后,是 About 的最后一行,上方有一条分隔线。
 
 ```
 Version                      v3.1.1
@@ -780,6 +869,8 @@ Version                      v3.1.1
 Recent updates
 · Up to 30 cities (was 10)
 · Core Time is much faster
+───────────────────────────────────
+City data       GeoNames (CC BY 4.0) ↗
 ```
 
 写法约定。前两条是这个区块可信度的前提 —— 用户会拿它对照自己的使用,对不上一次,以后就不再读:
@@ -822,6 +913,8 @@ Recent updates
 - 使用 **dnd-kit**。不用 HTML5 原生 drag-and-drop API,不用已停止维护的 react-beautiful-dnd
 - 启用键盘操作:聚焦抓手,空格拾起,方向键移动,空格放下,Esc 取消;读屏播报使用城市名而非 id
 - 拖到可视区域边缘时列表自动滚动(popup 仅 540px 高,约 6 个城市即需滚动)
+- 尺寸未变的 window `resize` 不取消拖拽:Firefox 的 popup 在 DOM 变化后会重新量尺寸,
+  即使大小没变也触发 `resize`。Esc、`pointercancel`、页面隐藏、尺寸真的变了,照旧取消
 - 顺序变更后立即持久化
 - **Core Time 面板的行顺序与列表顺序一致**(两者都按 entries 数组顺序)
 
@@ -835,6 +928,30 @@ Recent updates
 | 编辑 | 拖抓手     | 排序             |
 | 编辑 | 点减号     | 删除 + Undo      |
 | 编辑 | 点卡片     | 无               |
+
+
+### 9.6 城市搜索
+
+- **数据在扩展里,不联网。** 城市库 `src/data/cities.ts` 由 `scripts/build-cities.mjs` 从 GeoNames 的公开数据
+  (cities15000、alternateNamesV2、admin1CodesASCII、countryInfo)生成,文件头记录数据日期与生成命令;
+  生成的文件提交进仓库,构建时不下载任何东西(AMO 的复现构建不能依赖网络)。GeoNames 为 CC BY 4.0,
+  署名见 §9.4 与 `ATTRIBUTION.md`
+- **收录**:人口 ≥ 50,000 或国家首都;排除城区(GeoNames 地物代码 `PPLX`)。显示名为 GeoNames 的英文首选名
+  (没有时用 GeoNames 名称,如 `New York` 而非 `New York City`);另收供搜索的别名:GeoNames 名称与 ASCII
+  名、中文(各地区变体)、日文,以及英文旧名(`Bangalore`、`Calcutta`、`Kiev`、`Saigon`)。**不收俗称**
+  (否则 `New York` 会搜到雅加达的 `New York Van Java`)
+- **只在打开搜索时加载**:城市库是单独的 chunk,由搜索框挂载时动态 `import()`,不进 popup 首帧;加载完成前
+  显示 `Searching…`。之后每次按键在本地查询,不防抖
+- **匹配**:不区分大小写、变音符号与标点(`Sao Paulo` = `São Paulo`,全角字母同半角)。精确匹配(任一名称
+  与输入相同)排在前缀匹配之前,同级按人口从大到小;最多 8 条(与原先 Open-Meteo 的 `count=8` 相同)。
+  同名且同时区的城市只显示一条 —— 与添加时「同名 + 同时区视为重复」一致
+- **写入条目的字段不变**:`timezone`、`label`(城市名)、`lat`、`lon`,与原先从 Open-Meteo 得到的相同;
+  条目 `id` 仍由 `createEntry()` 生成(UUID),与 GeoNames id 无关 —— 原先也从未使用 Open-Meteo 返回的 id
+- 没有结果时显示:`No match. Try a nearby larger city — you can rename it after adding.`
+- **搜索栏(及结果框)下方留 8px**,城市列表滚动时止于这条间隔,不贴住搜索栏;未滚动时列表位置与关闭
+  搜索时相同(列表顶部的 8px 移到搜索区)
+- **国旗也在扩展里**:flagcdn.com 的 80px 宽 PNG(全部国家代码,`public/flags/<代码>.png`,由
+  `scripts/fetch-flags.mjs` 更新),以 32px 宽、高度按比例显示,与原先加载 flagcdn 的 SVG 同尺寸
 
 ---
 
@@ -892,6 +1009,24 @@ Recent updates
   写下的原样;v1 的 key 不被修改
 - 3.0.0 产生的 v2 → 只读取;重建之后用户在 3.0.0 里的改动,不会被仍然存在的 v1 key 覆盖
 - 无法识别的排序模式 / 12/24 值 → `console.warn` 带原始值,回退到 v1 的默认
+- Firefox 全新安装(`storage.local` 为空)→ v2 默认值,经 Firefox 后端写入并确认落盘
+- 写入失败:备份写失败 → 不写 v2;v2 写失败 → 存储里没有半成品,仍返回已映射的列表
+
+### 10.6 天色
+
+- 太阳高度角对照 Open-Meteo:10 座城市非极地日子的日出、日落时刻,几何高度角都在 −0.83° 附近
+- 天色对照 3.1.2:5 座城市 × 二分二至,见 §9.2 的允许误差;基准时间线由 3.1.2 自己的 `timeOfDay` 加
+  Open-Meteo 的日出日落生成(`test/fixtures/sky-3.1.2.json`),不是手写的
+- 极昼、极夜、日落过午夜(Tromsø、Reykjavík)
+- 坐标回退:自身坐标(含 0)、`zone.tab`、`backward` 旧名、无地理位置的时区
+
+### 10.7 存储适配层
+
+- Firefox 后端:写入按调用顺序完成;写入失败时 `console.error`、`flush()` reject、内存退回存储里
+  已确认的值;`init()` 读入 `storage.local` 的全部内容;任何一串操作之后内存与存储一致;`init()`
+  失败时只读,存储不被改动
+- Chrome 回归:同一份 v2 数据经新代码读取、修改、保存,写出的字符串与 3.1.2 逐字节一致。比较基准
+  用 3.1.2(`d5ff25d`)自己的代码生成,不是手写的(同 §3.5 的 2.1.0 数据)
 
 ---
 
@@ -920,11 +1055,14 @@ Recent updates
 ```
 src/
   core/
+    store.js        KeyValueStore 接口(core 访问存储的唯一方式)
     model.js        v2 schema、默认值、resolveWorkHours
     migrate.js      v1 → v2
     tz.js           偏移、本地时刻、本地星期
     coretime.js     交集与 closest
     dst.js          切换检测
+  platform/
+    storage/        KeyValueStore 的后端:localStorage(Chrome)、storage.local(Firefox),§2.3
   ui/
     popup.js
     card.js
@@ -937,7 +1075,7 @@ test/
     v1-real.json    真实 v1 导出数据
 ```
 
-`core/` 下所有模块不得引用 `chrome.*` 或 DOM。
+`core/` 只能通过注入的 `KeyValueStore` 访问存储,不得直接引用 `localStorage`、`chrome.*`、`browser.*` 或任何 DOM API。平台相关的实现放在 `platform/`,由入口(`main.tsx`)注入。
 
 ---
 
@@ -950,7 +1088,7 @@ test/
 | 人物模式 + 分组 | 下一版 | 改动列表主体结构(头像列、分组层级),不适合和 Core Time 同版上线。数据字段已在 §2.1 保留,不需要再迁移 |
 | Core Time 周视图 | 随付费通道 | Pro 功能(§8),没有购买通道前不做 |
 | 多语言 EN / JA / ZH | 界面文案稳定后 | 文案还在改,现在抽 JSON 只会反复改两遍。注意:`chrome.i18n` 按浏览器语言读 `_locales`,**无法在运行时切换**;要在应用内切换语言,需要自建一层 |
-| `localStorage` → `chrome.storage` | 与 DST 版本一起 | service worker 读不到 `localStorage`,DST 后台检测(§6.4)需要它。`storage` 权限不产生用户可见的警告,但换存储意味着又一次数据迁移(备份、幂等、失败不写入,同 §3.1),和 DST 一起做只迁一次。那次迁移同样要对照 §3.5 的全部起始状态,外加「已在 chrome.storage」这一种 |
+| Chrome 后端 `localStorage` → `chrome.storage.local` | 与 DST 版本一起 | service worker 读不到 `localStorage`,DST 后台检测(§6.4)需要它。适配层已经就位(§2.3),届时只需换 Chrome 的后端,再做一次数据搬迁(备份、幂等、失败不写入,同 §3.1),和 DST 一起做只迁一次。那次迁移同样要对照 §3.5 的全部起始状态,外加「已在 chrome.storage」这一种。Firefox 从第一版起就在 `storage.local`,不需要搬 |
 | ExtPay 接入 | 付费通道上线时 | §8.1 约定 `isPro()` 为唯一入口,但**它目前还不存在**:代码里没有任何 Pro 判断,Pro 功能(按城市自定义工时 / 工作日)只以只读 + "coming in the next update" 呈现。接入时先按 §8.1 建立 `isPro()`,再在它内部接 ExtPay,调用点只认 `isPro()` |
 | closest:基准时区不在城市列表里时 | 下一版 | 并列取最早是刻意保留的(§5.3),但它依赖使用者自己作为条目参与计算。基准时区不是任何条目时(例如用系统时区而没添加自己的城市),没有任何东西惩罚使用者的深夜,closest 可能给出凌晨的建议;基准 chip 可以自由切换后,这种情况更容易出现。**修法方向**:把基准时区的默认工时也纳入偏离计算,无论它是否作为条目存在 —— 开会的人总是在场的。本版不改 |
 

@@ -41,7 +41,6 @@
   flex-direction: column;
   background: rgba(44, 43, 50, 0.1);
   backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   box-shadow: 0 20px 44px rgba(0, 0, 0, 0.38);
@@ -202,10 +201,23 @@
     opacity: 0.5;
   }
 
+  // A link inside a value (About → City data): the value's grey, underlined
+  // on hover and keyboard focus, since the row itself isn't one link.
+  &__credit-link {
+    color: inherit;
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+      text-decoration: underline;
+    }
+  }
+
   // About → Recent updates (spec §9.4): a record, not an announcement. One
   // step down from the rows — 11px, the Version value's 50% grey — and no
-  // divider, hover or click state of its own. It sits after Version, which
-  // gives it Version's divider above.
+  // divider, hover or click state of its own. It sits right after Version,
+  // which gives it Version's divider above; the City data row after it brings
+  // its own divider (below).
   &__updates {
     padding: 12px 0px;
     font-family: 'Poppins', serif;
@@ -217,6 +229,12 @@
     letter-spacing: 0.02em;
     color: var(--color-font-timezone);
     opacity: 0.5;
+  }
+
+  // About → City data, the last row: it follows Recent updates, which has no
+  // divider of its own, so it draws the one between them.
+  &__updates + &__row {
+    border-top: 1px solid var(--color-division);
   }
 
   &__updates-title {

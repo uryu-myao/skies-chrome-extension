@@ -7,6 +7,7 @@
 // - Two or three lines. It's "recent", not a changelog — a test holds it to
 //   2–3, so a new line means dropping an old one.
 export const RECENT_UPDATES: readonly string[] = [
-  'Up to 30 cities (was 10)',
-  'Core Time is much faster',
+  'Works fully offline',
+  'Search cities in Chinese or Japanese',
+  'Sky colors follow the real sun',
 ];

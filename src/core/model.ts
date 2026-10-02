@@ -1,4 +1,5 @@
-import { friendlyZoneName } from './tz';
+import type { KeyValueStore } from './store';
+import { friendlyZoneName, sameZone } from './tz';
 import type { AppData, AppSettings, Entry, WorkDays, WorkHours } from './types';
 
 // The `timemate.` prefix predates the rename to Skies and must stay —
@@ -118,7 +119,9 @@ export function resolveReferenceChip(
   settings: AppSettings,
   systemTimezone: string
 ): ReferenceChip {
-  const firstIn = (zone: string) => entries.find((entry) => entry.timezone === zone);
+  // Same zone, whatever it's called: Chrome reports India's zone as
+  // Asia/Calcutta, a Kolkata entry says Asia/Kolkata (spec §4.2).
+  const firstIn = (zone: string) => entries.find((entry) => sameZone(entry.timezone, zone));
 
   const zone = settings.referenceTimezone;
   if (zone === null) {
@@ -130,7 +133,7 @@ export function resolveReferenceChip(
   }
 
   const picked = entries.find(
-    (entry) => entry.id === settings.referenceEntryId && entry.timezone === zone
+    (entry) => entry.id === settings.referenceEntryId && sameZone(entry.timezone, zone)
   );
   const entry = picked ?? firstIn(zone);
   if (!entry) {
@@ -151,7 +154,7 @@ export function referenceRoleOf(
   referenceTimezone: string
 ): ReferenceRole {
   if (chip.youEntryId === entry.id) return 'you';
-  return entry.timezone === referenceTimezone ? 'base' : null;
+  return sameZone(entry.timezone, referenceTimezone) ? 'base' : null;
 }
 
 export interface ResolvedWorkHours extends WorkHours {
@@ -180,9 +183,9 @@ export function resolveWorkDays(entry: Entry, settings: AppSettings): ResolvedWo
   return { days: entry.workDays, isDefault: false };
 }
 
-export function loadAppData(): AppData | null {
+export function loadAppData(store: KeyValueStore): AppData | null {
   try {
-    const raw = localStorage.getItem(APP_DATA_STORAGE_KEY);
+    const raw = store.get(APP_DATA_STORAGE_KEY);
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as AppData;
@@ -201,7 +204,7 @@ export function loadAppData(): AppData | null {
   }
 }
 
-export function saveAppData(data: AppData): void {
+export function saveAppData(store: KeyValueStore, data: AppData): void {
   const entries = data.entries.map((entry, order) => ({ ...entry, order }));
-  localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify({ ...data, entries }));
+  store.set(APP_DATA_STORAGE_KEY, JSON.stringify({ ...data, entries }));
 }

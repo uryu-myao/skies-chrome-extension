@@ -1,0 +1,194 @@
+{
+  "_comment": "The sky each card showed in 3.1.2 (d5ff25d): Open-Meteo's sunrise/sunset for the city (archive API, in UTC, turned into the zone's local minutes the way the forecast API gave them to the card; polar days as 00:00/00:00, as the card read them) run through 3.1.2's own tz.timeOfDay, every 15 minutes of the local day from 00:00. '.' night, 'a' dawn, 'D' day, 't' twilight. Coordinates are what the Open-Meteo search stored for the city. Generated, not hand-written; do not edit.",
+  "cities": {
+    "Tokyo": {
+      "lat": 35.6895,
+      "lon": 139.69171,
+      "zone": "Asia/Tokyo",
+      "days": {
+        "2026-03-20": {
+          "sunriseMinutes": 345,
+          "sunsetMinutes": 1072,
+          "timeline": "....................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt....................."
+        },
+        "2026-06-21": {
+          "sunriseMinutes": 265,
+          "sunsetMinutes": 1140,
+          "timeline": "...............aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt................"
+        },
+        "2026-09-23": {
+          "sunriseMinutes": 329,
+          "sunsetMinutes": 1057,
+          "timeline": "...................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt......................"
+        },
+        "2025-12-21": {
+          "sunriseMinutes": 406,
+          "sunsetMinutes": 991,
+          "timeline": ".........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt.........................."
+        }
+      }
+    },
+    "London": {
+      "lat": 51.50853,
+      "lon": -0.12574,
+      "zone": "Europe/London",
+      "days": {
+        "2026-03-20": {
+          "sunriseMinutes": 363,
+          "sunsetMinutes": 1093,
+          "timeline": "......................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt...................."
+        },
+        "2026-06-21": {
+          "sunriseMinutes": 283,
+          "sunsetMinutes": 1281,
+          "timeline": "................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt......."
+        },
+        "2026-09-23": {
+          "sunriseMinutes": 408,
+          "sunsetMinutes": 1136,
+          "timeline": ".........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt................."
+        },
+        "2025-12-21": {
+          "sunriseMinutes": 483,
+          "sunsetMinutes": 953,
+          "timeline": "..............................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDtttttt............................."
+        }
+      }
+    },
+    "New York": {
+      "lat": 40.71427,
+      "lon": -74.00597,
+      "zone": "America/New_York",
+      "days": {
+        "2026-03-20": {
+          "sunriseMinutes": 419,
+          "sunsetMinutes": 1148,
+          "timeline": ".........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt................"
+        },
+        "2026-06-21": {
+          "sunriseMinutes": 325,
+          "sunsetMinutes": 1230,
+          "timeline": "...................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt.........."
+        },
+        "2026-09-23": {
+          "sunriseMinutes": 404,
+          "sunsetMinutes": 1131,
+          "timeline": "........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt................."
+        },
+        "2025-12-21": {
+          "sunriseMinutes": 436,
+          "sunsetMinutes": 992,
+          "timeline": "...........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt.........................."
+        }
+      }
+    },
+    "Sydney": {
+      "lat": -33.86785,
+      "lon": 151.20732,
+      "zone": "Australia/Sydney",
+      "days": {
+        "2026-03-20": {
+          "sunriseMinutes": 418,
+          "sunsetMinutes": 1146,
+          "timeline": ".........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt................"
+        },
+        "2026-06-21": {
+          "sunriseMinutes": 419,
+          "sunsetMinutes": 1013,
+          "timeline": ".........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt........................."
+        },
+        "2026-09-23": {
+          "sunriseMinutes": 344,
+          "sunsetMinutes": 1072,
+          "timeline": "....................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt....................."
+        },
+        "2025-12-21": {
+          "sunriseMinutes": 340,
+          "sunsetMinutes": 1205,
+          "timeline": "....................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt............"
+        }
+      }
+    },
+    "Singapore": {
+      "lat": 1.28967,
+      "lon": 103.85007,
+      "zone": "Asia/Singapore",
+      "days": {
+        "2026-03-20": {
+          "sunriseMinutes": 428,
+          "sunsetMinutes": 1155,
+          "timeline": "..........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt..............."
+        },
+        "2026-06-21": {
+          "sunriseMinutes": 420,
+          "sunsetMinutes": 1152,
+          "timeline": ".........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt................"
+        },
+        "2026-09-23": {
+          "sunriseMinutes": 413,
+          "sunsetMinutes": 1140,
+          "timeline": ".........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt................"
+        },
+        "2025-12-21": {
+          "sunriseMinutes": 421,
+          "sunsetMinutes": 1144,
+          "timeline": "..........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt................"
+        }
+      }
+    },
+    "Tromsø": {
+      "lat": 69.6489,
+      "lon": 18.95508,
+      "zone": "Europe/Oslo",
+      "days": {
+        "2026-03-20": {
+          "sunriseMinutes": 343,
+          "sunsetMinutes": 1081,
+          "timeline": "....................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt...................."
+        },
+        "2026-06-21": {
+          "sunriseMinutes": 0,
+          "sunsetMinutes": 0,
+          "timeline": "aaaa............................................................................................"
+        },
+        "2026-09-23": {
+          "sunriseMinutes": 387,
+          "sunsetMinutes": 1123,
+          "timeline": ".......................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt.................."
+        },
+        "2025-12-21": {
+          "sunriseMinutes": 0,
+          "sunsetMinutes": 0,
+          "timeline": "aaaa............................................................................................"
+        }
+      }
+    },
+    "Reykjavík": {
+      "lat": 64.13548,
+      "lon": -21.89541,
+      "zone": "Atlantic/Reykjavik",
+      "days": {
+        "2026-03-20": {
+          "sunriseMinutes": 448,
+          "sunsetMinutes": 1183,
+          "timeline": "...........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt.............."
+        },
+        "2026-06-21": {
+          "sunriseMinutes": 177,
+          "sunsetMinutes": 2,
+          "timeline": "tttt.....aaaaaa................................................................................."
+        },
+        "2026-09-23": {
+          "sunriseMinutes": 433,
+          "sunsetMinutes": 1165,
+          "timeline": "..........................aaaaaaDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDtttttt..............."
+        },
+        "2025-12-21": {
+          "sunriseMinutes": 681,
+          "sunsetMinutes": 930,
+          "timeline": "...........................................aaaaaaDDDDDDDDDDDtttttt.............................."
+        }
+      }
+    }
+  }
+}

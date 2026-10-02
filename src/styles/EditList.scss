@@ -143,6 +143,12 @@
     align-items: center;
     padding-top: 0;
     border-radius: 16px;
+
+    // Same 12px as the full card where squircle corners aren't supported
+    // (Timezone.scss, spec §9.2).
+    @supports not (corner-shape: squircle) {
+      border-radius: 12px;
+    }
   }
 
   .timezone-data__location {

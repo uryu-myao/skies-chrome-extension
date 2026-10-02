@@ -13,6 +13,7 @@ import {
   saveAppData,
   toggleIncludeInCoreTime,
 } from './core/model';
+import type { KeyValueStore } from './core/store';
 import { getSystemTimezone } from './core/tz';
 import type { AppData, AppSettings, Entry } from './core/types';
 import '@styles/_reset.css';
@@ -30,9 +31,11 @@ interface RemovedEntry {
 
 interface AppProps {
   initialData: AppData;
+  // The persistent store main.tsx opened (spec §2.3).
+  store: KeyValueStore;
 }
 
-function App({ initialData }: AppProps) {
+function App({ initialData, store }: AppProps) {
   const [addTimezoneFn, setAddTimezoneFn] = useState<
     ((timezone: TimezoneInfo) => AddTimezoneResult) | null
   >(null);
@@ -68,8 +71,8 @@ function App({ initialData }: AppProps) {
   };
 
   useEffect(() => {
-    saveAppData({ version: 2, entries, groups: [], settings });
-  }, [entries, settings]);
+    saveAppData(store, { version: 2, entries, groups: [], settings });
+  }, [store, entries, settings]);
 
   const openCitySettings = (id: string) => {
     setCitySettingsId(id);

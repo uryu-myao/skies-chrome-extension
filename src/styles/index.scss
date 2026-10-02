@@ -1,3 +1,16 @@
+// Lato and Poppins ship with the extension (scripts/fetch-fonts.mjs).
+@use 'fonts';
+
+// The popup's size, fixed in static CSS: Firefox sizes a popup from the page
+// as soon as it loads, and the app itself only renders once storage has been
+// read (main.tsx). Without this the popup opens empty and then jumps to
+// size. Same as .app (main.scss).
+html,
+body {
+  width: 420px;
+  height: 540px;
+}
+
 :root {
   --container-padding-horizontal: 18px;
   --color-opacity: rgba(255, 255, 255, 0);
@@ -17,7 +30,6 @@
   --icon-convert: url('/icons/icon-convert-dark.svg');
   --icon-setting-header: url('/icons/icon-setting-header.svg');
   --icon-search: url('/icons/icon-search-dark.svg');
-  --icon-sort: url('/icons/icon-sort-dark.svg');
   --color-division: rgba(255, 255, 255, 0.075);
   --color-danger: #e5484d;
   --color-meridiem-am: rgb(255, 255, 255, 0.6);

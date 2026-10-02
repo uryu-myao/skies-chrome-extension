@@ -1,12 +1,22 @@
 {
   "name": "skies-chrome-extension",
   "private": true,
-  "version": "3.1.2",
+  "version": "3.2.0",
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build --mode chrome && vite build --mode firefox && node scripts/check-offline.mjs",
+    "build:chrome": "tsc -b && vite build --mode chrome && node scripts/check-offline.mjs chrome",
+    "build:firefox": "tsc -b && vite build --mode firefox && node scripts/check-offline.mjs firefox",
+    "package:chrome": "npm run build:chrome && node scripts/package.mjs chrome",
+    "package:firefox": "npm run build:firefox && node scripts/package.mjs firefox",
+    "package:source": "node scripts/package.mjs source",
     "lint": "eslint .",
+    "lint:firefox": "web-ext lint --source-dir dist/firefox",
+    "check:offline": "node scripts/check-offline.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -38,11 +48,11 @@
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.16",
     "globals": "^15.14.0",
-    "jsdom": "^27.0.1",
     "sass": "^1.83.4",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.18.2",
     "vite": "^6.0.7",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "web-ext": "10.7.0"
   }
 }
