@@ -104,7 +104,6 @@ function packageTarget(target) {
 // tests) needs goes to AMO.
 const SOURCE_EXCLUDES = [
   'src/server', // a local Express backend the extension doesn't bundle
-  'design', // source artwork, not shipped
   'docs',
   'CLAUDE.md',
   'README.md',

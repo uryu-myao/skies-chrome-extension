@@ -56,8 +56,8 @@ itself downloads nothing. `ATTRIBUTION.md` lists every source.
   bundle it. Its dependencies (`express`, `cors`, `dotenv`, `axios`,
   `node-fetch`) are still listed in `package.json`, but no extension code
   imports them.
-- Source artwork (`design/`), project documentation, and editor/lint
-  configuration. The build doesn't use any of them.
+- Project documentation and editor/lint configuration. The build doesn't use
+  any of them.
 
 ## Linter warnings
 
