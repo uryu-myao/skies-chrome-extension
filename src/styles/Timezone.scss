@@ -56,10 +56,11 @@
       --tz-c1 0.6s ease,
       --tz-c2 0.6s ease;
 
-    // Without squircle corners (Firefox; Chrome before 139) a plain 22px arc
-    // looks far rounder than the squircle; 16px is the closest match (spec §9.2).
+    // Without squircle corners (Firefox; Chrome before 139) a plain arc as
+    // large as the squircle looks far rounder: 12px instead (spec §9.2).
+    // Edit mode's single-row card has its own (EditList.scss).
     @supports not (corner-shape: squircle) {
-      border-radius: 16px;
+      border-radius: 12px;
     }
   }
 
