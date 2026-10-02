@@ -43,9 +43,10 @@
 
     &__inner {
       display: flex;
+      align-items: center;
       gap: 10px;
       background-color: var(--color-bg-info);
-      padding: 4px 4px 0;
+      padding: 4px;
       border-radius: 100vw;
     }
   }
@@ -359,11 +360,20 @@
   }
 
   &-btn {
+    // Block, not inline-block: an inline button sits on a line of text, and
+    // that line's descent (different per font and engine — 4.4px in Chrome,
+    // 5.2px in Firefox) added space below it, so it sat above the middle of
+    // its pill.
+    display: block;
     width: 26px;
     height: 26px;
     border-radius: 50%;
     background-color: inherit;
-    background-position: center;
+    // Each icon's SVG has a drop shadow below and to the right of the white
+    // glyph, so centring the image leaves the glyph up and to the left;
+    // --glyph-shift moves the glyph itself to the centre (measured from the
+    // rendered SVGs).
+    background-position: calc(50% + var(--glyph-shift)) calc(50% + var(--glyph-shift));
     background-repeat: no-repeat;
     transition: all 0.2s ease-in-out;
     cursor: pointer;
@@ -377,18 +387,20 @@
     }
 
     &__plus {
+      --glyph-shift: 0.5px;
       background-size: 15px;
       background-image: var(--icon-plus);
     }
 
     &__convert {
+      --glyph-shift: 0.5px;
       background-size: 22px;
       background-image: var(--icon-convert);
     }
 
     &__settings {
+      --glyph-shift: 0.8px;
       background-size: 20px;
-      background-position: 4px 4px;
       background-image: var(--icon-setting-header);
     }
   }
