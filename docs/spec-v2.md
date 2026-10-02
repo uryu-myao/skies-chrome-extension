@@ -909,6 +909,8 @@ City data       GeoNames (CC BY 4.0) ↗
 - 使用 **dnd-kit**。不用 HTML5 原生 drag-and-drop API,不用已停止维护的 react-beautiful-dnd
 - 启用键盘操作:聚焦抓手,空格拾起,方向键移动,空格放下,Esc 取消;读屏播报使用城市名而非 id
 - 拖到可视区域边缘时列表自动滚动(popup 仅 540px 高,约 6 个城市即需滚动)
+- 尺寸未变的 window `resize` 不取消拖拽:Firefox 的 popup 在 DOM 变化后会重新量尺寸,
+  即使大小没变也触发 `resize`。Esc、`pointercancel`、页面隐藏、尺寸真的变了,照旧取消
 - 顺序变更后立即持久化
 - **Core Time 面板的行顺序与列表顺序一致**(两者都按 entries 数组顺序)
 
