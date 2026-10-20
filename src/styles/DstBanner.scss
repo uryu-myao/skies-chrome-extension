@@ -41,8 +41,8 @@
     color: rgba(255, 255, 255, 0.6);
   }
 
-  // City names by weight, times (dates, offsets, gaps) by color, so a
-  // glance finds who and when. The blue is the banner's own tint, lighter:
+  // City names and times (dates, offsets, gaps) both in 600, set apart from
+  // each other by color, so a glance finds who and when. The blue is the banner's own tint, lighter:
   // 7.2:1 on the banner, 6.1:1 in effect; it sits on the dark surface,
   // never on a sky.
   &__city {
@@ -52,6 +52,7 @@
   }
 
   &__time {
+    font-weight: 600;
     color: var(--color-dst-time);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;

@@ -192,7 +192,6 @@
     // a quiet pill after the UTC offset. White on translucent white reads on
     // all four skies, like the rest of the footer.
     &__dst {
-      margin-left: 8px;
       padding: 1px 5px;
       border-radius: 100vw;
       background: rgba(255, 255, 255, 0.18);
@@ -202,6 +201,12 @@
       font-style: normal;
       text-transform: none;
       white-space: nowrap;
+
+      // Past the footer's own `span { margin: 0 }`, which outranks a lone
+      // class.
+      .timezone-footer & {
+        margin-left: 8px;
+      }
     }
 
     &__tz {
