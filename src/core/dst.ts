@@ -44,7 +44,9 @@ export interface EntryDstResult {
   entryId: string;
   timezone: string;
   transition: DstTransition | null; // the entry's own clock change
-  gapChange: GapChange | null;
+  // Every change in its gap to the reference inside the window, soonest
+  // first: one per side at most — Berlin on Oct 25, then Boston on Nov 1.
+  gapChanges: GapChange[];
 }
 
 export interface ReferenceDstResult {
@@ -138,50 +140,54 @@ export function dstSwitchKey(timezone: string, transition: DstTransition): strin
   return `${canonicalZone(timezone)}@${transition.date}`;
 }
 
-// The next change in the gap between an entry and the reference. Either can
+// The changes in the gap between an entry and the reference. Either can
 // move, or both. Two switches less than a day apart count as one change
 // (New York and Chicago switch an hour apart; their gap is the same after),
 // and if they cancel out there is none — an entry in the reference's own
 // zone, or London against Berlin, never changes.
-function gapChangeOf(
+function gapChangesOf(
   entryZone: string,
   entryTransition: DstTransition | null,
   referenceZone: string,
   referenceTransition: DstTransition | null,
   fromDate: Date,
   leadDays: number
-): GapChange | null {
+): GapChange[] {
   const switches = [
     entryTransition && { mover: 'entry' as const, zone: entryZone, transition: entryTransition },
     referenceTransition && { mover: 'reference' as const, zone: referenceZone, transition: referenceTransition },
   ]
     .filter((s) => s !== null)
     .sort((a, b) => a.transition.at - b.transition.at);
-  if (switches.length === 0) return null;
 
-  const first = switches[0].transition.at;
-  const together = switches.filter((s) => s.transition.at - first < DAY);
-  const last = together[together.length - 1].transition.at;
+  const changes: GapChange[] = [];
+  for (let i = 0; i < switches.length; ) {
+    const first = switches[i].transition.at;
+    const together = switches.slice(i).filter((s) => s.transition.at - first < DAY);
+    i += together.length;
+    const last = together[together.length - 1].transition.at;
 
-  const gapBeforeMinutes = relativeOffsetMinutes(entryZone, referenceZone, new Date(first - MINUTE));
-  const gapAfterMinutes = relativeOffsetMinutes(entryZone, referenceZone, new Date(last));
-  if (gapBeforeMinutes === gapAfterMinutes) return null;
+    const gapBeforeMinutes = relativeOffsetMinutes(entryZone, referenceZone, new Date(first - MINUTE));
+    const gapAfterMinutes = relativeOffsetMinutes(entryZone, referenceZone, new Date(last));
+    if (gapBeforeMinutes === gapAfterMinutes) continue;
 
-  const date = localDateKey(referenceZone, new Date(first));
-  const daysFromNow = epochDay(date) - epochDay(localDateKey(referenceZone, fromDate));
-  if (daysFromNow > leadDays) return null;
+    const date = localDateKey(referenceZone, new Date(first));
+    const daysFromNow = epochDay(date) - epochDay(localDateKey(referenceZone, fromDate));
+    if (daysFromNow > leadDays) continue;
 
-  return {
-    mover: together.length > 1 ? 'both' : together[0].mover,
-    at: first,
-    date,
-    daysFromNow,
-    gapBeforeMinutes,
-    gapAfterMinutes,
-    entryOffsetAfterMinutes: offsetMinutes(entryZone, new Date(last)),
-    referenceOffsetAfterMinutes: offsetMinutes(referenceZone, new Date(last)),
-    switchKeys: together.map((s) => dstSwitchKey(s.zone, s.transition)),
-  };
+    changes.push({
+      mover: together.length > 1 ? 'both' : together[0].mover,
+      at: first,
+      date,
+      daysFromNow,
+      gapBeforeMinutes,
+      gapAfterMinutes,
+      entryOffsetAfterMinutes: offsetMinutes(entryZone, new Date(last)),
+      referenceOffsetAfterMinutes: offsetMinutes(referenceZone, new Date(last)),
+      switchKeys: together.map((s) => dstSwitchKey(s.zone, s.transition)),
+    });
+  }
+  return changes;
 }
 
 // Detects upcoming DST transitions for every entry and for the reference
@@ -213,8 +219,43 @@ export function detectDstTransitions({
         entryId: entry.id,
         timezone: entry.timezone,
         transition,
-        gapChange: gapChangeOf(entry.timezone, transition, referenceTimezone, referenceTransition, fromDate, lead),
+        gapChanges: gapChangesOf(entry.timezone, transition, referenceTimezone, referenceTransition, fromDate, lead),
       };
     }),
   };
+}
+
+// ---- The banner (spec §6.3, layer 2) ---------------------------------------
+
+export interface DstBannerPick {
+  entryId: string;
+  change: GapChange;
+}
+
+function isDismissed(settings: AppSettings, change: GapChange): boolean {
+  const dismissed = settings.dstDismissed ?? [];
+  return change.switchKeys.every((key) => dismissed.includes(key));
+}
+
+// The one change the banner shows: the soonest that hasn't been dismissed,
+// ties to the higher row in the list. Null while the banner is turned off.
+// How several changes at once should read is still open (spec §6.3).
+export function pickDstBanner(result: DstDetectionResult, settings: AppSettings): DstBannerPick | null {
+  if (!settings.dstBannerEnabled) return null;
+  let pick: DstBannerPick | null = null;
+  for (const { entryId, gapChanges } of result.entries) {
+    const change = gapChanges.find((c) => !isDismissed(settings, c));
+    if (change && (!pick || change.at < pick.change.at)) pick = { entryId, change };
+  }
+  return pick;
+}
+
+// Records the switches behind a dismissed banner, so the same switch doesn't
+// come back; another switch still does. Keys for switches that are over are
+// dropped on the way, so the list never grows past the few in the window.
+export function dismissDstSwitches(settings: AppSettings, keys: string[], now: Date): AppSettings {
+  // A day of slack either side of UTC: a key's date is its zone's own.
+  const stale = new Date(now.getTime() - 2 * DAY).toISOString().slice(0, 10);
+  const kept = (settings.dstDismissed ?? []).filter((key) => key.slice(key.lastIndexOf('@') + 1) >= stale);
+  return { ...settings, dstDismissed: [...new Set([...kept, ...keys])] };
 }

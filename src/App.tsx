@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import Header from './components/Header';
 import TimezoneList from './components/TimezoneList';
 import CoreTimePanel from './components/CoreTimePanel';
 import SettingsPanel from './components/SettingsPanel';
 import CitySettingsPanel from './components/CitySettingsPanel';
 import UndoToast from './components/UndoToast';
+import DstBanner from './components/DstBanner';
 import { TimezoneInfo } from './components/Timezone';
 import {
   hasRoomForCity,
@@ -13,6 +14,7 @@ import {
   saveAppData,
   toggleIncludeInCoreTime,
 } from './core/model';
+import { detectDstTransitions, dismissDstSwitches, pickDstBanner } from './core/dst';
 import type { KeyValueStore } from './core/store';
 import { getSystemTimezone } from './core/tz';
 import type { AppData, AppSettings, Entry } from './core/types';
@@ -55,6 +57,20 @@ function App({ initialData, store }: AppProps) {
 
   const hourFormat: HourFormat = settings.hour24 ? '24' : '12';
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
+
+  // DST alerts (spec §6): layers 1 and 2 are computed as the popup renders,
+  // nothing scheduled. Each card gets its next gap change for the badge; the
+  // banner shows the one pickDstBanner() chooses.
+  const dst = useMemo(
+    () => detectDstTransitions({ entries, settings, fromDate: new Date() }),
+    [entries, settings]
+  );
+  const gapChanges = useMemo(
+    () => new Map(dst.entries.map(({ entryId, gapChanges }) => [entryId, gapChanges[0] ?? null])),
+    [dst]
+  );
+  const dstBanner = pickDstBanner(dst, settings);
+  const dstBannerCity = entries.find((entry) => entry.id === dstBanner?.entryId)?.label;
 
   const registerAddTimezone = useCallback(
     (fn: (timezone: TimezoneInfo) => AddTimezoneResult) => {
@@ -174,6 +190,15 @@ function App({ initialData, store }: AppProps) {
         </div>
       )}
       <div className="app-content">
+        {dstBanner && dstBannerCity !== undefined && !isEditMode && (
+          <DstBanner
+            change={dstBanner.change}
+            city={dstBannerCity}
+            onDismiss={() =>
+              setSettings((prev) => dismissDstSwitches(prev, dstBanner.change.switchKeys, new Date()))
+            }
+          />
+        )}
         <TimezoneList
           entries={entries}
           setEntries={setEntries}
@@ -186,6 +211,7 @@ function App({ initialData, store }: AppProps) {
           onOpenCity={openCitySettings}
           isEditMode={isEditMode}
           onRemoveCity={removeEntry}
+          gapChanges={gapChanges}
         />
       </div>
       <CoreTimePanel

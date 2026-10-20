@@ -188,6 +188,22 @@
       opacity: 0.75;
     }
 
+    // The DST badge (spec §6.3, layer 1): the date and the gap it becomes,
+    // a quiet pill after the UTC offset. White on translucent white reads on
+    // all four skies, like the rest of the footer.
+    &__dst {
+      margin-left: 8px;
+      padding: 1px 5px;
+      border-radius: 100vw;
+      background: rgba(255, 255, 255, 0.18);
+      color: var(--color-font-timezone);
+      font-size: 10px;
+      font-weight: 600;
+      font-style: normal;
+      text-transform: none;
+      white-space: nowrap;
+    }
+
     &__tz {
       position: relative;
       padding-right: 6px;

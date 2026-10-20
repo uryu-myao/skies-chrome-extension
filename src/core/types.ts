@@ -70,6 +70,10 @@ export interface AppSettings {
   dstBannerEnabled: boolean;
   dstLeadDays: number;
   dstNotificationEnabled: boolean;
+  // The DST switches whose banner the user closed (dstSwitchKey(): "zone@date"),
+  // so the same switch doesn't alert again (spec §6.3). Optional: absent until
+  // the first dismissal, so nothing changes in stored data before then.
+  dstDismissed?: string[];
 }
 
 export interface AppData {

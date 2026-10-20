@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { detectDstTransitions, detectZoneTransition, dstSwitchKey } from '../../src/core/dst';
+import {
+  detectDstTransitions,
+  detectZoneTransition,
+  dismissDstSwitches,
+  dstSwitchKey,
+  pickDstBanner,
+} from '../../src/core/dst';
 import { createEntry, DEFAULT_SETTINGS } from '../../src/core/model';
 import type { AppSettings } from '../../src/core/types';
 
@@ -80,7 +86,7 @@ describe('detectDstTransitions — §10.1 boundary dates', () => {
     const result = detectOne('Asia/Tokyo', 'Asia/Kolkata', '2026-03-22T00:00:00Z');
     expect(result.reference.transition).toBeNull();
     expect(result.entries[0].transition).toBeNull();
-    expect(result.entries[0].gapChange).toBeNull();
+    expect(result.entries[0].gapChanges).toEqual([]);
   });
 });
 
@@ -112,7 +118,7 @@ describe('detectDstTransitions — the gap to the reference (§6.2)', () => {
   it('Tokyo vs Berlin, one-sided: only Berlin moves, the gap changes all the same', () => {
     const result = detectOne('Europe/Berlin', 'Asia/Tokyo', '2026-03-22T00:00:00Z');
     expect(result.reference.transition).toBeNull();
-    expect(result.entries[0].gapChange).toMatchObject({
+    expect(result.entries[0].gapChanges[0]).toMatchObject({
       mover: 'entry',
       date: '2026-03-29',
       gapBeforeMinutes: -8 * 60,
@@ -126,7 +132,7 @@ describe('detectDstTransitions — the gap to the reference (§6.2)', () => {
     const result = detectOne('Asia/Tokyo', 'Europe/Berlin', '2026-10-20T00:00:00Z');
     expect(result.entries[0].transition).toBeNull();
     expect(result.reference.transition?.date).toBe('2026-10-25');
-    expect(result.entries[0].gapChange).toMatchObject({
+    expect(result.entries[0].gapChanges[0]).toMatchObject({
       mover: 'reference',
       date: '2026-10-25',
       gapBeforeMinutes: 7 * 60,
@@ -136,7 +142,7 @@ describe('detectDstTransitions — the gap to the reference (§6.2)', () => {
   });
 
   it('Tokyo vs Boston on 2026-11-01: 13 hours → 14 hours', () => {
-    const gap = detectOne('America/New_York', 'Asia/Tokyo', '2026-10-23T00:00:00Z').entries[0].gapChange;
+    const gap = detectOne('America/New_York', 'Asia/Tokyo', '2026-10-23T00:00:00Z').entries[0].gapChanges[0];
     expect(gap).toMatchObject({
       mover: 'entry',
       date: '2026-11-01',
@@ -150,7 +156,7 @@ describe('detectDstTransitions — the gap to the reference (§6.2)', () => {
 
   it("Sydney seen from Boston: the date and day count are the reference's own", () => {
     // Sydney's 02:00 on Oct 4 is noon on Oct 3 in Boston.
-    const gap = detectOne('Australia/Sydney', 'America/New_York', '2026-09-28T12:00:00Z').entries[0].gapChange;
+    const gap = detectOne('Australia/Sydney', 'America/New_York', '2026-09-28T12:00:00Z').entries[0].gapChanges[0];
     expect(gap).toMatchObject({
       mover: 'entry',
       date: '2026-10-03',
@@ -161,12 +167,18 @@ describe('detectDstTransitions — the gap to the reference (§6.2)', () => {
   });
 
   it('Berlin, then Boston a week later: the next change is the reference’s', () => {
-    const gap = detectOne('America/New_York', 'Europe/Berlin', '2026-10-20T00:00:00Z').entries[0].gapChange;
+    const gap = detectOne('America/New_York', 'Europe/Berlin', '2026-10-20T00:00:00Z').entries[0].gapChanges[0];
     expect(gap).toMatchObject({ mover: 'reference', date: '2026-10-25', gapBeforeMinutes: -360, gapAfterMinutes: -300 });
   });
 
+  it('…followed by Boston’s own, a week later', () => {
+    const changes = detectOne('America/New_York', 'Europe/Berlin', '2026-10-20T00:00:00Z').entries[0].gapChanges;
+    expect(changes).toHaveLength(2);
+    expect(changes[1]).toMatchObject({ mover: 'entry', date: '2026-11-01', gapBeforeMinutes: -300, gapAfterMinutes: -360 });
+  });
+
   it('…and once Berlin has switched, Boston’s own change is next', () => {
-    const gap = detectOne('America/New_York', 'Europe/Berlin', '2026-10-26T00:00:00Z').entries[0].gapChange;
+    const gap = detectOne('America/New_York', 'Europe/Berlin', '2026-10-26T00:00:00Z').entries[0].gapChanges[0];
     expect(gap).toMatchObject({ mover: 'entry', date: '2026-11-01', gapBeforeMinutes: -300, gapAfterMinutes: -360 });
   });
 
@@ -181,16 +193,16 @@ describe('detectDstTransitions — the gap to the reference (§6.2)', () => {
       fromDate: new Date('2026-10-20T00:00:00Z'),
     });
     expect(result.entries[0].transition).not.toBeNull();
-    expect(result.entries[0].gapChange).toBeNull();
-    expect(result.entries[1].gapChange).toBeNull();
-    expect(result.entries[2].gapChange?.mover).toBe('reference');
+    expect(result.entries[0].gapChanges).toEqual([]);
+    expect(result.entries[1].gapChanges).toEqual([]);
+    expect(result.entries[2].gapChanges[0]?.mover).toBe('reference');
   });
 
   it('New York vs Chicago switch an hour apart; the gap is the same after, so no change', () => {
     const result = detectOne('America/New_York', 'America/Chicago', '2026-10-25T00:00:00Z');
     expect(result.entries[0].transition).not.toBeNull();
     expect(result.reference.transition).not.toBeNull();
-    expect(result.entries[0].gapChange).toBeNull();
+    expect(result.entries[0].gapChanges).toEqual([]);
   });
 
   it('a gap change past the window in the reference’s calendar is left out', () => {
@@ -199,11 +211,59 @@ describe('detectDstTransitions — the gap to the reference (§6.2)', () => {
     // Anchorage, day 15 for the reference.
     const result = detectOne('America/Anchorage', 'Pacific/Kiritimati', '2026-10-18T08:30:00Z', 14);
     expect(result.entries[0].transition?.daysFromNow).toBe(14);
-    expect(result.entries[0].gapChange).toBeNull();
+    expect(result.entries[0].gapChanges).toEqual([]);
   });
 
   it('an old zone name is the same switch as the current one', () => {
     const transition = detectZoneTransition('US/Eastern', new Date('2026-10-25T00:00:00Z'), 14)!;
     expect(dstSwitchKey('US/Eastern', transition)).toBe('America/New_York@2026-11-01');
+  });
+});
+
+describe('pickDstBanner / dismissDstSwitches — the banner (§6.3)', () => {
+  const FROM = new Date('2026-10-20T00:00:00Z');
+  const entries = [
+    createEntry({ id: 'sf', timezone: 'America/Los_Angeles' }),
+    createEntry({ id: 'boston', timezone: 'America/New_York' }),
+    createEntry({ id: 'ny', timezone: 'America/New_York' }),
+    createEntry({ id: 'sydney', timezone: 'Australia/Sydney' }),
+  ];
+  const tokyo = settingsWithReference('Asia/Tokyo');
+  const detect = (settings: AppSettings) => detectDstTransitions({ entries, settings, fromDate: FROM });
+
+  it('shows the soonest change; a tie goes to the higher row', () => {
+    // Boston and New York switch at 06:00Z, San Francisco three hours later.
+    expect(pickDstBanner(detect(tokyo), tokyo)?.entryId).toBe('boston');
+  });
+
+  it('shows nothing while the banner is turned off', () => {
+    const off = { ...tokyo, dstBannerEnabled: false };
+    expect(pickDstBanner(detect(off), off)).toBeNull();
+  });
+
+  it('a dismissed switch stays dismissed for every city in that zone; the next one shows', () => {
+    const dismissed = dismissDstSwitches(tokyo, ['America/New_York@2026-11-01'], FROM);
+    expect(dismissed.dstDismissed).toEqual(['America/New_York@2026-11-01']);
+    expect(pickDstBanner(detect(dismissed), dismissed)?.entryId).toBe('sf');
+  });
+
+  it('dismissing the reference’s own switch covers every city it moves against', () => {
+    const berlin = settingsWithReference('Europe/Berlin');
+    const result = detect(berlin);
+    expect(pickDstBanner(result, berlin)?.change.mover).toBe('reference');
+    const dismissed = dismissDstSwitches(berlin, ['Europe/Berlin@2026-10-25'], FROM);
+    // Next: the US cities' own switches on Nov 1.
+    expect(pickDstBanner(detect(dismissed), dismissed)?.change).toMatchObject({ mover: 'entry', date: '2026-11-01' });
+  });
+
+  it('drops keys for switches that are over, and never repeats one', () => {
+    const settings = { ...tokyo, dstDismissed: ['Europe/Berlin@2026-03-29', 'America/New_York@2026-11-01'] };
+    const next = dismissDstSwitches(settings, ['America/New_York@2026-11-01', 'America/Los_Angeles@2026-11-01'], FROM);
+    expect(next.dstDismissed).toEqual(['America/New_York@2026-11-01', 'America/Los_Angeles@2026-11-01']);
+  });
+
+  it('leaves settings without dstDismissed untouched until the first dismissal', () => {
+    expect('dstDismissed' in tokyo).toBe(false);
+    expect(pickDstBanner(detect(tokyo), tokyo)).not.toBeNull();
   });
 });

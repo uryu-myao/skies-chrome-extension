@@ -13,6 +13,8 @@ import {
 } from '../core/tz';
 import type { ConvertPosition, HourFormat } from '../App';
 import { dayDeltaLabel } from './dayDeltaLabel';
+import type { GapChange } from '../core/dst';
+import { dstBadgeDescription, dstBadgeText } from './dstCopy';
 
 export interface TimezoneInfo {
   id: string;
@@ -32,6 +34,9 @@ interface TimezoneProps extends TimezoneInfo {
   // Edit mode: one row of city + time, no footer, and the card itself does
   // nothing when clicked — the row's own controls handle remove / reorder.
   isCompact?: boolean;
+  // The next change in this city's gap to the reference, if one falls in the
+  // DST lead window: shown as a badge in the footer (spec §6.3, layer 1).
+  gapChange?: GapChange | null;
 }
 
 function hashStr(s: string): number {
@@ -69,6 +74,7 @@ const Timezone: React.FC<TimezoneProps> = ({
   convertPosition,
   onOpen,
   isCompact = false,
+  gapChange = null,
 }) => {
   const stars = useMemo(() => makeStars(id, 20), [id]);
 
@@ -214,6 +220,11 @@ const Timezone: React.FC<TimezoneProps> = ({
                 {sameZone(zone, referenceTimezone) ? 'Base' : timeData.relativeOffset}
               </span>
               <span className="timezone-data__offset">{timeData.utcOffset}</span>
+              {gapChange && (
+                <span className="timezone-data__dst" title={dstBadgeDescription(gapChange)}>
+                  {dstBadgeText(gapChange)}
+                </span>
+              )}
             </p>
             <p>
               {timeData.dayDelta !== 0 && (
