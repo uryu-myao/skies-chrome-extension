@@ -28,16 +28,44 @@
   &__headline {
     margin: 0;
     font-size: 12px;
-    font-weight: 600;
-    line-height: 1.4;
+    font-weight: 400;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.85);
   }
 
   &__detail {
     margin: 2px 0 0;
     font-size: 11px;
     font-weight: 400;
-    line-height: 1.4;
-    opacity: 0.7;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  // City names by weight, times (dates, offsets, gaps) by color, so a
+  // glance finds who and when. The blue is the banner's own tint, lighter:
+  // 7.2:1 on the banner, 6.1:1 in effect; it sits on the dark surface,
+  // never on a sky.
+  &__city {
+    font-weight: 600;
+    color: var(--color-font-timezone);
+    white-space: nowrap;
+  }
+
+  &__time {
+    color: var(--color-dst-time);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  &__detail &__city {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  // The change has happened (or some of it has, today): one step stronger,
+  // still no warning colors — it's the forecast turning into fact.
+  &--in-effect {
+    border-color: rgba(0, 170, 255, 0.32);
+    background: rgba(0, 170, 255, 0.22);
   }
 
   &__close {

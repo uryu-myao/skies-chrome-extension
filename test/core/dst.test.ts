@@ -106,6 +106,16 @@ describe('detectDstTransitions — the lead window', () => {
     expect(result.entries[0].transition).toBeNull();
   });
 
+  it('keeps a change that just happened as in effect, for that day and the next', () => {
+    // From Tokyo: Boston switched at 15:00 on Nov 1.
+    const at = (iso: string) => detectOne('America/New_York', 'Asia/Tokyo', iso).entries[0];
+    expect(at('2026-11-01T07:00:00Z').transition).toBeNull();
+    expect(at('2026-11-01T07:00:00Z').gapChanges).toMatchObject([{ inEffect: true, daysFromNow: 0, date: '2026-11-01' }]);
+    expect(at('2026-11-02T14:59:00Z').gapChanges).toMatchObject([{ inEffect: true, daysFromNow: -1 }]);
+    expect(at('2026-11-02T15:00:00Z').gapChanges).toEqual([]);
+    expect(at('2026-11-01T05:00:00Z').gapChanges).toMatchObject([{ inEffect: false, daysFromNow: 0 }]);
+  });
+
   it('counts a switch later today, and not one already past', () => {
     // 01:00 EDT on Nov 1: the switch is an hour away.
     expect(detectOne('America/New_York', 'UTC', '2026-11-01T05:00:00Z').entries[0].transition?.daysFromNow).toBe(0);
@@ -177,9 +187,10 @@ describe('detectDstTransitions — the gap to the reference (§6.2)', () => {
     expect(changes[1]).toMatchObject({ mover: 'entry', date: '2026-11-01', gapBeforeMinutes: -300, gapAfterMinutes: -360 });
   });
 
-  it('…and once Berlin has switched, Boston’s own change is next', () => {
-    const gap = detectOne('America/New_York', 'Europe/Berlin', '2026-10-26T00:00:00Z').entries[0].gapChanges[0];
-    expect(gap).toMatchObject({ mover: 'entry', date: '2026-11-01', gapBeforeMinutes: -300, gapAfterMinutes: -360 });
+  it('…and once Berlin has switched, it stays in effect for a day while Boston’s own is next', () => {
+    const changes = detectOne('America/New_York', 'Europe/Berlin', '2026-10-26T00:00:00Z').entries[0].gapChanges;
+    expect(changes[0]).toMatchObject({ mover: 'reference', date: '2026-10-25', inEffect: true, daysFromNow: -1 });
+    expect(changes[1]).toMatchObject({ mover: 'entry', date: '2026-11-01', inEffect: false, gapBeforeMinutes: -300, gapAfterMinutes: -360 });
   });
 
   it('no gap change for an entry in the reference zone, or one that switches with it', () => {
@@ -260,6 +271,14 @@ describe('pickDstBanner / dismissDstSwitches — the banner (§6.3)', () => {
     // Next: the US cities' own switches on Nov 1.
     expect(pickDstBanner(detect(dismissed), dismissed)).toMatchObject({ date: '2026-11-01', referenceMoves: false });
     expect(ids(dismissed)).toEqual(['sf', 'boston', 'ny']);
+  });
+
+  it('closed ahead of time, it doesn’t come back once in effect', () => {
+    const closed = dismissDstSwitches(tokyo, pickDstBanner(detect(tokyo), tokyo)!.switchKeys, FROM);
+    const sameDay = (settings: AppSettings) =>
+      pickDstBanner(detectDstTransitions({ entries, settings, fromDate: new Date('2026-11-01T12:00:00Z') }), settings);
+    expect(sameDay(tokyo)?.inEffect).toBe('all');
+    expect(sameDay(closed)).toBeNull();
   });
 
   it('drops keys for switches that are over, and never repeats one', () => {

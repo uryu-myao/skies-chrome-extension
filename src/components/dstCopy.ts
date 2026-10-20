@@ -15,11 +15,51 @@ export function shortDate(dateKey: string): string {
   return `${MONTHS[month - 1]} ${day}`;
 }
 
-function when({ date: key, daysFromNow }: { date: string; daysFromNow: number }): string {
-  const date = shortDate(key);
-  if (daysFromNow <= 0) return `Later today (${date})`;
-  if (daysFromNow === 1) return `Tomorrow (${date})`;
-  return `In ${daysFromNow} days (${date})`;
+// The banner's wording is built from parts so the banner can set city names
+// and times apart from the words around them: a city by weight, a time
+// (dates, offsets, gaps) by color.
+export interface CopyPart {
+  text: string;
+  kind: 'plain' | 'city' | 'time';
+}
+export type CopyLine = CopyPart[];
+
+const city = (text: string): CopyPart => ({ text, kind: 'city' });
+const time = (text: string): CopyPart => ({ text, kind: 'time' });
+
+// line`In ${time('12 days')}, …` — the literal text is plain; a value is a
+// part, a run of parts, or more plain text.
+function line(strings: TemplateStringsArray, ...values: (string | CopyPart | CopyLine)[]): CopyLine {
+  const parts: CopyLine = [];
+  const push = (part: CopyPart) => {
+    if (!part.text) return;
+    const last = parts[parts.length - 1];
+    if (last && last.kind === 'plain' && part.kind === 'plain') last.text += part.text;
+    else parts.push({ ...part });
+  };
+  strings.forEach((text, i) => {
+    push({ text, kind: 'plain' });
+    if (i >= values.length) return;
+    const value = values[i];
+    if (typeof value === 'string') push({ text: value, kind: 'plain' });
+    else if (Array.isArray(value)) value.forEach(push);
+    else push(value);
+  });
+  return parts;
+}
+
+export function lineText(parts: CopyLine): string {
+  return parts.map((part) => part.text).join('');
+}
+
+// "In 12 days (Nov 1)", "Later today (Nov 1)" before the change; "Today
+// (Nov 1)", "Yesterday (Nov 1)" once it's in effect.
+function when(daysFromNow: number, dateKey: string, inEffect: boolean): CopyLine {
+  const date = time(shortDate(dateKey));
+  if (daysFromNow < 0) return line`Yesterday (${date})`;
+  if (daysFromNow === 0) return inEffect ? line`Today (${date})` : line`Later today (${date})`;
+  if (daysFromNow === 1) return line`Tomorrow (${date})`;
+  return line`In ${time(`${daysFromNow} days`)} (${date})`;
 }
 
 function hours(minutes: number): string {
@@ -30,41 +70,70 @@ function hours(minutes: number): string {
   return `${h} ${h === 1 ? 'hour' : 'hours'}`;
 }
 
+const flips = (before: number, after: number) => before * after < 0;
+const side = (minutes: number) => (minutes > 0 ? ' ahead' : ' behind');
+
 // "13 hours → 14 hours". How far apart, not which way — unless the change
 // flips which side is ahead, when the size alone could read "1 hour → 1 hour".
-export function gapChangeText(before: number, after: number): string {
-  if (before * after < 0) {
-    const side = (minutes: number) => `${hours(minutes)} ${minutes > 0 ? 'ahead' : 'behind'}`;
-    return `${side(before)} → ${side(after)}`;
+function gapChangeParts(before: number, after: number): CopyLine {
+  if (flips(before, after)) {
+    return line`${time(hours(before))}${side(before)} → ${time(hours(after))}${side(after)}`;
   }
-  return `${hours(before)} → ${hours(after)}`;
+  return line`${time(hours(before))} → ${time(hours(after))}`;
+}
+
+export function gapChangeText(before: number, after: number): string {
+  return lineText(gapChangeParts(before, after));
+}
+
+// Once in effect: "14 hours (was 13 hours)".
+function gapNowParts(before: number, after: number): CopyLine {
+  if (flips(before, after)) {
+    return line`${time(hours(after))}${side(after)} (was ${time(hours(before))}${side(before)})`;
+  }
+  return line`${time(hours(after))} (was ${time(hours(before))})`;
 }
 
 export interface DstBannerCopy {
-  headline: string;
-  detail: string;
+  headline: CopyLine;
+  detail: CopyLine;
 }
 
 // One city that day: the full wording, saying who moves on that date and
 // who doesn't — a one-sided switch is the case the user can't see coming.
-function oneCity(change: GapChange, city: string): DstBannerCopy {
-  const gap = gapChangeText(change.gapBeforeMinutes, change.gapAfterMinutes);
+function oneCity(change: GapChange, name: string): DstBannerCopy {
+  const w = when(change.daysFromNow, change.date, change.inEffect);
+  const entryUtc = time(formatUtcOffset(change.entryOffsetAfterMinutes));
+  const referenceUtc = time(formatUtcOffset(change.referenceOffsetAfterMinutes));
+  const before = change.gapBeforeMinutes;
+  const after = change.gapAfterMinutes;
+
+  if (change.inEffect) {
+    const now = gapNowParts(before, after);
+    switch (change.mover) {
+      case 'entry':
+        return { headline: line`${w}, ${city(name)} shifted to ${entryUtc} — your clock didn’t.`, detail: line`Your gap is now ${now}` };
+      case 'reference':
+        return {
+          headline: line`${w}, your clock shifted to ${referenceUtc} — ${city(name)}’s didn’t.`,
+          detail: line`Your gap with ${city(name)} is now ${now}`,
+        };
+      case 'both':
+        return { headline: line`${w}, your clock and ${city(name)}’s both shifted.`, detail: line`Your gap is now ${now}` };
+    }
+  }
+
+  const gap = gapChangeParts(before, after);
   switch (change.mover) {
     case 'entry':
-      return {
-        headline: `${when(change)}, ${city} shifts to ${formatUtcOffset(change.entryOffsetAfterMinutes)} — your clock doesn’t.`,
-        detail: `Your gap: ${gap}`,
-      };
+      return { headline: line`${w}, ${city(name)} shifts to ${entryUtc} — your clock doesn’t.`, detail: line`Your gap: ${gap}` };
     case 'reference':
       return {
-        headline: `${when(change)}, your clock shifts to ${formatUtcOffset(change.referenceOffsetAfterMinutes)} — ${city}’s doesn’t.`,
-        detail: `Your gap with ${city}: ${gap}`,
+        headline: line`${w}, your clock shifts to ${referenceUtc} — ${city(name)}’s doesn’t.`,
+        detail: line`Your gap with ${city(name)}: ${gap}`,
       };
     case 'both':
-      return {
-        headline: `${when(change)}, your clock and ${city}’s both shift.`,
-        detail: `Your gap: ${gap}`,
-      };
+      return { headline: line`${w}, your clock and ${city(name)}’s both shift.`, detail: line`Your gap: ${gap}` };
   }
 }
 
@@ -76,9 +145,9 @@ function shortHours(minutes: number): string {
 
 // "13 → 14 h"; "1 h behind → 1 h ahead" when the change flips the side.
 export function shortGapText(before: number, after: number): string {
-  if (before * after < 0) {
-    const side = (minutes: number) => `${shortHours(minutes)} h ${minutes > 0 ? 'ahead' : 'behind'}`;
-    return `${side(before)} → ${side(after)}`;
+  if (flips(before, after)) {
+    const sided = (minutes: number) => `${shortHours(minutes)} h${side(minutes)}`;
+    return `${sided(before)} → ${sided(after)}`;
   }
   return `${shortHours(before)} → ${shortHours(after)} h`;
 }
@@ -90,24 +159,33 @@ const NAMED_CITIES = 3;
 // The banner for one day (spec §6.2, §6.3). `cityOf` gives an entry's label.
 // Several cities: when they move, the cities lead and each gap is listed;
 // when your clock moves, that leads — every city moves against you then.
+// Past tense only once every change that day is in effect; a day with some
+// still to come reads "Today …, 4 cities shift".
 export function dstBannerCopy(day: DstBannerDay, cityOf: (entryId: string) => string): DstBannerCopy {
   if (day.items.length === 1) return oneCity(day.items[0].change, cityOf(day.items[0].entryId));
 
+  const done = day.inEffect === 'all';
+  const w = when(day.daysFromNow, day.date, day.inEffect !== 'none');
   const count = day.items.length;
   if (day.referenceMoves) {
+    const utc = time(formatUtcOffset(day.referenceOffsetAfterMinutes));
     return {
-      headline: `${when(day)}, your clock shifts to ${formatUtcOffset(day.referenceOffsetAfterMinutes)}.`,
-      detail: `Gaps change for ${count} cities`,
+      headline: done ? line`${w}, your clock shifted to ${utc}.` : line`${w}, your clock shifts to ${utc}.`,
+      detail: done ? line`Gaps changed for ${String(count)} cities` : line`Gaps change for ${String(count)} cities`,
     };
   }
   const named = count > NAMED_CITIES ? day.items.slice(0, NAMED_CITIES - 1) : day.items;
-  const list = named.map(
-    ({ entryId, change }) => `${cityOf(entryId)} ${shortGapText(change.gapBeforeMinutes, change.gapAfterMinutes)}`
-  );
-  if (named.length < count) list.push(`+${count - named.length} more`);
+  const detail: CopyLine = [];
+  named.forEach(({ entryId, change }, i) => {
+    // A no-break space: a city and its gap wrap as one item.
+    detail.push(...line`${i ? ' · ' : ''}${city(cityOf(entryId))}\u00a0${time(shortGapText(change.gapBeforeMinutes, change.gapAfterMinutes))}`);
+  });
+  if (named.length < count) detail.push(...line` · +${String(count - named.length)} more`);
   return {
-    headline: `${when(day)}, ${count} cities shift — your clock doesn’t.`,
-    detail: list.join(' · '),
+    headline: done
+      ? line`${w}, ${String(count)} cities shifted — your clock didn’t.`
+      : line`${w}, ${String(count)} cities shift — your clock doesn’t.`,
+    detail,
   };
 }
 

@@ -12,7 +12,7 @@ import {
 // One zone's own clock change (spec §6.1).
 export interface DstTransition {
   date: string; // YYYY-MM-DD, the zone's own local calendar date the new offset takes effect
-  daysFromNow: number; // in the zone's own calendar, 0 = later today
+  daysFromNow: number; // in the zone's own calendar: 0 = today, negative = past
   at: number; // the instant of the change, epoch ms, to the minute
   offsetBeforeMinutes: number;
   offsetAfterMinutes: number;
@@ -30,7 +30,11 @@ export interface GapChange {
   mover: DstMover;
   at: number; // the instant of the change, epoch ms
   date: string; // YYYY-MM-DD in the reference's calendar
-  daysFromNow: number; // in the reference's calendar, 0 = later today
+  daysFromNow: number; // in the reference's calendar: 0 = today, −1 = yesterday
+  // Already happened (at ≤ now). Shown on the day of the change and the day
+  // after, in the past tense — the first meetings on the new gap are when
+  // it's easiest to get wrong, and the switches fall on weekends.
+  inEffect: boolean;
   gapBeforeMinutes: number; // entry minus reference, signed, as the card's relative offset
   gapAfterMinutes: number;
   entryOffsetAfterMinutes: number;
@@ -43,9 +47,9 @@ export interface GapChange {
 export interface EntryDstResult {
   entryId: string;
   timezone: string;
-  transition: DstTransition | null; // the entry's own clock change
-  // Every change in its gap to the reference inside the window, soonest
-  // first: one per side at most — Berlin on Oct 25, then Boston on Nov 1.
+  transition: DstTransition | null; // the entry's own next clock change
+  // Every change in its gap to the reference from yesterday to the end of
+  // the window, soonest first — Berlin on Oct 25, then Boston on Nov 1.
   gapChanges: GapChange[];
 }
 
@@ -62,13 +66,20 @@ export interface DstDetectionResult {
 export interface DstDetectionInput {
   entries: Entry[];
   settings: AppSettings;
-  // Now. Changes at or before it are over and not reported.
+  // Now. A change at or before it is in effect: kept in gapChanges for the
+  // day of the change and the day after, never as the next `transition`.
   fromDate: Date;
   leadDays?: number;
 }
 
 const MINUTE = 60_000;
 const DAY = 86_400_000;
+// A gap change stays on show for the day it happens and the day after, in
+// the reference's calendar (spec §6.3).
+const IN_EFFECT_DAYS = 2;
+// How far back each zone is walked to find those: a zone's date can be a day
+// either side of the reference's.
+const LOOKBACK_DAYS = IN_EFFECT_DAYS + 1;
 
 function dateKey({ year, month, day }: { year: number; month: number; day: number }): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -98,40 +109,44 @@ function changeInstant(timezone: string, before: number, after: number): number 
   return Math.floor(hi / MINUTE) * MINUTE;
 }
 
-// Walks forward day by day from today sampling this zone's own local-noon
-// offset; a change between two consecutive days marks a transition (spec
-// §6.1). Today is compared with yesterday, so a change later today counts;
-// one already past doesn't. Direction always comes from the actual signed
-// delta — never assume "falls back" or "springs forward", since southern-
-// hemisphere zones move opposite the northern ones.
+// Walks day by day sampling this zone's own local-noon offset; a change
+// between two consecutive days marks a transition (spec §6.1). Day `fromDay`
+// is compared with the day before it, so with fromDay 0 a change later today
+// counts. Direction always comes from the actual signed delta — never assume
+// "falls back" or "springs forward", since southern-hemisphere zones move
+// opposite the northern ones.
+function zoneTransitions(timezone: string, fromDate: Date, fromDay: number, leadDays: number): DstTransition[] {
+  const transitions: DstTransition[] = [];
+  let previousNoon = localNoon(timezone, fromDate, fromDay - 1);
+  let previousOffset = offsetMinutes(timezone, new Date(previousNoon));
+
+  for (let day = fromDay; day <= leadDays; day++) {
+    const noon = localNoon(timezone, fromDate, day);
+    const offset = offsetMinutes(timezone, new Date(noon));
+    if (offset !== previousOffset) {
+      transitions.push({
+        date: dateKey(addLocalCalendarDays(timezone, fromDate, day)),
+        daysFromNow: day,
+        at: changeInstant(timezone, previousNoon, noon),
+        offsetBeforeMinutes: previousOffset,
+        offsetAfterMinutes: offset,
+        deltaMinutes: offset - previousOffset,
+      });
+    }
+    previousNoon = noon;
+    previousOffset = offset;
+  }
+  return transitions;
+}
+
+// The zone's next clock change from now to `leadDays` ahead; one already
+// past (earlier today) doesn't count.
 export function detectZoneTransition(
   timezone: string,
   fromDate: Date,
   leadDays: number
 ): DstTransition | null {
-  let previousNoon = localNoon(timezone, fromDate, -1);
-  let previousOffset = offsetMinutes(timezone, new Date(previousNoon));
-
-  for (let day = 0; day <= leadDays; day++) {
-    const noon = localNoon(timezone, fromDate, day);
-    const offset = offsetMinutes(timezone, new Date(noon));
-    if (offset !== previousOffset) {
-      const at = changeInstant(timezone, previousNoon, noon);
-      if (at > fromDate.getTime()) {
-        return {
-          date: dateKey(addLocalCalendarDays(timezone, fromDate, day)),
-          daysFromNow: day,
-          at,
-          offsetBeforeMinutes: previousOffset,
-          offsetAfterMinutes: offset,
-          deltaMinutes: offset - previousOffset,
-        };
-      }
-    }
-    previousNoon = noon;
-    previousOffset = offset;
-  }
-  return null;
+  return zoneTransitions(timezone, fromDate, 0, leadDays).find((t) => t.at > fromDate.getTime()) ?? null;
 }
 
 // Names one zone's switch: same zone (whatever it's called) and same local
@@ -147,18 +162,16 @@ export function dstSwitchKey(timezone: string, transition: DstTransition): strin
 // zone, or London against Berlin, never changes.
 function gapChangesOf(
   entryZone: string,
-  entryTransition: DstTransition | null,
+  entryTransitions: DstTransition[],
   referenceZone: string,
-  referenceTransition: DstTransition | null,
+  referenceTransitions: DstTransition[],
   fromDate: Date,
   leadDays: number
 ): GapChange[] {
   const switches = [
-    entryTransition && { mover: 'entry' as const, zone: entryZone, transition: entryTransition },
-    referenceTransition && { mover: 'reference' as const, zone: referenceZone, transition: referenceTransition },
-  ]
-    .filter((s) => s !== null)
-    .sort((a, b) => a.transition.at - b.transition.at);
+    ...entryTransitions.map((transition) => ({ mover: 'entry' as const, zone: entryZone, transition })),
+    ...referenceTransitions.map((transition) => ({ mover: 'reference' as const, zone: referenceZone, transition })),
+  ].sort((a, b) => a.transition.at - b.transition.at);
 
   const changes: GapChange[] = [];
   for (let i = 0; i < switches.length; ) {
@@ -173,13 +186,14 @@ function gapChangesOf(
 
     const date = localDateKey(referenceZone, new Date(first));
     const daysFromNow = epochDay(date) - epochDay(localDateKey(referenceZone, fromDate));
-    if (daysFromNow > leadDays) continue;
+    if (daysFromNow > leadDays || daysFromNow <= -IN_EFFECT_DAYS) continue;
 
     changes.push({
       mover: together.length > 1 ? 'both' : together[0].mover,
       at: first,
       date,
       daysFromNow,
+      inEffect: first <= fromDate.getTime(),
       gapBeforeMinutes,
       gapAfterMinutes,
       entryOffsetAfterMinutes: offsetMinutes(entryZone, new Date(last)),
@@ -202,24 +216,26 @@ export function detectDstTransitions({
 }: DstDetectionInput): DstDetectionResult {
   const lead = leadDays ?? settings.dstLeadDays;
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
-  const referenceTransition = detectZoneTransition(referenceTimezone, fromDate, lead);
 
-  // Many entries share a zone; each zone is walked once.
-  const byZone = new Map<string, DstTransition | null>();
-  const transitionOf = (zone: string) => {
-    if (!byZone.has(zone)) byZone.set(zone, detectZoneTransition(zone, fromDate, lead));
+  // Many entries share a zone; each zone is walked once, from a few days back
+  // so a change that just happened is still known.
+  const byZone = new Map<string, DstTransition[]>();
+  const transitionsOf = (zone: string) => {
+    if (!byZone.has(zone)) byZone.set(zone, zoneTransitions(zone, fromDate, -LOOKBACK_DAYS, lead));
     return byZone.get(zone)!;
   };
+  const next = (transitions: DstTransition[]) => transitions.find((t) => t.at > fromDate.getTime()) ?? null;
+  const referenceTransitions = transitionsOf(referenceTimezone);
 
   return {
-    reference: { timezone: referenceTimezone, transition: referenceTransition },
+    reference: { timezone: referenceTimezone, transition: next(referenceTransitions) },
     entries: entries.map((entry) => {
-      const transition = transitionOf(entry.timezone);
+      const transitions = transitionsOf(entry.timezone);
       return {
         entryId: entry.id,
         timezone: entry.timezone,
-        transition,
-        gapChanges: gapChangesOf(entry.timezone, transition, referenceTimezone, referenceTransition, fromDate, lead),
+        transition: next(transitions),
+        gapChanges: gapChangesOf(entry.timezone, transitions, referenceTimezone, referenceTransitions, fromDate, lead),
       };
     }),
   };
@@ -237,6 +253,9 @@ export interface DstBannerItem {
 export interface DstBannerDay {
   date: string; // YYYY-MM-DD in the reference's calendar
   daysFromNow: number;
+  // Every change that day has happened (past tense), some have (today, the
+  // rest later), or none yet.
+  inEffect: 'all' | 'some' | 'none';
   // Your own clock moves that day. Then every item moves against you, and
   // the banner leads with that rather than with the cities.
   referenceMoves: boolean;
@@ -267,9 +286,11 @@ export function pickDstBanner(result: DstDetectionResult, settings: AppSettings)
   const date = soonest.change.date;
   const items = pending.filter((item) => item.change.date === date);
   const withReference = items.find((item) => item.change.mover !== 'entry');
+  const done = items.filter((item) => item.change.inEffect).length;
   return {
     date,
     daysFromNow: soonest.change.daysFromNow,
+    inEffect: done === items.length ? 'all' : done > 0 ? 'some' : 'none',
     referenceMoves: withReference !== undefined,
     referenceOffsetAfterMinutes: (withReference ?? soonest).change.referenceOffsetAfterMinutes,
     items,
@@ -281,8 +302,9 @@ export function pickDstBanner(result: DstDetectionResult, settings: AppSettings)
 // come back; another switch still does. Keys for switches that are over are
 // dropped on the way, so the list never grows past the few in the window.
 export function dismissDstSwitches(settings: AppSettings, keys: string[], now: Date): AppSettings {
-  // A day of slack either side of UTC: a key's date is its zone's own.
-  const stale = new Date(now.getTime() - 2 * DAY).toISOString().slice(0, 10);
+  // A key's date is its zone's own, and a change stays on show for
+  // IN_EFFECT_DAYS: keep a day of slack either side of that.
+  const stale = new Date(now.getTime() - (IN_EFFECT_DAYS + 1) * DAY).toISOString().slice(0, 10);
   const kept = (settings.dstDismissed ?? []).filter((key) => key.slice(key.lastIndexOf('@') + 1) >= stale);
   return { ...settings, dstDismissed: [...new Set([...kept, ...keys])] };
 }

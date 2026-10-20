@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { detectDstTransitions, pickDstBanner, type DstBannerDay, type GapChange } from '../../src/core/dst';
 import { createEntry, DEFAULT_SETTINGS } from '../../src/core/model';
-import { dstBadgeText, dstBannerCopy, gapChangeText, shortDate, shortGapText } from '../../src/components/dstCopy';
+import {
+  dstBadgeText,
+  dstBannerCopy as dstBannerParts,
+  gapChangeText,
+  lineText,
+  shortDate,
+  shortGapText,
+} from '../../src/components/dstCopy';
+
+// The wording as plain text; the parts are checked on their own below.
+const dstBannerCopy = (...args: Parameters<typeof dstBannerParts>) => {
+  const { headline, detail } = dstBannerParts(...args);
+  return { headline: lineText(headline), detail: lineText(detail) };
+};
 
 function gapChange(timezone: string, reference: string, from: string): GapChange {
   const result = detectDstTransitions({
@@ -67,6 +80,7 @@ describe('dstBannerCopy (§6.2)', () => {
       at: 0,
       date: '2026-11-01',
       daysFromNow: 3,
+      inEffect: false,
       gapBeforeMinutes: 60,
       gapAfterMinutes: 180,
       entryOffsetAfterMinutes: 0,
@@ -76,6 +90,7 @@ describe('dstBannerCopy (§6.2)', () => {
     const day: DstBannerDay = {
       date: change.date,
       daysFromNow: change.daysFromNow,
+      inEffect: 'none',
       referenceMoves: true,
       referenceOffsetAfterMinutes: 0,
       items: [{ entryId: 'e', change }],
@@ -94,7 +109,7 @@ describe('dstBannerCopy — several cities the same day (§6.3, option A)', () =
     const entries = zones.map(([id, timezone]) => createEntry({ id, label: id, timezone }));
     const settings = settingsFor(reference);
     const day = pickDstBanner(detectDstTransitions({ entries, settings, fromDate: new Date(from) }), settings)!;
-    return { day, copy: dstBannerCopy(day, (id) => id) };
+    return { day, copy: dstBannerCopy(day, (id: string) => id) };
   };
 
   it('the cities move: one banner names each, with its gap', () => {
@@ -107,7 +122,7 @@ describe('dstBannerCopy — several cities the same day (§6.3, option A)', () =
     expect(day.switchKeys).toEqual(['America/New_York@2026-11-01', 'America/Los_Angeles@2026-11-01']);
     expect(copy).toEqual({
       headline: 'In 12 days (Nov 1), 3 cities shift — your clock doesn’t.',
-      detail: 'Boston 13 → 14 h · New York 13 → 14 h · San Francisco 16 → 17 h',
+      detail: 'Boston\u00a013 → 14 h · New York\u00a013 → 14 h · San Francisco\u00a016 → 17 h',
     });
   });
 
@@ -124,7 +139,7 @@ describe('dstBannerCopy — several cities the same day (§6.3, option A)', () =
     );
     expect(copy).toEqual({
       headline: 'In 12 days (Nov 1), 4 cities shift — your clock doesn’t.',
-      detail: 'Boston 13 → 14 h · Chicago 14 → 15 h · +2 more',
+      detail: 'Boston\u00a013 → 14 h · Chicago\u00a014 → 15 h · +2 more',
     });
   });
 
@@ -141,6 +156,75 @@ describe('dstBannerCopy — several cities the same day (§6.3, option A)', () =
       headline: 'In 5 days (Oct 25), your clock shifts to UTC+01.',
       detail: 'Gaps change for 3 cities',
     });
+  });
+});
+
+describe('dstBannerCopy — once the change is in effect (§6.3)', () => {
+  // From Tokyo, Boston switches at 15:00 on Sunday Nov 1.
+  it('later that day: past tense, the gap as it is now', () => {
+    const day = dayOf('America/New_York', 'Asia/Tokyo', '2026-11-01T07:00:00Z');
+    expect(day).toMatchObject({ inEffect: 'all', daysFromNow: 0 });
+    expect(dstBannerCopy(day, named('Boston'))).toEqual({
+      headline: 'Today (Nov 1), Boston shifted to UTC−05 — your clock didn’t.',
+      detail: 'Your gap is now 14 hours (was 13 hours)',
+    });
+  });
+
+  it('the day after — Monday, the first meeting on the new gap', () => {
+    const day = dayOf('America/New_York', 'Asia/Tokyo', '2026-11-02T00:00:00Z');
+    expect(dstBannerCopy(day, named('Boston')).headline).toBe(
+      'Yesterday (Nov 1), Boston shifted to UTC−05 — your clock didn’t.'
+    );
+  });
+
+  it('gone the day after that', () => {
+    const settings = { ...DEFAULT_SETTINGS, referenceTimezone: 'Asia/Tokyo' };
+    const entries = [createEntry({ timezone: 'America/New_York' })];
+    const result = detectDstTransitions({ entries, settings, fromDate: new Date('2026-11-02T15:00:00Z') });
+    expect(pickDstBanner(result, settings)).toBeNull();
+  });
+
+  it('your clock moved: past tense from your side', () => {
+    const day = dayOf('Asia/Tokyo', 'Europe/Berlin', '2026-10-25T08:00:00Z');
+    expect(dstBannerCopy(day, named('Tokyo'))).toEqual({
+      headline: 'Today (Oct 25), your clock shifted to UTC+01 — Tokyo’s didn’t.',
+      detail: 'Your gap with Tokyo is now 8 hours (was 7 hours)',
+    });
+  });
+
+  it('several cities, some done and some still to come today: "Today", present tense', () => {
+    const settings = { ...DEFAULT_SETTINGS, referenceTimezone: 'Asia/Tokyo' };
+    const entries = [
+      createEntry({ id: 'Boston', timezone: 'America/New_York' }),
+      createEntry({ id: 'San Francisco', timezone: 'America/Los_Angeles' }),
+    ];
+    const at = (iso: string) =>
+      pickDstBanner(detectDstTransitions({ entries, settings, fromDate: new Date(iso) }), settings)!;
+    // 16:00 in Tokyo: Boston switched at 15:00, San Francisco does at 18:00.
+    const some = at('2026-11-01T07:00:00Z');
+    expect(some.inEffect).toBe('some');
+    expect(dstBannerCopy(some, (id: string) => id).headline).toBe('Today (Nov 1), 2 cities shift — your clock doesn’t.');
+    const all = at('2026-11-01T10:00:00Z');
+    expect(dstBannerCopy(all, (id: string) => id)).toEqual({
+      headline: 'Today (Nov 1), 2 cities shifted — your clock didn’t.',
+      detail: 'Boston\u00a013 → 14 h · San Francisco\u00a016 → 17 h',
+    });
+  });
+});
+
+describe('dstBannerCopy — parts', () => {
+  it('cities and times are their own parts', () => {
+    const { headline, detail } = dstBannerParts(
+      dayOf('America/New_York', 'Asia/Tokyo', '2026-10-23T00:00:00Z'),
+      named('Boston')
+    );
+    expect(headline.filter((p) => p.kind !== 'plain')).toEqual([
+      { kind: 'time', text: '9 days' },
+      { kind: 'time', text: 'Nov 1' },
+      { kind: 'city', text: 'Boston' },
+      { kind: 'time', text: 'UTC−05' },
+    ]);
+    expect(detail.filter((p) => p.kind !== 'plain').map((p) => p.text)).toEqual(['13 hours', '14 hours']);
   });
 });
 

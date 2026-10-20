@@ -66,7 +66,8 @@ function App({ initialData, store }: AppProps) {
     [entries, settings]
   );
   const gapChanges = useMemo(
-    () => new Map(dst.entries.map(({ entryId, gapChanges }) => [entryId, gapChanges[0] ?? null])),
+    // The badge looks ahead only: a change already in effect shows on the card itself.
+    () => new Map(dst.entries.map(({ entryId, gapChanges }) => [entryId, gapChanges.find((c) => !c.inEffect) ?? null])),
     [dst]
   );
   const dstBanner = pickDstBanner(dst, settings);
