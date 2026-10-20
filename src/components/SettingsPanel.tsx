@@ -33,6 +33,7 @@ interface SettingsPanelProps {
 }
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const DST_LEAD_DAYS = [14, 7, 3];
 
 // Leaves the extension: arrow out of a frame.
 const ExternalIcon = () => (
@@ -335,6 +336,32 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   </button>
                 ))}
               </div>
+            </div>
+          </section>
+
+          {/* Free for everyone, so no PRO tag (spec §8). Lead time sets the
+              window for the card badges as well as the banner. */}
+          <h3 className="settings-panel__section-title">DST alerts</h3>
+          <section className="settings-panel__section">
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Show banner</span>
+              <SegmentedControl
+                value={settings.dstBannerEnabled}
+                onChange={(dstBannerEnabled) => update({ dstBannerEnabled })}
+                options={[
+                  { value: false, label: 'Off' },
+                  { value: true, label: 'On' },
+                ]}
+              />
+            </div>
+
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Lead time</span>
+              <SegmentedControl
+                value={settings.dstLeadDays}
+                onChange={(dstLeadDays) => update({ dstLeadDays })}
+                options={DST_LEAD_DAYS.map((days) => ({ value: days, label: `${days} days` }))}
+              />
             </div>
           </section>
 

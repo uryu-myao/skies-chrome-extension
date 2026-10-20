@@ -20,6 +20,7 @@ import { CSS } from '@dnd-kit/utilities';
 import Timezone, { TimezoneInfo } from './Timezone';
 import { createEntry, hasRoomForCity } from '../core/model';
 import { sameZone } from '../core/tz';
+import type { GapChange } from '../core/dst';
 import type { Entry } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition, HourFormat } from '../App';
 import '@styles/EditList.scss';
@@ -42,6 +43,8 @@ interface TimezoneListProps {
   onOpenCity: (id: string) => void;
   isEditMode: boolean;
   onRemoveCity: (id: string) => void;
+  // Each entry's next gap change to the reference, for the card's DST badge.
+  gapChanges: Map<string, GapChange | null>;
 }
 
 interface SortableRowProps {
@@ -104,6 +107,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   onOpenCity,
   isEditMode,
   onRemoveCity,
+  gapChanges,
 }) => {
   // 使用useCallback包装addTimezone函数，避免不必要的重新创建
   const addTimezone = useCallback((newTimezone: TimezoneInfo): AddTimezoneResult => {
@@ -220,6 +224,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
                   convertPosition={convertPosition}
                   onOpen={() => onOpenCity(entry.id)}
                   isCompact={isEditMode}
+                  gapChange={gapChanges.get(entry.id) ?? null}
                 />
               </SortableRow>
             ))}

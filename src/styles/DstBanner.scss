@@ -1,0 +1,95 @@
+// Above the city list, scrolling with it. Quiet on purpose: the popup's
+// own dark surface with a blue tint, no warning colors — it's notice, not
+// alarm, and it sits next to the sky-colored cards.
+.dst-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 10px 8px 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg-info);
+  color: var(--color-font-timezone);
+  font-family: 'Poppins', serif;
+
+  &__icon {
+    flex: none;
+    display: flex;
+    margin-top: 1px;
+    opacity: 0.7;
+  }
+
+  &__text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__headline {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  &__detail {
+    margin: 2px 0 0;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  // City names and times (dates, offsets, gaps) both in 600, set apart from
+  // each other by color, so a glance finds who and when. The blue is the banner's own tint, lighter:
+  // 7.2:1 on the banner, 6.1:1 in effect; it sits on the dark surface,
+  // never on a sky.
+  &__city {
+    font-weight: 600;
+    color: var(--color-font-timezone);
+    white-space: nowrap;
+  }
+
+  &__time {
+    font-weight: 600;
+    color: var(--color-dst-time);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  &__detail &__city {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  // The change has happened (or some of it has, today): one step stronger,
+  // still no warning colors — it's the forecast turning into fact.
+  &--in-effect {
+    border-color: rgba(0, 170, 255, 0.32);
+    background: rgba(0, 170, 255, 0.22);
+  }
+
+  &__close {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: inherit;
+    opacity: 0.6;
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      opacity 0.15s ease;
+
+    &:hover {
+      background: var(--color-hover);
+      opacity: 1;
+    }
+  }
+}
