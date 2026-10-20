@@ -230,10 +230,13 @@ describe('pickDstBanner / dismissDstSwitches — the banner (§6.3)', () => {
   ];
   const tokyo = settingsWithReference('Asia/Tokyo');
   const detect = (settings: AppSettings) => detectDstTransitions({ entries, settings, fromDate: FROM });
+  const ids = (settings: AppSettings) => pickDstBanner(detect(settings), settings)?.items.map((item) => item.entryId);
 
-  it('shows the soonest change; a tie goes to the higher row', () => {
-    // Boston and New York switch at 06:00Z, San Francisco three hours later.
-    expect(pickDstBanner(detect(tokyo), tokyo)?.entryId).toBe('boston');
+  it('one banner for the soonest day, every city changing that day, in list order', () => {
+    const day = pickDstBanner(detect(tokyo), tokyo)!;
+    expect(day).toMatchObject({ date: '2026-11-01', daysFromNow: 12, referenceMoves: false });
+    expect(day.items.map((item) => item.entryId)).toEqual(['sf', 'boston', 'ny']);
+    expect(day.switchKeys).toEqual(['America/Los_Angeles@2026-11-01', 'America/New_York@2026-11-01']);
   });
 
   it('shows nothing while the banner is turned off', () => {
@@ -241,19 +244,22 @@ describe('pickDstBanner / dismissDstSwitches — the banner (§6.3)', () => {
     expect(pickDstBanner(detect(off), off)).toBeNull();
   });
 
-  it('a dismissed switch stays dismissed for every city in that zone; the next one shows', () => {
-    const dismissed = dismissDstSwitches(tokyo, ['America/New_York@2026-11-01'], FROM);
-    expect(dismissed.dstDismissed).toEqual(['America/New_York@2026-11-01']);
-    expect(pickDstBanner(detect(dismissed), dismissed)?.entryId).toBe('sf');
+  it('one close covers the day; a city whose switch is still open stays', () => {
+    const closed = dismissDstSwitches(tokyo, pickDstBanner(detect(tokyo), tokyo)!.switchKeys, FROM);
+    expect(pickDstBanner(detect(closed), closed)).toBeNull();
+    const partly = dismissDstSwitches(tokyo, ['America/New_York@2026-11-01'], FROM);
+    expect(ids(partly)).toEqual(['sf']);
   });
 
-  it('dismissing the reference’s own switch covers every city it moves against', () => {
+  it('your own switch: every city that moves against you, and one close covers them', () => {
     const berlin = settingsWithReference('Europe/Berlin');
-    const result = detect(berlin);
-    expect(pickDstBanner(result, berlin)?.change.mover).toBe('reference');
-    const dismissed = dismissDstSwitches(berlin, ['Europe/Berlin@2026-10-25'], FROM);
+    const day = pickDstBanner(detect(berlin), berlin)!;
+    expect(day).toMatchObject({ date: '2026-10-25', referenceMoves: true, referenceOffsetAfterMinutes: 60 });
+    expect(day.items.map((item) => item.entryId)).toEqual(['sf', 'boston', 'ny', 'sydney']);
+    const dismissed = dismissDstSwitches(berlin, day.switchKeys, FROM);
     // Next: the US cities' own switches on Nov 1.
-    expect(pickDstBanner(detect(dismissed), dismissed)?.change).toMatchObject({ mover: 'entry', date: '2026-11-01' });
+    expect(pickDstBanner(detect(dismissed), dismissed)).toMatchObject({ date: '2026-11-01', referenceMoves: false });
+    expect(ids(dismissed)).toEqual(['sf', 'boston', 'ny']);
   });
 
   it('drops keys for switches that are over, and never repeats one', () => {

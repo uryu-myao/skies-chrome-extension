@@ -1,18 +1,18 @@
 import '@styles/DstBanner.scss';
-import type { GapChange } from '../core/dst';
+import type { DstBannerDay } from '../core/dst';
 import { dstBannerCopy } from './dstCopy';
 
 interface DstBannerProps {
-  change: GapChange;
-  city: string;
+  day: DstBannerDay;
+  cityOf: (entryId: string) => string;
   onDismiss: () => void;
 }
 
-// The top-of-popup DST alert (spec §6.3, layer 2). Which change it shows,
-// and whether at all, is decided in core (pickDstBanner); closing it records
-// the switch so the same one doesn't come back.
-const DstBanner: React.FC<DstBannerProps> = ({ change, city, onDismiss }) => {
-  const { headline, detail } = dstBannerCopy(change, city);
+// The top-of-popup DST alert (spec §6.3, layer 2): one banner for one day.
+// Which day, and whether at all, is decided in core (pickDstBanner); closing
+// it records that day's switches so they don't come back.
+const DstBanner: React.FC<DstBannerProps> = ({ day, cityOf, onDismiss }) => {
+  const { headline, detail } = dstBannerCopy(day, cityOf);
   return (
     <section className="dst-banner" aria-label="Time difference change">
       <span className="dst-banner__icon" aria-hidden="true">

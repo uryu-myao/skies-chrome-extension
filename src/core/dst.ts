@@ -227,9 +227,24 @@ export function detectDstTransitions({
 
 // ---- The banner (spec §6.3, layer 2) ---------------------------------------
 
-export interface DstBannerPick {
+export interface DstBannerItem {
   entryId: string;
   change: GapChange;
+}
+
+// What the banner shows: every change on one day of the reference's
+// calendar — the soonest day with anything not yet dismissed (spec §6.3).
+export interface DstBannerDay {
+  date: string; // YYYY-MM-DD in the reference's calendar
+  daysFromNow: number;
+  // Your own clock moves that day. Then every item moves against you, and
+  // the banner leads with that rather than with the cities.
+  referenceMoves: boolean;
+  referenceOffsetAfterMinutes: number;
+  items: DstBannerItem[]; // list order
+  // Every switch behind the items: closing the banner records them all, so
+  // one close covers the day.
+  switchKeys: string[];
 }
 
 function isDismissed(settings: AppSettings, change: GapChange): boolean {
@@ -237,17 +252,29 @@ function isDismissed(settings: AppSettings, change: GapChange): boolean {
   return change.switchKeys.every((key) => dismissed.includes(key));
 }
 
-// The one change the banner shows: the soonest that hasn't been dismissed,
-// ties to the higher row in the list. Null while the banner is turned off.
-// How several changes at once should read is still open (spec §6.3).
-export function pickDstBanner(result: DstDetectionResult, settings: AppSettings): DstBannerPick | null {
+// The banner's day, or null while the banner is turned off or there's
+// nothing left to show. Several cities changing the same day — the US on
+// Nov 1, or every city when your own clock moves — make one banner, not one
+// each.
+export function pickDstBanner(result: DstDetectionResult, settings: AppSettings): DstBannerDay | null {
   if (!settings.dstBannerEnabled) return null;
-  let pick: DstBannerPick | null = null;
-  for (const { entryId, gapChanges } of result.entries) {
-    const change = gapChanges.find((c) => !isDismissed(settings, c));
-    if (change && (!pick || change.at < pick.change.at)) pick = { entryId, change };
-  }
-  return pick;
+  const pending = result.entries.flatMap(({ entryId, gapChanges }) =>
+    gapChanges.filter((change) => !isDismissed(settings, change)).map((change) => ({ entryId, change }))
+  );
+  if (pending.length === 0) return null;
+
+  const soonest = pending.reduce((a, b) => (b.change.at < a.change.at ? b : a));
+  const date = soonest.change.date;
+  const items = pending.filter((item) => item.change.date === date);
+  const withReference = items.find((item) => item.change.mover !== 'entry');
+  return {
+    date,
+    daysFromNow: soonest.change.daysFromNow,
+    referenceMoves: withReference !== undefined,
+    referenceOffsetAfterMinutes: (withReference ?? soonest).change.referenceOffsetAfterMinutes,
+    items,
+    switchKeys: [...new Set(items.flatMap((item) => item.change.switchKeys))],
+  };
 }
 
 // Records the switches behind a dismissed banner, so the same switch doesn't

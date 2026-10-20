@@ -1,4 +1,4 @@
-import type { GapChange } from '../core/dst';
+import type { DstBannerDay, GapChange } from '../core/dst';
 import { formatRelativeOffset, formatUtcOffset } from '../core/tz';
 
 // The DST banner's and card badge's wording (spec §6.2). "You" is the
@@ -15,11 +15,11 @@ export function shortDate(dateKey: string): string {
   return `${MONTHS[month - 1]} ${day}`;
 }
 
-function when(change: GapChange): string {
-  const date = shortDate(change.date);
-  if (change.daysFromNow <= 0) return `Later today (${date})`;
-  if (change.daysFromNow === 1) return `Tomorrow (${date})`;
-  return `In ${change.daysFromNow} days (${date})`;
+function when({ date: key, daysFromNow }: { date: string; daysFromNow: number }): string {
+  const date = shortDate(key);
+  if (daysFromNow <= 0) return `Later today (${date})`;
+  if (daysFromNow === 1) return `Tomorrow (${date})`;
+  return `In ${daysFromNow} days (${date})`;
 }
 
 function hours(minutes: number): string {
@@ -45,9 +45,9 @@ export interface DstBannerCopy {
   detail: string;
 }
 
-// `city` is the entry's label. Each wording says who moves on that date and
-// who doesn't: a one-sided switch is the case the user can't see coming.
-export function dstBannerCopy(change: GapChange, city: string): DstBannerCopy {
+// One city that day: the full wording, saying who moves on that date and
+// who doesn't — a one-sided switch is the case the user can't see coming.
+function oneCity(change: GapChange, city: string): DstBannerCopy {
   const gap = gapChangeText(change.gapBeforeMinutes, change.gapAfterMinutes);
   switch (change.mover) {
     case 'entry':
@@ -66,6 +66,49 @@ export function dstBannerCopy(change: GapChange, city: string): DstBannerCopy {
         detail: `Your gap: ${gap}`,
       };
   }
+}
+
+function shortHours(minutes: number): string {
+  const abs = Math.abs(minutes);
+  const m = abs % 60;
+  return `${Math.floor(abs / 60)}${m ? `:${String(m).padStart(2, '0')}` : ''}`;
+}
+
+// "13 → 14 h"; "1 h behind → 1 h ahead" when the change flips the side.
+export function shortGapText(before: number, after: number): string {
+  if (before * after < 0) {
+    const side = (minutes: number) => `${shortHours(minutes)} h ${minutes > 0 ? 'ahead' : 'behind'}`;
+    return `${side(before)} → ${side(after)}`;
+  }
+  return `${shortHours(before)} → ${shortHours(after)} h`;
+}
+
+// Up to three cities by name; past that, two and "+N more". The badges carry
+// every city's own change.
+const NAMED_CITIES = 3;
+
+// The banner for one day (spec §6.2, §6.3). `cityOf` gives an entry's label.
+// Several cities: when they move, the cities lead and each gap is listed;
+// when your clock moves, that leads — every city moves against you then.
+export function dstBannerCopy(day: DstBannerDay, cityOf: (entryId: string) => string): DstBannerCopy {
+  if (day.items.length === 1) return oneCity(day.items[0].change, cityOf(day.items[0].entryId));
+
+  const count = day.items.length;
+  if (day.referenceMoves) {
+    return {
+      headline: `${when(day)}, your clock shifts to ${formatUtcOffset(day.referenceOffsetAfterMinutes)}.`,
+      detail: `Gaps change for ${count} cities`,
+    };
+  }
+  const named = count > NAMED_CITIES ? day.items.slice(0, NAMED_CITIES - 1) : day.items;
+  const list = named.map(
+    ({ entryId, change }) => `${cityOf(entryId)} ${shortGapText(change.gapBeforeMinutes, change.gapAfterMinutes)}`
+  );
+  if (named.length < count) list.push(`+${count - named.length} more`);
+  return {
+    headline: `${when(day)}, ${count} cities shift — your clock doesn’t.`,
+    detail: list.join(' · '),
+  };
 }
 
 // The card's passive marker (spec §6.3, layer 1): the date and what the

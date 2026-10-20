@@ -60,7 +60,7 @@ function App({ initialData, store }: AppProps) {
 
   // DST alerts (spec §6): layers 1 and 2 are computed as the popup renders,
   // nothing scheduled. Each card gets its next gap change for the badge; the
-  // banner shows the one pickDstBanner() chooses.
+  // banner shows the day pickDstBanner() chooses.
   const dst = useMemo(
     () => detectDstTransitions({ entries, settings, fromDate: new Date() }),
     [entries, settings]
@@ -70,7 +70,7 @@ function App({ initialData, store }: AppProps) {
     [dst]
   );
   const dstBanner = pickDstBanner(dst, settings);
-  const dstBannerCity = entries.find((entry) => entry.id === dstBanner?.entryId)?.label;
+  const cityOf = (entryId: string) => entries.find((entry) => entry.id === entryId)?.label ?? '';
 
   const registerAddTimezone = useCallback(
     (fn: (timezone: TimezoneInfo) => AddTimezoneResult) => {
@@ -190,13 +190,11 @@ function App({ initialData, store }: AppProps) {
         </div>
       )}
       <div className="app-content">
-        {dstBanner && dstBannerCity !== undefined && !isEditMode && (
+        {dstBanner && !isEditMode && (
           <DstBanner
-            change={dstBanner.change}
-            city={dstBannerCity}
-            onDismiss={() =>
-              setSettings((prev) => dismissDstSwitches(prev, dstBanner.change.switchKeys, new Date()))
-            }
+            day={dstBanner}
+            cityOf={cityOf}
+            onDismiss={() => setSettings((prev) => dismissDstSwitches(prev, dstBanner.switchKeys, new Date()))}
           />
         )}
         <TimezoneList
