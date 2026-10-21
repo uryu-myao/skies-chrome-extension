@@ -81,12 +81,12 @@ const CoreTimePanel: React.FC<CoreTimePanelProps> = ({
   // even if the edit didn't change the entries.
   const [recalcToken, setRecalcToken] = useState(0);
 
-  // Collapsed while the list is being edited; expanded again on the way out,
-  // so the rows' new order (which follows the list) is right there.
+  // Collapsed while the list is being edited; on the way out it goes back to
+  // how it was before (isExpanded isn't touched in edit mode — the header
+  // can't be toggled there).
   const wasEditModeRef = useRef(isEditMode);
   useEffect(() => {
     if (wasEditModeRef.current && !isEditMode) {
-      setIsExpanded(true);
       setRecalcToken((token) => token + 1);
     }
     wasEditModeRef.current = isEditMode;
