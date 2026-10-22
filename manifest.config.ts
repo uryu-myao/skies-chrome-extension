@@ -9,12 +9,14 @@ export const BUILD_TARGETS: readonly BuildTarget[] = ['chrome', 'firefox'];
 
 // Shared by every target. The Chrome manifest is exactly this plus the
 // version, and must stay byte-identical to what 3.1.2 shipped — key order
-// included — so nothing changes for existing Chrome users.
+// included — so nothing changes for existing Chrome users. The one change
+// since: `description` (3.3.1), which is store copy, not behaviour. Chrome
+// caps it at 132 characters.
 const base = {
   name: 'Skies — World Clock & Time Zones',
   short_name: 'Skies',
   description:
-    'View multiple city time zones in one popup—now with a built-in Time Converter for instant cross-time-zone planning.',
+    "A world clock for your browser. Find the hours everyone's free, and get warned before daylight saving shifts them.",
   background: {
     service_worker: 'background.js',
   },
