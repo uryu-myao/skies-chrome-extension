@@ -96,7 +96,8 @@
     `flush()` 立即 resolve。
   - `init()` 读取失败时,**不得当作全新安装** —— 那样会用默认数据覆盖用户真实的存储。此时只读
     运行:本次打开显示默认数据,所有写入被拒绝并 `console.error`,存储里的原数据不动。
-- 只有持久数据(`timemate.data.v2`、`timemate.backup_v1`、v1 的 key)经过适配层。3.1.x 在
+- 只有持久数据(`timemate.data.v2`、`timemate.backup_v1`、v1 的 key、评分请求的
+  `timemate.rating-prompt.v1`,§9.7)经过适配层。3.1.x 在
   `localStorage` 里留下的日出日落缓存 `timemate.sun.*` 已不再使用(天色改为本地计算,§9.2),每次打开
   popup 从 `localStorage` 删除残留,不经过适配层。
 
@@ -952,12 +953,12 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 - **Display** — Hour format / Show seconds / Edit city list(进入编辑模式,§9.5;
   原 Sort order 已移除,不提供一次性排序按钮)
 - **Core time** — Core Time panel 显示模式 / Default work hours / Default work days
-- **About**(本版新增,不在最初的分区规划内)— Share Skies(复制**本浏览器**的商店链接。
+- **About**(本版新增,不在最初的分区规划内)— Rate Skies(About 的第一行,行首星形图标,行尾「箭头出框」。
+  Chrome 版打开商店的 reviews 页;Firefox 版打开 https://addons.mozilla.org/firefox/addon/skies-world-clock/ ,
+  AMO 在商品页本身打分。两个版本的链接按 `__TARGET__` 在编译期选定,各自的包里只有自己的;所有链接集中在
+  `src/config/links.ts`。点击后评分请求卡片不再出现(§9.7))/ Share Skies(复制**本浏览器**的商店链接。
   剪贴板确认写入成功后,按钮文案才短暂变为 "Copied!";写入失败(没有剪贴板、被拒绝等)时同样时长显示
-  "Couldn't copy" —— 不显示没有发生的复制)/ Rate(Chrome 版 `Rate on Chrome Web Store`,打开商店的 reviews 页;
-  Firefox 版 `Rate on Firefox Add-ons`,打开 https://addons.mozilla.org/firefox/addon/skies-world-clock/ ,
-  AMO 在商品页本身打分。两个版本的链接与文案按 `__TARGET__` 在编译期选定,各自的包里只有自己的)/
-  Send Feedback / Website
+  "Couldn't copy" —— 不显示没有发生的复制)/ Send Feedback / Website
   (右侧灰字 `useskies.com`,打开 https://useskies.com;行文案用 "Website" 而非品牌名)/ Version
   (读取 `package.json` 的版本号,而非写死字符串)/ Recent updates(见下)/ City data(About 分区的
   最后一行:`GeoNames (CC BY 4.0)`,`GeoNames` 链接到 https://www.geonames.org/,`CC BY 4.0` 链接到
@@ -974,9 +975,14 @@ Version                      v3.1.1
 Recent updates
 · Up to 30 cities (was 10)
 · Core Time is much faster
+If these updates help, a rating goes a long way.
 ───────────────────────────────────
 City data       GeoNames (CC BY 4.0) ↗
 ```
+
+列表之下固定一行 `If these updates help, a rating goes a long way.`,与列表文字同样式、同弱化色;
+其中 `a rating` 是链接,指向与 Rate Skies 相同的评分链接,点击同样记为已评分(§9.7)。它不是条目,
+不计入 2–3 条的限制,发版时不替换。
 
 写法约定。前两条是这个区块可信度的前提 —— 用户会拿它对照自己的使用,对不上一次,以后就不再读:
 
@@ -998,6 +1004,54 @@ City data       GeoNames (CC BY 4.0) ↗
 用途不同,不要合并成一个分区。
 
 (People 分区下一版加入)
+
+### 9.7 评分请求(3.3.2 起)
+
+在用户已经从扩展得到过价值之后,请一次评分。城市列表底部、Core Time 面板之上的一张内联卡片,
+随列表滚动;不是弹窗,不遮挡任何内容,没有动画或红点。
+
+```
+Enjoying Skies?
+A quick rating helps other people find it.
+[ Rate on Chrome Web Store ]  [ Send feedback ]  Not now
+```
+
+- **两个按钮对所有人同时显示。** 不做「先问喜不喜欢,满意的才导向商店」的筛选 —— 商店政策不允许,
+  对不满意的用户也不诚实。主按钮 Chrome 版 `Rate on Chrome Web Store`(reviews 页),Firefox 版
+  `Rate on Firefox Add-ons`(AMO 商品页);次按钮 `Send feedback`(反馈表单);文字按钮 `Not now`。
+  链接与 About 相同(`src/config/links.ts`),按 `__TARGET__` 在编译期选定,用普通的 `target="_blank"` 链接打开,
+  不需要任何权限
+- **外观**:与 DST 横幅同一种表面(`--color-bg-info` 底、`--color-border` 边、12px 圆角),主按钮
+  `--color-primary-blue`。不用橙色(`--color-secondary` 只属于 Core Time 重叠框)或其他新颜色
+- `role="region"` + `aria-label`;三个按钮都是可聚焦、可用键盘触发的原生链接 / 按钮
+
+**状态**:一个 key `timemate.rating-prompt.v1`,值为 JSON,一次读写,经过适配层(§2.3)。时间是毫秒时间戳。
+
+| 字段 | 含义 |
+| ---- | ---- |
+| `firstSeenAt` | 第一次打开 popup 的时间。不存在时写入当前时间 —— 老用户也从升级后第一次打开算起 |
+| `openCount` | 每次打开 popup +1(`main.tsx`,在第一次渲染之前,不受 React StrictMode 重复执行影响) |
+| `dstAlertSeenAt` | 第一次真正显示 DST 横幅的时间(编辑模式下横幅隐藏,不算);之后不再更新。第 3 层系统通知实现后同样记录 |
+| `shownCount` | 卡片真正渲染的次数,每次打开最多计 1 次 |
+| `lastShownAt` | 最近一次渲染的时间 |
+| `status` | `pending` / `rated` / `feedback` / `dismissed`;不是 `pending` 就永远不再显示 |
+
+**显示条件**:`shouldShowRatingPrompt(state, now, context)`(`src/core/ratingPrompt.ts`,纯函数),以下全部满足:
+
+- `status === 'pending'`,`shownCount < 2`;`shownCount === 1` 时距 `lastShownAt` 至少 14 天
+- 二者其一:(a) `dstAlertSeenAt` 存在,且早于本次打开(`context.openedAt`)—— 横幅本次刚出现时,下一次打开
+  才显示,两者不同时出现;(b) 距 `firstSeenAt` 至少 7 天,且 `openCount >= 10`
+- 当前不在编辑模式、设置页、城市设置面板中,DST 横幅当前没有显示
+
+条件按本次打开时的计数判断:卡片渲染时记下的 `shownCount` / `lastShownAt` 不会让它在同一次打开里消失。
+本次打开里打开设置页等再关上,卡片回来,不重复计数。
+
+**按钮**:主按钮 → `rated`;Send feedback → `feedback`;Not now → 本次打开内隐藏,若这是第 2 次显示则
+`dismissed`,否则保持 `pending`,按 14 天间隔等下一次。About 的 Rate Skies 与 Recent updates 下的
+`a rating` 同样记为 `rated`(无论当前是什么状态)。
+
+**调试**:仅开发服务器(`npm run dev`,`import.meta.env.DEV`)下,URL 加 `?rating-prompt` 强制显示卡片,
+不看条件;生产构建里这段代码不存在。
 
 ### 9.5 编辑模式与手势分配
 
@@ -1136,7 +1190,17 @@ City data       GeoNames (CC BY 4.0) ↗
   已确认的值;`init()` 读入 `storage.local` 的全部内容;任何一串操作之后内存与存储一致;`init()`
   失败时只读,存储不被改动
 - Chrome 回归:同一份 v2 数据经新代码读取、修改、保存,写出的字符串与 3.1.2 逐字节一致。比较基准
-  用 3.1.2(`d5ff25d`)自己的代码生成,不是手写的(同 §3.5 的 2.1.0 数据)
+  用 3.1.2(`d5ff25d`)自己的代码生成,不是手写的(同 §3.5 的 2.1.0 数据)。评分请求的 key(§9.7)是
+  另外一个 key,不改变 `timemate.data.v2` 等已有 key 的内容
+
+### 10.8 评分请求
+
+- 第 1 天打开 3 次 → 不显示;第 7 天打开 10 次 → 显示;打开 10 次但只过了 5 天 → 不显示
+- `dstAlertSeenAt` 记于之前的打开 → 显示;记于本次打开 → 不显示
+- `status` 为 `rated` / `feedback` / `dismissed` → 不显示;`shownCount === 2` → 不显示
+- `shownCount === 1`,距上次 10 天 → 不显示;20 天 → 显示
+- 编辑模式、设置页、城市设置面板、DST 横幅显示中 → 不显示
+- Chrome / Firefox 各自的评分链接与按钮文案
 
 ---
 
@@ -1171,6 +1235,7 @@ src/
     tz.js           偏移、本地时刻、本地星期
     coretime.js     交集与 closest
     dst.js          切换检测
+    ratingPrompt.js 评分请求的显示条件与状态
   platform/
     storage/        KeyValueStore 的后端:localStorage(Chrome)、storage.local(Firefox),§2.3
   ui/

@@ -185,6 +185,13 @@
     }
   }
 
+  // An icon before the label (About → Rate Skies).
+  &__row-start {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   // Keeps a value and its row-end icon together on the right; as two
   // separate children of the space-between row the value would sit mid-row.
   &__row-end {
@@ -241,6 +248,18 @@
     margin: 0 0 6px;
     font-size: inherit;
     font-weight: 600;
+  }
+
+  // The line under the list: its text, its grey. The link is underlined —
+  // in the same grey as the sentence, it would be invisible otherwise.
+  &__updates-note {
+    margin: 8px 0 0;
+  }
+
+  &__updates-link {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   &__updates-list {

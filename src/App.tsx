@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Header from './components/Header';
 import TimezoneList from './components/TimezoneList';
 import CoreTimePanel from './components/CoreTimePanel';
@@ -6,6 +6,7 @@ import SettingsPanel from './components/SettingsPanel';
 import CitySettingsPanel from './components/CitySettingsPanel';
 import UndoToast from './components/UndoToast';
 import DstBanner from './components/DstBanner';
+import RatingPrompt from './components/RatingPrompt';
 import { TimezoneInfo } from './components/Timezone';
 import {
   hasRoomForCity,
@@ -15,6 +16,15 @@ import {
   toggleIncludeInCoreTime,
 } from './core/model';
 import { detectDstTransitions, dismissDstSwitches, pickDstBanner } from './core/dst';
+import {
+  answerRatingPrompt,
+  recordDstAlertSeen,
+  recordRatingPromptShown,
+  saveRatingPrompt,
+  shouldShowRatingPrompt,
+  type RatingPromptAnswer,
+  type RatingPromptState,
+} from './core/ratingPrompt';
 import type { KeyValueStore } from './core/store';
 import { getSystemTimezone } from './core/tz';
 import type { AppData, AppSettings, Entry } from './core/types';
@@ -35,9 +45,18 @@ interface AppProps {
   initialData: AppData;
   // The persistent store main.tsx opened (spec §2.3).
   store: KeyValueStore;
+  // The rating card's state with this open already counted, and when this
+  // open began (spec §9.7).
+  initialRatingPrompt: RatingPromptState;
+  openedAt: Date;
 }
 
-function App({ initialData, store }: AppProps) {
+// Development only: `?rating-prompt` shows the rating card whatever its
+// state (spec §9.7). import.meta.env.DEV is false in every build, so this
+// goes from the packages entirely.
+const FORCE_RATING_PROMPT = import.meta.env.DEV && new URLSearchParams(window.location.search).has('rating-prompt');
+
+function App({ initialData, store, initialRatingPrompt, openedAt }: AppProps) {
   const [addTimezoneFn, setAddTimezoneFn] = useState<
     ((timezone: TimezoneInfo) => AddTimezoneResult) | null
   >(null);
@@ -54,6 +73,12 @@ function App({ initialData, store }: AppProps) {
   const [isCitySettingsOpen, setIsCitySettingsOpen] = useState(false);
   const [removed, setRemoved] = useState<RemovedEntry | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [ratingPrompt, setRatingPrompt] = useState(initialRatingPrompt);
+  // The latest state, for updates that follow each other before a re-render.
+  const ratingPromptRef = useRef(initialRatingPrompt);
+  // Answered (or Not now) during this open: gone until the next one.
+  const [isRatingPromptClosed, setIsRatingPromptClosed] = useState(false);
+  const ratingPromptShownRecorded = useRef(false);
 
   const hourFormat: HourFormat = settings.hour24 ? '24' : '12';
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
@@ -71,6 +96,7 @@ function App({ initialData, store }: AppProps) {
     [dst]
   );
   const dstBanner = pickDstBanner(dst, settings);
+  const isDstBannerShown = dstBanner !== null && !isEditMode;
   const cityOf = (entryId: string) => entries.find((entry) => entry.id === entryId)?.label ?? '';
 
   const registerAddTimezone = useCallback(
@@ -90,6 +116,48 @@ function App({ initialData, store }: AppProps) {
   useEffect(() => {
     saveAppData(store, { version: 2, entries, groups: [], settings });
   }, [store, entries, settings]);
+
+  // Written right away, not from an effect: the rating links open a tab,
+  // and the popup can close before an effect would run.
+  const updateRatingPrompt = useCallback(
+    (update: (state: RatingPromptState) => RatingPromptState) => {
+      const next = update(ratingPromptRef.current);
+      if (next === ratingPromptRef.current) return;
+      ratingPromptRef.current = next;
+      saveRatingPrompt(store, next);
+      setRatingPrompt(next);
+    },
+    [store]
+  );
+
+  // Judged on the counts this open started with, so recording the card as
+  // shown doesn't take it away again; the status is the live one.
+  const showRatingPrompt =
+    !isRatingPromptClosed &&
+    (FORCE_RATING_PROMPT ||
+      shouldShowRatingPrompt({ ...initialRatingPrompt, status: ratingPrompt.status }, new Date(), {
+        openedAt,
+        isEditMode,
+        isSettingsOpen,
+        isCitySettingsOpen,
+        isDstBannerShown,
+      }));
+
+  useEffect(() => {
+    if (isDstBannerShown) updateRatingPrompt((prev) => recordDstAlertSeen(prev, new Date()));
+  }, [isDstBannerShown, updateRatingPrompt]);
+
+  // Once per open, however often Settings covers and uncovers it.
+  useEffect(() => {
+    if (!showRatingPrompt || ratingPromptShownRecorded.current) return;
+    ratingPromptShownRecorded.current = true;
+    updateRatingPrompt((prev) => recordRatingPromptShown(prev, new Date()));
+  }, [showRatingPrompt, updateRatingPrompt]);
+
+  const answerRating = (answer: RatingPromptAnswer) => {
+    updateRatingPrompt((prev) => answerRatingPrompt(prev, answer));
+    setIsRatingPromptClosed(true);
+  };
 
   const openCitySettings = (id: string) => {
     setCitySettingsId(id);
@@ -212,6 +280,7 @@ function App({ initialData, store }: AppProps) {
           onRemoveCity={removeEntry}
           gapChanges={gapChanges}
         />
+        {showRatingPrompt && <RatingPrompt onAnswer={answerRating} />}
       </div>
       <CoreTimePanel
         entries={entries}
@@ -230,6 +299,7 @@ function App({ initialData, store }: AppProps) {
         setSettings={setSettings}
         canEditList={entries.length > 0}
         onEditList={enterEditMode}
+        onRate={() => updateRatingPrompt((prev) => answerRatingPrompt(prev, 'rated'))}
       />
       <CitySettingsPanel
         isOpen={isCitySettingsOpen && citySettingsEntry !== null}
