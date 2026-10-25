@@ -21,5 +21,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["test"]
+  // vite-env.d.ts declares __TARGET__, for the modules that branch on it.
+  "include": ["test", "src/vite-env.d.ts"]
 }

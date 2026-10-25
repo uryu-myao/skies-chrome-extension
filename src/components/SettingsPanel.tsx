@@ -5,20 +5,7 @@ import type { AppSettings } from '../core/types';
 import SegmentedControl from './SegmentedControl';
 import { RECENT_UPDATES } from './recentUpdates';
 import { version as appVersion } from '../../package.json';
-
-// Each build points at its own store, fixed at compile time (spec §9.4): Share
-// copies the listing, Rate opens where reviews are written. AMO rates on the
-// listing itself; the Chrome Web Store has a separate reviews page.
-const CHROME_WEB_STORE_URL = 'https://chromewebstore.google.com/detail/gmjjpjccmmdnainbbgchlnkhmgckcmik';
-const FIREFOX_ADD_ONS_URL = 'https://addons.mozilla.org/firefox/addon/skies-world-clock/';
-const STORE =
-  __TARGET__ === 'firefox'
-    ? { shareUrl: FIREFOX_ADD_ONS_URL, rateUrl: FIREFOX_ADD_ONS_URL, rateLabel: 'Rate on Firefox Add-ons' }
-    : { shareUrl: CHROME_WEB_STORE_URL, rateUrl: `${CHROME_WEB_STORE_URL}/reviews`, rateLabel: 'Rate on Chrome Web Store' };
-const FEEDBACK_URL = 'https://forms.gle/ncZLfTs8RKE59ETC9';
-const WEBSITE_URL = 'https://useskies.com';
-const GEONAMES_URL = 'https://www.geonames.org/';
-const CC_BY_URL = 'https://creativecommons.org/licenses/by/4.0/';
+import { CC_BY_URL, FEEDBACK_URL, GEONAMES_URL, STORE, WEBSITE_URL } from '../config/links';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -30,6 +17,8 @@ interface SettingsPanelProps {
   setSettings: Dispatch<SetStateAction<AppSettings>>;
   canEditList: boolean;
   onEditList: () => void;
+  // Either rating link was followed (spec §9.7).
+  onRate: () => void;
 }
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -51,6 +40,20 @@ const ExternalIcon = () => (
         stroke="currentColor"
         strokeWidth="1.3"
         strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </span>
+);
+
+// Rate Skies, at the start of its row.
+const StarIcon = () => (
+  <span className="settings-panel__row-icon" aria-hidden="true">
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path
+        d="M6.5 1.5 8 4.94l3.73.36-2.8 2.49.8 3.66L6.5 9.55l-3.23 1.9.8-3.66-2.8-2.49L5 4.94 6.5 1.5Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
         strokeLinejoin="round"
       />
     </svg>
@@ -105,6 +108,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   setSettings,
   canEditList,
   onEditList,
+  onRate,
 }) => {
   // Share's label for a moment after a click: whether the copy worked.
   const [shareResult, setShareResult] = useState<'copied' | 'failed' | null>(null);
@@ -155,7 +159,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     // same failure branch as a rejected write.
     let write: Promise<void>;
     try {
-      write = navigator.clipboard.writeText(STORE.shareUrl);
+      write = navigator.clipboard.writeText(STORE.listingUrl);
     } catch (error) {
       write = Promise.reject(error);
     }
@@ -367,6 +371,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
           <h3 className="settings-panel__section-title">About</h3>
           <section className="settings-panel__section">
+            <a
+              className="settings-panel__row settings-panel__row--link"
+              href={STORE.rateUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onRate}>
+              <span className="settings-panel__row-start">
+                <StarIcon />
+                <span className="settings-panel__label">Rate Skies</span>
+              </span>
+              <ExternalIcon />
+            </a>
+
             <button
               type="button"
               className="settings-panel__row settings-panel__row--link"
@@ -376,15 +393,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               </span>
               <CopyIcon copied={shareResult === 'copied'} />
             </button>
-
-            <a
-              className="settings-panel__row settings-panel__row--link"
-              href={STORE.rateUrl}
-              target="_blank"
-              rel="noopener noreferrer">
-              <span className="settings-panel__label">{STORE.rateLabel}</span>
-              <ExternalIcon />
-            </a>
 
             <a
               className="settings-panel__row settings-panel__row--link"
@@ -423,6 +431,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <li key={update}>{update}</li>
                 ))}
               </ul>
+              <p className="settings-panel__updates-note">
+                If these updates help,{' '}
+                <a
+                  className="settings-panel__updates-link"
+                  href={STORE.rateUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onRate}>
+                  a rating
+                </a>{' '}
+                goes a long way.
+              </p>
             </div>
 
             {/* The city search's data is GeoNames', CC BY 4.0: the credit and
