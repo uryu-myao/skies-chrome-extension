@@ -9,5 +9,5 @@
 export const RECENT_UPDATES: readonly string[] = [
   'Alerts before a time difference changes for DST',
   'DST lead time: 14, 7 or 3 days, in Settings',
-  'Works fully offline',
+  'Date format and week start, in Settings',
 ];
