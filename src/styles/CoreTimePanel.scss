@@ -32,10 +32,14 @@
     // similar the two gradients are) — so the hover fade can't live on
     // `background` directly. A separate layer faded via opacity sidesteps
     // that entirely, since opacity *is* always interpolatable.
+    // Inset 1px and rounded like the panel: the panel's edge is an inset
+    // box-shadow, painted below its children, so a layer reaching the edge
+    // would hide it while hovered.
     &::before {
       content: '';
       position: absolute;
-      inset: 0;
+      inset: 1px 1px 0;
+      border-radius: 11px 11px 0 0;
       z-index: 0;
       background: radial-gradient(
         40% 70% at 50% 0,
