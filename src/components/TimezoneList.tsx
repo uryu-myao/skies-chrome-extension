@@ -21,6 +21,7 @@ import Timezone, { TimezoneInfo } from './Timezone';
 import { createEntry, hasRoomForCity } from '../core/model';
 import { sameZone } from '../core/tz';
 import type { GapChange } from '../core/dst';
+import type { DateOrder } from '../core/locale';
 import type { Entry } from '../core/types';
 import type { AddTimezoneResult, ConvertPosition, HourFormat } from '../App';
 import '@styles/EditList.scss';
@@ -38,6 +39,7 @@ interface TimezoneListProps {
   referenceTimezone: string;
   hourFormat: HourFormat;
   showSeconds: boolean;
+  dateOrder: DateOrder;
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
   onOpenCity: (id: string) => void;
@@ -102,6 +104,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
   referenceTimezone,
   hourFormat,
   showSeconds,
+  dateOrder,
   isConvertModeOpen,
   convertPosition,
   onOpenCity,
@@ -220,6 +223,7 @@ const TimezoneList: React.FC<TimezoneListProps> = ({
                   referenceTimezone={referenceTimezone}
                   hourFormat={hourFormat}
                   showSeconds={showSeconds}
+                  dateOrder={dateOrder}
                   isConvertModeOpen={isConvertModeOpen}
                   convertPosition={convertPosition}
                   onOpen={() => onOpenCity(entry.id)}

@@ -231,12 +231,14 @@
       }
     }
 
-    &__date {
+    // Day and month, in the order Date format picks (spec §9.4): the space
+    // after the weekday's divider goes before whichever comes first.
+    &__day {
       padding-left: 7px;
-    }
 
-    &__month {
-      padding-left: 2px;
+      > span + span {
+        padding-left: 2px;
+      }
     }
 
     // The one emphasis in the footer: full-strength white against the

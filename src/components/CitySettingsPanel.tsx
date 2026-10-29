@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import '@styles/SettingsPanel.scss';
 import '@styles/CitySettingsPanel.scss';
 import ResetButton from './ResetButton';
+import { weekdayDisplayOrder, type WeekStart } from '../core/locale';
 import { defaultLabelOf, resolveWorkDays, resolveWorkHours } from '../core/model';
 import type { AppSettings, Entry, WorkDays } from '../core/types';
 
@@ -9,6 +10,8 @@ interface CitySettingsPanelProps {
   isOpen: boolean;
   entry: Entry | null;
   settings: AppSettings;
+  // Which day the work-days summary starts from (spec §9.4).
+  weekStart: WeekStart;
   onClose: () => void;
   onRename: (label: string) => void;
   onResetLabel: () => void;
@@ -26,15 +29,18 @@ function formatHour(hour: number): string {
 }
 
 // [1,2,3,4,5] -> "Mon–Fri"; runs of 3+ consecutive days collapse to a range.
-function formatWorkDays(days: WorkDays): string {
+// Days run in the order the week is shown: [0,6] is "Sat, Sun" when the week
+// starts on Monday.
+function formatWorkDays(days: WorkDays, weekStart: WeekStart): string {
   if (days.length === 0) return 'None';
-  const sorted = [...days].sort((a, b) => a - b);
+  const order = weekdayDisplayOrder(weekStart);
   const runs: number[][] = [];
-  for (const day of sorted) {
+  order.forEach((day, position) => {
+    if (!days.includes(day)) return;
     const run = runs[runs.length - 1];
-    if (run && day === run[run.length - 1] + 1) run.push(day);
+    if (run && order[position - 1] === run[run.length - 1]) run.push(day);
     else runs.push([day]);
-  }
+  });
   return runs
     .flatMap((run) =>
       run.length >= 3
@@ -48,6 +54,7 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
   isOpen,
   entry,
   settings,
+  weekStart,
   onClose,
   onRename,
   onResetLabel,
@@ -174,7 +181,7 @@ const CitySettingsPanel: React.FC<CitySettingsPanelProps> = ({
                 onClick={() => setShowHint(true)}>
                 <span className="settings-panel__label">Work days</span>
                 <span className="settings-panel__value">
-                  {formatWorkDays(days.days)}
+                  {formatWorkDays(days.days, weekStart)}
                   {days.isDefault && <span className="city-settings__default"> · default</span>}
                 </span>
               </button>

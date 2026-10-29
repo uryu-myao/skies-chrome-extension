@@ -1,10 +1,12 @@
 import '@styles/DstBanner.scss';
 import type { DstBannerDay } from '../core/dst';
+import type { DateOrder } from '../core/locale';
 import { dstBannerCopy, type CopyLine } from './dstCopy';
 
 interface DstBannerProps {
   day: DstBannerDay;
   cityOf: (entryId: string) => string;
+  dateOrder: DateOrder;
   onDismiss: () => void;
 }
 
@@ -26,8 +28,8 @@ const Parts: React.FC<{ parts: CopyLine }> = ({ parts }) => (
   </>
 );
 
-const DstBanner: React.FC<DstBannerProps> = ({ day, cityOf, onDismiss }) => {
-  const { headline, detail } = dstBannerCopy(day, cityOf);
+const DstBanner: React.FC<DstBannerProps> = ({ day, cityOf, dateOrder, onDismiss }) => {
+  const { headline, detail } = dstBannerCopy(day, cityOf, dateOrder);
   return (
     <section
       className={`dst-banner${day.inEffect !== 'none' ? ' dst-banner--in-effect' : ''}`}

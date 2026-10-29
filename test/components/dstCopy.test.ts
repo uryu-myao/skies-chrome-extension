@@ -9,10 +9,12 @@ import {
   shortDate,
   shortGapText,
 } from '../../src/components/dstCopy';
+import type { DateOrder } from '../../src/core/locale';
 
 // The wording as plain text; the parts are checked on their own below.
-const dstBannerCopy = (...args: Parameters<typeof dstBannerParts>) => {
-  const { headline, detail } = dstBannerParts(...args);
+// Month first unless a test says otherwise — the wording is the same either way.
+const dstBannerCopy = (day: DstBannerDay, cityOf: (entryId: string) => string, order: DateOrder = 'monthDay') => {
+  const { headline, detail } = dstBannerParts(day, cityOf, order);
   return { headline: lineText(headline), detail: lineText(detail) };
 };
 
@@ -72,6 +74,7 @@ describe('dstBannerCopy (§6.2)', () => {
     expect(dstBannerCopy(today, named('Boston')).headline).toMatch(/^Later today \(Nov 1\), /);
     const tomorrow = dayOf('America/New_York', 'Asia/Tokyo', '2026-10-31T01:00:00Z');
     expect(dstBannerCopy(tomorrow, named('Boston')).headline).toMatch(/^Tomorrow \(Nov 1\), /);
+    expect(dstBannerCopy(tomorrow, named('Boston'), 'dayMonth').headline).toMatch(/^Tomorrow \(1 Nov\), /);
   });
 
   it('both clocks moving on the same day', () => {
@@ -216,7 +219,8 @@ describe('dstBannerCopy — parts', () => {
   it('cities and times are their own parts', () => {
     const { headline, detail } = dstBannerParts(
       dayOf('America/New_York', 'Asia/Tokyo', '2026-10-23T00:00:00Z'),
-      named('Boston')
+      named('Boston'),
+      'monthDay'
     );
     expect(headline.filter((p) => p.kind !== 'plain')).toEqual([
       { kind: 'time', text: '9 days' },
@@ -250,12 +254,19 @@ describe('gapChangeText', () => {
 
 describe('dstBadgeText (§6.3 layer 1)', () => {
   it('the date and the relative offset the card will show', () => {
-    expect(dstBadgeText(gapChange('America/New_York', 'Asia/Tokyo', '2026-10-23T00:00:00Z'))).toBe('Nov 1 → −14h');
-    expect(dstBadgeText(gapChange('Australia/Lord_Howe', 'Asia/Tokyo', '2026-09-30T00:00:00Z'))).toBe('Oct 4 → +2h');
+    expect(dstBadgeText(gapChange('America/New_York', 'Asia/Tokyo', '2026-10-23T00:00:00Z'), 'monthDay')).toBe('Nov 1 → −14h');
+    expect(dstBadgeText(gapChange('Australia/Lord_Howe', 'Asia/Tokyo', '2026-09-30T00:00:00Z'), 'monthDay')).toBe('Oct 4 → +2h');
+  });
+
+  it('follows Date format (§9.4)', () => {
+    expect(dstBadgeText(gapChange('America/New_York', 'Asia/Tokyo', '2026-10-23T00:00:00Z'), 'dayMonth')).toBe('1 Nov → −14h');
   });
 
   it('shortDate', () => {
-    expect(shortDate('2026-03-08')).toBe('Mar 8');
-    expect(shortDate('2026-12-31')).toBe('Dec 31');
+    expect(shortDate('2026-03-08', 'monthDay')).toBe('Mar 8');
+    expect(shortDate('2026-12-31', 'monthDay')).toBe('Dec 31');
+    expect(shortDate('2026-03-08', 'dayMonth')).toBe('8 Mar');
+    // Three letters, never Intl's en-GB "Sept".
+    expect(shortDate('2026-09-24', 'dayMonth')).toBe('24 Sep');
   });
 });

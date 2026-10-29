@@ -47,6 +47,9 @@
   settings: {
     hour24: true,
     showSeconds: false,
+    dateFormat: "auto",        // 可选。auto | dayMonth | monthDay —— 日期里日与月缩写的先后,§9.4;
+                               // 不存在 = auto
+    weekStart: "auto",         // 可选。auto | sunday | monday —— 星期的显示顺序,§9.4;不存在 = auto
     sortOrder: "manual",       // 【废弃】manual | offset | name(由 v1 的 newest | time | alphabet
                                // 映射而来,见 §3.2);仅迁移时读取一次,见 §3.4
     referenceTimezone: null,   // null = 使用系统时区;所有时间计算只读它
@@ -70,6 +73,11 @@
 读取时统一走 `resolveWorkHours(entry, settings)`,禁止在渲染层直接读 `entry.workHours`。
 
 **`workDays` 使用 0=周日 … 6=周六**,与 `Date.getDay()` 一致。
+
+**`workDays` 的存储顺序与显示顺序是两回事。** 存储永远是数值、按数值升序(`[1,2,3,4,5]`),
+与「一周从哪天开始」(`settings.weekStart`,§9.4)无关;周一开头只改变星期选择器的按钮排列
+(`weekdayDisplayOrder()`,`core/locale.ts`)。按钮按**星期的值**识别,不按位置:周一开头时
+第一个按钮是 1(周一),不是 0。改这个设置不改写任何已存数据。
 
 **`person` 为 `null` 时,条目渲染为普通城市卡片**,不占用头像列。
 
@@ -950,8 +958,29 @@ popup 内滑入式面板,不开新标签页。导航深度不超过两层。
 
 当前已实现的分区,按顺序:
 
-- **Display** — Hour format / Show seconds / Edit city list(进入编辑模式,§9.5;
-  原 Sort order 已移除,不提供一次性排序按钮)
+- **Display** — Hour format / Show seconds / Date format / Week starts on / Edit city list(进入编辑模式,
+  §9.5;原 Sort order 已移除,不提供一次性排序按钮)
+
+**Date format** 与 **Week starts on**(3.4.0 起)是两项本地化显示设置,只管排列,不改数据、不改文字:
+
+| 设置 | 选项 | 字段 | 作用于 |
+| ---- | ---- | ---- | ------ |
+| Date format | `Auto` / `24 SEP` / `SEP 24` | `dateFormat`: `auto` / `dayMonth` / `monthDay` | 每一处日期:卡片底栏(含转换器模式下)、DST 横幅、卡片 DST 角标及其悬停说明 |
+| Week starts on | `Auto` / `Sun` / `Mon` | `weekStart`: `auto` / `sunday` / `monday` | Core time 的 Default work days 选择器;城市面板里只读的工作日摘要(周一开头时 `Sat, Sun` 而非 `Sun, Sat`) |
+
+- 默认都是 Auto,按浏览器的界面语言(`navigator.language`)判断;字段不存在即 Auto,旧数据无需迁移。
+  判断全部在 `core/locale.ts`,纯函数,语言标签作为参数传入 —— core 不读 `navigator`
+- **日期顺序**:`Intl.DateTimeFormat(语言, { month: 'short', day: 'numeric' })`(强制公历、拉丁数字)的
+  `formatToParts`,**只看 day 与 month 谁在前,不取文字**。月份缩写永远来自 core 的三字母表
+  (`MONTH_SHORT`):Intl 在 en-GB 下给九月的是四个字母的 `Sept`,de-DE 是 `Sept.`,直接用会破坏
+  三字母对齐
+- **一周起始日**:`Intl.Locale` 的 `getWeekInfo()`,没有则 `weekInfo`(浏览器支持不一致,不能假定
+  存在),再没有则查地区表 —— CLDR 中从周日开始的地区,表外一律周一。地区取语言标签的地区,
+  没写地区(`en`、`ja`)则用 `maximize()` 补全。只有周日 / 周一两个选项:CLDR 从周六开始的地区
+  (EG、IR 等,工作日多为周日到周四)归入周日
+- 语言标签无效、或任何一步判断失败 → 日在前、周日开头,即本功能加入前的样子
+- 改设置立即生效,无需重开 popup
+- 示例:en-US → `SEP 24`、周日;en-GB → `24 SEP`、周一;ja-JP → `SEP 24`、周日;de-DE → `24 SEP`、周一
 - **Core time** — Core Time panel 显示模式 / Default work hours / Default work days
 - **About**(本版新增,不在最初的分区规划内)— Rate Skies(About 的第一行,行首星形图标,行尾「箭头出框」。
   Chrome 版打开商店的 reviews 页;Firefox 版打开 https://addons.mozilla.org/firefox/addon/skies-world-clock/ ,
@@ -1202,6 +1231,14 @@ A quick rating helps other people find it.
 - 编辑模式、设置页、城市设置面板、DST 横幅显示中 → 不显示
 - Chrome / Firefox 各自的评分链接与按钮文案
 
+### 10.9 本地化显示(§9.4)
+
+- en-US → 月在前、周日;en-GB → 日在前、周一;ja-JP → 月在前、周日;de-DE → 日在前、周一
+- `en`、`ja` 这类不带地区的标签按补全后的地区判断;无效标签 → 日在前、周日
+- 没有 `getWeekInfo` / `weekInfo` 时地区表给出同样的结果;地区表与 CLDR(Node 的 `getWeekInfo()`)逐一一致
+- 显示的月份缩写恒为三个字母,en-GB 下九月也是 `Sep`
+- 周一开头时选择器顺序为 1…6, 0;切换第一个按钮改的是 1;存储仍按数值升序
+
 ---
 
 ## 11. 构建顺序
@@ -1236,6 +1273,7 @@ src/
     coretime.js     交集与 closest
     dst.js          切换检测
     ratingPrompt.js 评分请求的显示条件与状态
+    locale.js       日期顺序、一周起始日、月份三字母缩写(§9.4)
   platform/
     storage/        KeyValueStore 的后端:localStorage(Chrome)、storage.local(Firefox),§2.3
   ui/
