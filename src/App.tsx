@@ -25,6 +25,7 @@ import {
   type RatingPromptAnswer,
   type RatingPromptState,
 } from './core/ratingPrompt';
+import { resolveDateOrder, resolveWeekStart } from './core/locale';
 import type { KeyValueStore } from './core/store';
 import { getSystemTimezone } from './core/tz';
 import type { AppData, AppSettings, Entry } from './core/types';
@@ -82,6 +83,9 @@ function App({ initialData, store, initialRatingPrompt, openedAt }: AppProps) {
 
   const hourFormat: HourFormat = settings.hour24 ? '24' : '12';
   const referenceTimezone = settings.referenceTimezone ?? getSystemTimezone();
+  // Auto follows the browser's language (spec §9.4); core gets the tag.
+  const dateOrder = useMemo(() => resolveDateOrder(settings.dateFormat, navigator.language), [settings.dateFormat]);
+  const weekStart = useMemo(() => resolveWeekStart(settings.weekStart, navigator.language), [settings.weekStart]);
 
   // DST alerts (spec §6): layers 1 and 2 are computed as the popup renders,
   // nothing scheduled. Each card gets its next gap change for the badge; the
@@ -263,6 +267,7 @@ function App({ initialData, store, initialRatingPrompt, openedAt }: AppProps) {
           <DstBanner
             day={dstBanner}
             cityOf={cityOf}
+            dateOrder={dateOrder}
             onDismiss={() => setSettings((prev) => dismissDstSwitches(prev, dstBanner.switchKeys, new Date()))}
           />
         )}
@@ -273,6 +278,7 @@ function App({ initialData, store, initialRatingPrompt, openedAt }: AppProps) {
           referenceTimezone={referenceTimezone}
           hourFormat={hourFormat}
           showSeconds={settings.showSeconds}
+          dateOrder={dateOrder}
           isConvertModeOpen={isConvertModeOpen}
           convertPosition={convertPosition}
           onOpenCity={openCitySettings}
@@ -297,6 +303,7 @@ function App({ initialData, store, initialRatingPrompt, openedAt }: AppProps) {
         }}
         settings={settings}
         setSettings={setSettings}
+        weekStart={weekStart}
         canEditList={entries.length > 0}
         onEditList={enterEditMode}
         onRate={() => updateRatingPrompt((prev) => answerRatingPrompt(prev, 'rated'))}
@@ -305,6 +312,7 @@ function App({ initialData, store, initialRatingPrompt, openedAt }: AppProps) {
         isOpen={isCitySettingsOpen && citySettingsEntry !== null}
         entry={citySettingsEntry}
         settings={settings}
+        weekStart={weekStart}
         onClose={closeCitySettings}
         onRename={(label) => citySettingsId && updateEntry(citySettingsId, (entry) => renameEntry(entry, label))}
         onResetLabel={() => citySettingsId && updateEntry(citySettingsId, resetEntryLabel)}

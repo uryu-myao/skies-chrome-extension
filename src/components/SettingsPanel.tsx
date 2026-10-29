@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import '@styles/SettingsPanel.scss';
+import { weekdayDisplayOrder, type DateFormatSetting, type WeekStart, type WeekStartSetting } from '../core/locale';
 import type { AppSettings } from '../core/types';
 import SegmentedControl from './SegmentedControl';
 import { RECENT_UPDATES } from './recentUpdates';
@@ -15,14 +16,31 @@ interface SettingsPanelProps {
   onClose: () => void;
   settings: AppSettings;
   setSettings: Dispatch<SetStateAction<AppSettings>>;
+  // Week starts on, resolved (Auto → the browser's language): the order of
+  // the work-days picker.
+  weekStart: WeekStart;
   canEditList: boolean;
   onEditList: () => void;
   // Either rating link was followed (spec §9.7).
   onRate: () => void;
 }
 
+// Indexed by weekday value, 0=Sunday — not by position in the picker.
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DST_LEAD_DAYS = [14, 7, 3];
+
+// Date format and Week starts on only arrange things (spec §9.4).
+const DATE_FORMAT_OPTIONS: { value: DateFormatSetting; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'dayMonth', label: '24 SEP' },
+  { value: 'monthDay', label: 'SEP 24' },
+];
+const WEEK_START_OPTIONS: { value: WeekStartSetting; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'sunday', label: 'Sun' },
+  { value: 'monday', label: 'Mon' },
+];
 
 // Leaves the extension: arrow out of a frame.
 const ExternalIcon = () => (
@@ -106,6 +124,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
   settings,
   setSettings,
+  weekStart,
   canEditList,
   onEditList,
   onRate,
@@ -271,6 +290,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               />
             </div>
 
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Date format</span>
+              <SegmentedControl
+                value={settings.dateFormat ?? 'auto'}
+                onChange={(dateFormat) => update({ dateFormat })}
+                options={DATE_FORMAT_OPTIONS}
+              />
+            </div>
+
+            <div className="settings-panel__row">
+              <span className="settings-panel__label">Week starts on</span>
+              <SegmentedControl
+                value={settings.weekStart ?? 'auto'}
+                onChange={(weekStart) => update({ weekStart })}
+                options={WEEK_START_OPTIONS}
+              />
+            </div>
+
             <button
               type="button"
               className="settings-panel__row settings-panel__row--link"
@@ -328,15 +365,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <div className="settings-panel__row">
               <span className="settings-panel__label">Default work days</span>
+              {/* Shown from the day the week starts on; each button is its
+                  weekday's value, so the stored days never change order
+                  (spec §2.2). */}
               <div className="settings-panel__days">
-                {WEEKDAY_LABELS.map((label, day) => (
+                {weekdayDisplayOrder(weekStart).map((day) => (
                   <button
                     key={day}
                     className={`settings-panel__day ${
                       settings.defaultWorkDays.includes(day) ? 'active' : ''
                     }`}
+                    aria-label={WEEKDAY_NAMES[day]}
+                    aria-pressed={settings.defaultWorkDays.includes(day)}
                     onClick={() => toggleWorkDay(day)}>
-                    {label}
+                    {WEEKDAY_LABELS[day]}
                   </button>
                 ))}
               </div>

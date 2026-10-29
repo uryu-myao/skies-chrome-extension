@@ -1,7 +1,7 @@
 {
   "name": "skies-chrome-extension",
   "private": true,
-  "version": "3.3.2",
+  "version": "3.4.0",
   "type": "module",
   "engines": {
     "node": "24.x"

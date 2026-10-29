@@ -47,12 +47,19 @@ export interface Entry {
   lon?: number;
 }
 
+import type { DateFormatSetting, WeekStartSetting } from './locale';
+
 export type SortOrder = 'manual' | 'offset' | 'name';
 export type CoreTimePanelMode = 'always' | 'collapsed' | 'hidden';
 
 export interface AppSettings {
   hour24: boolean;
   showSeconds: boolean;
+  // Day or month first in every date, and the day the week starts on — only
+  // how things are arranged (spec §9.4). Optional: absent means Auto, so data
+  // saved before they existed needs no migration.
+  dateFormat?: DateFormatSetting;
+  weekStart?: WeekStartSetting;
   // Deprecated — manual order is the only order now. Kept for the same reason
   // as Entry.pinned: freezeDisplayOrder() needs it to reproduce the old order.
   sortOrder: SortOrder;

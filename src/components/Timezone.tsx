@@ -14,6 +14,7 @@ import {
 import type { ConvertPosition, HourFormat } from '../App';
 import { dayDeltaLabel } from './dayDeltaLabel';
 import type { GapChange } from '../core/dst';
+import { MONTH_SHORT, type DateOrder } from '../core/locale';
 import { dstBadgeDescription, dstBadgeText } from './dstCopy';
 
 export interface TimezoneInfo {
@@ -28,6 +29,8 @@ interface TimezoneProps extends TimezoneInfo {
   referenceTimezone: string;
   hourFormat: HourFormat;
   showSeconds: boolean;
+  // Day or month first in the footer's date (spec §9.4).
+  dateOrder: DateOrder;
   isConvertModeOpen: boolean;
   convertPosition: ConvertPosition;
   onOpen: () => void;
@@ -70,6 +73,7 @@ const Timezone: React.FC<TimezoneProps> = ({
   referenceTimezone,
   hourFormat,
   showSeconds,
+  dateOrder,
   isConvertModeOpen,
   convertPosition,
   onOpen,
@@ -119,9 +123,6 @@ const Timezone: React.FC<TimezoneProps> = ({
           weekday:
             parts.find((p) => p.type === 'weekday')?.value.toLowerCase() ?? '',
           dayPeriod: parts.find((p) => p.type === 'dayPeriod')?.value ?? '',
-          monthShort: date
-            .toLocaleDateString('en-US', { timeZone, month: 'short' })
-            .toLowerCase(),
         };
       };
 
@@ -146,7 +147,8 @@ const Timezone: React.FC<TimezoneProps> = ({
         meridiem: isConvertModeOpen ? '' : targetParts.dayPeriod.toUpperCase(),
         week: targetParts.weekday,
         date: targetParts.dayNumber.toString(),
-        month: targetParts.monthShort,
+        // Always the three-letter name, never a locale's (spec §9.4).
+        month: MONTH_SHORT[targetParts.monthNumber - 1]?.toLowerCase() ?? '',
         // Both read at the instant the card is showing (the converter's
         // chosen time in convert mode), so a DST switch in between is honored.
         relativeOffset: formatRelativeOffset(
@@ -221,8 +223,8 @@ const Timezone: React.FC<TimezoneProps> = ({
               </span>
               <span className="timezone-data__offset">{timeData.utcOffset}</span>
               {gapChange && (
-                <span className="timezone-data__dst" title={dstBadgeDescription(gapChange)}>
-                  {dstBadgeText(gapChange)}
+                <span className="timezone-data__dst" title={dstBadgeDescription(gapChange, dateOrder)}>
+                  {dstBadgeText(gapChange, dateOrder)}
                 </span>
               )}
             </p>
@@ -234,9 +236,18 @@ const Timezone: React.FC<TimezoneProps> = ({
               )}
               <span>
                 <span className="timezone-data__week">{timeData.week}</span>
-                <span>
-                  <span className="timezone-data__date">{timeData.date}</span>
-                  <span className="timezone-data__month">{timeData.month}</span>
+                <span className="timezone-data__day">
+                  {dateOrder === 'monthDay' ? (
+                    <>
+                      <span className="timezone-data__month">{timeData.month}</span>
+                      <span className="timezone-data__date">{timeData.date}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="timezone-data__date">{timeData.date}</span>
+                      <span className="timezone-data__month">{timeData.month}</span>
+                    </>
+                  )}
                 </span>
               </span>
             </p>

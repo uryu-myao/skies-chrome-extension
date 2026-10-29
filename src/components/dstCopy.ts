@@ -1,4 +1,5 @@
 import type { DstBannerDay, GapChange } from '../core/dst';
+import { formatDayMonth, type DateOrder } from '../core/locale';
 import { formatRelativeOffset, formatUtcOffset } from '../core/tz';
 
 // The DST banner's and card badge's wording (spec §6.2). "You" is the
@@ -7,12 +8,10 @@ import { formatRelativeOffset, formatUtcOffset } from '../core/tz';
 // 30 minutes. A zone is named by its UTC offset, never an abbreviation like
 // EST (spec §4.2).
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-// "2026-11-01" → "Nov 1".
-export function shortDate(dateKey: string): string {
+// "2026-11-01" → "Nov 1", or "1 Nov" — in the order Date format picks (spec §9.4).
+export function shortDate(dateKey: string, order: DateOrder): string {
   const [, month, day] = dateKey.split('-').map(Number);
-  return `${MONTHS[month - 1]} ${day}`;
+  return formatDayMonth(day, month, order);
 }
 
 // The banner's wording is built from parts so the banner can set city names
@@ -54,8 +53,8 @@ export function lineText(parts: CopyLine): string {
 
 // "In 12 days (Nov 1)", "Later today (Nov 1)" before the change; "Today
 // (Nov 1)", "Yesterday (Nov 1)" once it's in effect.
-function when(daysFromNow: number, dateKey: string, inEffect: boolean): CopyLine {
-  const date = time(shortDate(dateKey));
+function when(daysFromNow: number, dateKey: string, inEffect: boolean, order: DateOrder): CopyLine {
+  const date = time(shortDate(dateKey, order));
   if (daysFromNow < 0) return line`Yesterday (${date})`;
   if (daysFromNow === 0) return inEffect ? line`Today (${date})` : line`Later today (${date})`;
   if (daysFromNow === 1) return line`Tomorrow (${date})`;
@@ -101,8 +100,8 @@ export interface DstBannerCopy {
 
 // One city that day: the full wording, saying who moves on that date and
 // who doesn't — a one-sided switch is the case the user can't see coming.
-function oneCity(change: GapChange, name: string): DstBannerCopy {
-  const w = when(change.daysFromNow, change.date, change.inEffect);
+function oneCity(change: GapChange, name: string, order: DateOrder): DstBannerCopy {
+  const w = when(change.daysFromNow, change.date, change.inEffect, order);
   const entryUtc = time(formatUtcOffset(change.entryOffsetAfterMinutes));
   const referenceUtc = time(formatUtcOffset(change.referenceOffsetAfterMinutes));
   const before = change.gapBeforeMinutes;
@@ -161,11 +160,11 @@ const NAMED_CITIES = 3;
 // when your clock moves, that leads — every city moves against you then.
 // Past tense only once every change that day is in effect; a day with some
 // still to come reads "Today …, 4 cities shift".
-export function dstBannerCopy(day: DstBannerDay, cityOf: (entryId: string) => string): DstBannerCopy {
-  if (day.items.length === 1) return oneCity(day.items[0].change, cityOf(day.items[0].entryId));
+export function dstBannerCopy(day: DstBannerDay, cityOf: (entryId: string) => string, order: DateOrder): DstBannerCopy {
+  if (day.items.length === 1) return oneCity(day.items[0].change, cityOf(day.items[0].entryId), order);
 
   const done = day.inEffect === 'all';
-  const w = when(day.daysFromNow, day.date, day.inEffect !== 'none');
+  const w = when(day.daysFromNow, day.date, day.inEffect !== 'none', order);
   const count = day.items.length;
   if (day.referenceMoves) {
     const utc = time(formatUtcOffset(day.referenceOffsetAfterMinutes));
@@ -191,10 +190,10 @@ export function dstBannerCopy(day: DstBannerDay, cityOf: (entryId: string) => st
 
 // The card's passive marker (spec §6.3, layer 1): the date and what the
 // card's own relative offset becomes, "Nov 1 → −14h".
-export function dstBadgeText(change: GapChange): string {
-  return `${shortDate(change.date)} → ${formatRelativeOffset(change.gapAfterMinutes)}`;
+export function dstBadgeText(change: GapChange, order: DateOrder): string {
+  return `${shortDate(change.date, order)} → ${formatRelativeOffset(change.gapAfterMinutes)}`;
 }
 
-export function dstBadgeDescription(change: GapChange): string {
-  return `Gap changes on ${shortDate(change.date)}: ${formatRelativeOffset(change.gapBeforeMinutes)} → ${formatRelativeOffset(change.gapAfterMinutes)}`;
+export function dstBadgeDescription(change: GapChange, order: DateOrder): string {
+  return `Gap changes on ${shortDate(change.date, order)}: ${formatRelativeOffset(change.gapBeforeMinutes)} → ${formatRelativeOffset(change.gapAfterMinutes)}`;
 }
